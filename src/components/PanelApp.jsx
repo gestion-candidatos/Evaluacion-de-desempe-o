@@ -175,27 +175,261 @@ function EvaluacionesAdmin() {
 
 function PanelLider() {
   const [equipo, setEquipo] = useState([]);
+  const [evaluaciones, setEvaluaciones] = useState({});
+  const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
+
   useEffect(() => { cargarEquipo(); }, []);
 
   async function cargarEquipo() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id);
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('leader_id', session.user.id);
+    
     setEquipo(data || []);
+
+    if (data) {
+      const evalsPorColaborador = {};
+      for (const col of data) {
+        const { data: autoeval } = await supabase
+          .from('evaluaciones')
+          .select('*')
+          .eq('colaborador_id', col.id)
+          .eq('tipo_evaluacion', 'autoevaluacion')
+          .maybeSingle();
+        
+        const { data: evalLider } = await supabase
+          .from('evaluaciones')
+          .select('*')
+          .eq('colaborador_id', col.id)
+          .eq('tipo_evaluacion', 'evaluacion_lider')
+          .maybeSingle();
+
+        evalsPorColaborador[col.id] = {
+          autoevaluacion: autoeval,
+          evaluacionLider: evalLider
+        };
+      }
+      setEvaluaciones(evalsPorColaborador);
+    }
+  }
+
+  if (colaboradorSeleccionado) {
+    return (
+      <EvaluacionLider 
+        colaborador={colaboradorSeleccionado}
+        onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }}
+      />
+    );
   }
 
   return (
     <div>
-      <h3 style={{ marginBottom: 20, color: '#1e293b' }}>👥 Mi Equipo</h3>
-      {equipo.length === 0 ? <div style={s.tarjetaPlaceholder}><p>No tienes colaboradores asignados.</p></div> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {equipo.map(c => (
-            <div key={c.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div><h4 style={{ margin: 0 }}>{c.full_name || c.email}</h4><p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{c.area || 'Sin área'} · {c.seniority || 'Sin seniority'}</p></div>
-              <button style={s.btnPrimario}>📝 Evaluar</button>
-            </div>
-          ))}
+      <h3 style={{ marginBottom: 20, color: '#1e293b' }}>👥 Mi Equipo ({equipo.length})</h3>
+      
+      {equipo.length === 0 ? (
+        <div style={s.tarjetaPlaceholder}>
+          <p style={{ fontSize: 16 }}>No tienes colaboradores asignados.</p>
+          <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 8 }}>Contacta a RRHH para configurar tu equipo.</p>
         </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {equipo.map(col => {
+            const auto = evaluaciones[col.id]?.autoevaluacion;
+            const lider = evaluaciones[col.id]?.evaluacionLider;
+            
+            return (
+              <div key={col.id} style={{
+                ...s.tarjetaStat,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <h4 style={{ margin: 0, color: '#1e293b' }}>{col.full_name || col.email}</h4>
+                  <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>
+                    {col.area || 'Sin área'} · {col.seniority || 'Sin seniority'}
+                  </p>
+                  <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
+                    <span>
+                      📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>
+                        {auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}
+                      </strong>
+                    </span>
+                    <span>
+                      👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>
+                        {lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {auto?.estado === 'enviado' && (
+                    <button onClick={() => setColaboradorSeleccionado(col)} style={{ ...s.btnInfo, background: '#dbeafe', color: '#1e40af', fontWeight: 600 }}>
+                      👁️ Ver Auto
+                    </button>
+                  )}
+                  <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>
+                    {lider ? '✏️ Editar Evaluación' : '📝 Evaluar'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvaluacionLider({ colaborador, onVolver }) {
+  const [competencias, setCompetencias] = useState([]);
+  const [autoevaluacion, setAutoevaluacion] = useState(null);
+  const [puntuacionesAuto, setPuntuacionesAuto] = useState({});
+  const [evaluacionLider, setEvaluacionLider] = useState(null);
+  const [ratings, setRatings] = useState({});
+  const [comentarios, setComentarios] = useState({});
+  const [mensaje, setMensaje] = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [showInfo, setShowInfo] = useState({});
+
+  useEffect(() => { cargarDatos(); }, []);
+
+  async function cargarDatos() {
+    // Cargar competencias del seniority del colaborador
+    const { data: comps } = await supabase
+      .from('competencias')
+      .select('*')
+      .eq('aplica_a', colaborador.seniority || 'Analista');
+    setCompetencias(comps || []);
+
+    // Cargar autoevaluación
+    const { data: auto } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*)')
+      .eq('colaborador_id', colaborador.id)
+      .eq('tipo_evaluacion', 'autoevaluacion')
+      .maybeSingle();
+    
+    if (auto) {
+      setAutoevaluacion(auto);
+      const pa = {};
+      (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; });
+      setPuntuacionesAuto(pa);
+    }
+
+    // Cargar o crear evaluación del líder
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: liderEval } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*)')
+      .eq('colaborador_id', colaborador.id)
+      .eq('tipo_evaluacion', 'evaluacion_lider')
+      .maybeSingle();
+
+    if (liderEval) {
+      setEvaluacionLider(liderEval);
+      const rm = {}; const cm = {};
+      (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
+      setRatings(rm); setComentarios(cm);
+    } else {
+      const { data: nueva } = await supabase
+        .from('evaluaciones')
+        .insert({
+          colaborador_id: colaborador.id,
+          evaluador_id: session.user.id,
+          tipo_evaluacion: 'evaluacion_lider',
+          estado: 'borrador'
+        })
+        .select()
+        .single();
+      setEvaluacionLider(nueva);
+    }
+    setCargando(false);
+  }
+
+  async function guardar() {
+    await supabase.from('evaluaciones').update({ updated_at: new Date() }).eq('id', evaluacionLider.id);
+    for (const [compId, rating] of Object.entries(ratings)) {
+      const com = comentarios[compId] || '';
+      const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evaluacionLider.id).eq('competencia_id', compId).maybeSingle();
+      if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); }
+      else { await supabase.from('puntuaciones').insert({ evaluacion_id: evaluacionLider.id, competencia_id: compId, rating, comentario: com }); }
+    }
+    setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500);
+  }
+
+  async function enviar() {
+    await guardar();
+    await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evaluacionLider.id);
+    setMensaje('🎉 Evaluación enviada'); setEvaluacionLider({ ...evaluacionLider, estado: 'enviado' });
+    setTimeout(() => setMensaje(''), 3000);
+  }
+
+  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+  const enviada = evaluacionLider?.estado === 'enviado';
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16, fontSize: 14 }}>← Volver al equipo</button>
+      
+      <h3 style={{ color: '#1e293b' }}>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
+
+      {competencias.map(comp => (
+        <div key={comp.id} style={s.competenciaCard}>
+          <div style={s.competenciaHeader}>
+            <div>
+              <h5 style={{ margin: 0 }}>{comp.nombre}</h5>
+              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
+            </div>
+            <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button>
+          </div>
+
+          {/* GAP: Autoevaluación vs Líder */}
+          {puntuacionesAuto[comp.id] && (
+            <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+              📝 Autoevaluación: <strong>{puntuacionesAuto[comp.id]}</strong>
+              {ratings[comp.id] && (
+                <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>
+                  | Tu evaluación: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})
+                </span>
+              )}
+            </div>
+          )}
+
+          <div style={s.ratingRow}>
+            {[1, 2, 3, 4, 5].map(r => (
+              <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>
+            ))}
+          </div>
+
+          {showInfo[comp.id] && (
+            <div style={s.ratingInfoBox}>
+              {[1, 2, 3, 4, 5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}
+            </div>
+          )}
+
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} disabled={enviada} />
+        </div>
+      ))}
+
+      {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
+
+      {!enviada && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
+          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
+          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button>
+        </div>
+      )}
+
+      {enviada && (
+        <div style={s.bannerEnviado}>✅ Tu evaluación como líder ha sido enviada.</div>
       )}
     </div>
   );
@@ -315,13 +549,9 @@ function RatingDesc({ competenciaId, rating }) {
         .eq('competencia_id', competenciaId)
         .eq('rating', rating)
         .single();
-      if (error) {
-        setDesc('Error al cargar');
-      } else if (data) {
-        setDesc(`${data.titulo}: ${data.descripcion}`);
-      } else {
-        setDesc('Sin descripción');
-      }
+      if (error) { setDesc('Error al cargar'); }
+      else if (data) { setDesc(`${data.titulo}: ${data.descripcion}`); }
+      else { setDesc('Sin descripción'); }
     }
     load();
   }, [competenciaId, rating]);
