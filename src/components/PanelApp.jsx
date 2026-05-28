@@ -174,6 +174,46 @@ function PanelCalibracion({ colaboradores }) {
     setGuardando(false);
   }
 
+  async function enviarResumenCalibracion(d) {
+    if (!d.ratingFinal) return;
+    
+    const clasif = clasificar(d.ratingFinal);
+    
+    // Enviar al colaborador
+    emailjs.send('service_httvcn8', 'template_ytka22b', {
+      to_email: d.colaborador.email,
+      to_name: d.colaborador.full_name || d.colaborador.email,
+      promedio: d.ratingFinal,
+      clasificacion: clasif.texto,
+      message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}\n\nIngresa a la plataforma para ver tu evaluación completa.`
+    }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
+
+    // Enviar al líder
+    if (d.evaluacionLider?.evaluador_id) {
+      const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single();
+      if (lider?.email) {
+        emailjs.send('service_httvcn8', 'template_ytka22b', {
+          to_email: lider.email,
+          to_name: lider.full_name || 'Líder',
+          promedio: d.ratingFinal,
+          clasificacion: clasif.texto,
+          message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}`
+        }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
+      }
+    }
+
+    // Enviar a admin
+    emailjs.send('service_httvcn8', 'template_ytka22b', {
+      to_email: 'florencia.salvaneschi@grupo-fabric.com',
+      to_name: 'Florencia Salvaneschi',
+      promedio: d.ratingFinal,
+      clasificacion: clasif.texto,
+      message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}`
+    }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email admin:', err));
+
+    alert('✅ Resumen enviado al colaborador, líder y admin');
+  }
+
   const clasificar = (prom) => {
     if (!prom) return { texto: '-', color: '#94a3b8' };
     const p = parseFloat(prom);
@@ -189,16 +229,16 @@ function PanelCalibracion({ colaboradores }) {
   return (
     <div style={{ ...s.tarjetaStat }}>
       <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones.</p>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones. Selecciona rating calibrado y envía el resumen.</p>
 
       {datos.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1050px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Detalle</th>
+                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Detalle</th><th style={th}>Enviar</th>
               </tr>
             </thead>
             <tbody>
@@ -226,6 +266,11 @@ function PanelCalibracion({ colaboradores }) {
                     </td>
                     <td style={td}>
                       <button onClick={() => setDetalleVisible(d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button>
+                    </td>
+                    <td style={td}>
+                      {d.ratingFinal ? (
+                        <button onClick={() => enviarResumenCalibracion(d)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }} title="Enviar resumen por email">📧</button>
+                      ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>-</span>}
                     </td>
                   </tr>
                 );
@@ -509,7 +554,6 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     await guardar();
     await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id);
     
-    // Calcular promedio para el email
     const valores = Object.values(ratings).filter(r => r > 0);
     const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0';
     let clasif = '';
@@ -520,7 +564,6 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     else if (p <= 4.4) clasif = 'Excede las expectativas';
     else clasif = 'Desempeño distinguido';
 
-    // Obtener email del líder
     const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single();
     let leaderEmail = null;
     let leaderName = null;
@@ -530,7 +573,6 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
       leaderName = lider?.full_name;
     }
 
-    // Enviar email al colaborador
     emailjs.send('service_httvcn8', 'template_ytka22b', {
       to_email: email,
       to_name: nombre || 'Colaborador',
@@ -539,7 +581,6 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
       message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
-    // Enviar email al líder
     if (leaderEmail) {
       emailjs.send('service_httvcn8', 'template_ytka22b', {
         to_email: leaderEmail,
