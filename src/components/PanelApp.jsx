@@ -73,6 +73,7 @@ function PanelAdmin() {
         <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
         <div style={{ background: '#e2e8f0', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #22c55e)', borderRadius: 10, transition: 'width 0.5s' }} /></div>
       </div>
+      <EvaluacionesAdmin />
       <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
         <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
         {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
@@ -87,6 +88,79 @@ function PanelAdmin() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+function EvaluacionesAdmin() {
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => { cargarEvaluaciones(); }, []);
+
+  async function cargarEvaluaciones() {
+    const { data } = await supabase
+      .from('evaluaciones')
+      .select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name)')
+      .order('created_at', { ascending: false });
+    
+    setEvaluaciones(data || []);
+    setCargando(false);
+  }
+
+  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando evaluaciones...</p>;
+
+  return (
+    <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
+      <h4 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
+      {evaluaciones.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones aún.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                <th style={th}>Colaborador</th>
+                <th style={th}>Área</th>
+                <th style={th}>Tipo</th>
+                <th style={th}>Evaluador</th>
+                <th style={th}>Estado</th>
+                <th style={th}>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evaluaciones.map(ev => (
+                <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
+                  <td style={td}>{ev.colaborador?.area || '-'}</td>
+                  <td style={td}>
+                    <span style={{
+                      padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                      background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7',
+                      color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e'
+                    }}>
+                      {ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}
+                    </span>
+                  </td>
+                  <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
+                  <td style={td}>
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                      background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9',
+                      color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b'
+                    }}>
+                      {ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}
+                    </span>
+                  </td>
+                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
+                    {new Date(ev.created_at).toLocaleDateString('es-AR')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
