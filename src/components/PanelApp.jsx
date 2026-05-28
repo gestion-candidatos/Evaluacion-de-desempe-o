@@ -56,7 +56,7 @@ function PanelAdmin() {
   }
 
   async function cargarColabs() {
-    const { data } = await supabase.from('profiles').select('*').neq('role', 'admin_rrhh');
+    const { data } = await supabase.from('profiles').select('*');
     setColaboradores(data || []);
   }
 
@@ -91,19 +91,17 @@ function PanelAdmin() {
       
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
-          {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
-              <tbody>{colaboradores.map(c => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : '#1e40af' }}>{c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
+          <h4 style={{ margin: '0 0 16px 0' }}>👥 Todos ({colaboradores.length})</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
+            <tbody>{colaboradores.map(c => (
+              <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
+                <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
+                <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : c.role === 'admin_rrhh' ? '#dcfce7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : c.role === 'admin_rrhh' ? '#166534' : '#1e40af' }}>{c.role === 'admin_rrhh' ? '🔧 Admin' : c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
         </div>
       )}
     </div>
@@ -114,13 +112,15 @@ function PanelCalibracion({ colaboradores }) {
   const [datos, setDatos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [detalleVisible, setDetalleVisible] = useState(null);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
     const resultado = [];
+    const colsFiltrados = colaboradores.filter(c => c.role !== 'admin_rrhh');
     
-    for (const col of colaboradores) {
+    for (const col of colsFiltrados) {
       const { data: autoeval } = await supabase
         .from('evaluaciones')
         .select('*, puntuaciones(*)')
@@ -135,7 +135,6 @@ function PanelCalibracion({ colaboradores }) {
         .eq('tipo_evaluacion', 'evaluacion_lider')
         .maybeSingle();
 
-      // Calcular promedios
       const calcPromedio = (puntuaciones) => {
         if (!puntuaciones || puntuaciones.length === 0) return null;
         const valores = puntuaciones.map(p => p.rating).filter(r => r > 0);
@@ -152,12 +151,26 @@ function PanelCalibracion({ colaboradores }) {
         evaluacionLider: evalLider,
         promAuto,
         promLider,
-        gap: promAuto && promLider ? (parseFloat(promLider) - parseFloat(promAuto)).toFixed(1) : null
+        gap: promAuto && promLider ? (parseFloat(promLider) - parseFloat(promAuto)).toFixed(1) : null,
+        ratingFinal: evalLider?.rating_calibrado || null
       });
     }
 
     setDatos(resultado);
     setCargando(false);
+  }
+
+  async function guardarCalibracion(evaluacionId, rating) {
+    setGuardando(true);
+    await supabase
+      .from('evaluaciones')
+      .update({ rating_calibrado: rating })
+      .eq('id', evaluacionId);
+    
+    setDatos(prev => prev.map(d => 
+      d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d
+    ));
+    setGuardando(false);
   }
 
   const clasificar = (prom) => {
@@ -170,76 +183,50 @@ function PanelCalibracion({ colaboradores }) {
     return { texto: '🟣 Distinguido', color: '#8b5cf6' };
   };
 
-  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando datos de calibración...</p>;
+  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>⏳ Cargando datos de calibración...</p>;
 
   return (
     <div style={{ ...s.tarjetaStat }}>
-      <h3 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
+      <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
       <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>
-        Comparación de autoevaluación y evaluación del líder para detectar gaps y calibrar.
+        Comparación y calibración final de evaluaciones.
       </p>
 
       {datos.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th>
-                <th style={th}>Área</th>
-                <th style={th}>Seniority</th>
-                <th style={th}>Auto</th>
-                <th style={th}>Líder</th>
-                <th style={th}>GAP</th>
-                <th style={th}>Clasificación</th>
-                <th style={th}>Acción</th>
+                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Detalle</th>
               </tr>
             </thead>
             <tbody>
               {datos.map(d => {
-                const clasAuto = clasificar(d.promAuto);
-                const clasLider = clasificar(d.promLider);
+                const clasFinal = clasificar(d.ratingFinal);
                 return (
                   <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
                     <td style={td}>{d.colaborador.area || '-'}</td>
                     <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{d.colaborador.seniority || '-'}</span></td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.promAuto ? (
-                        <div>
-                          <span style={{ fontSize: 20, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span>
-                          <br /><span style={{ fontSize: 10, color: clasAuto.color }}>{clasAuto.texto}</span>
-                        </div>
-                      ) : <span style={{ color: '#94a3b8' }}>Sin datos</span>}
-                    </td>
+                    <td style={{ ...td, textAlign: 'center', fontSize: 18, fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
+                    <td style={{ ...td, textAlign: 'center', fontSize: 18, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
+                    <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       {d.promLider ? (
                         <div>
-                          <span style={{ fontSize: 20, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span>
-                          <br /><span style={{ fontSize: 10, color: clasLider.color }}>{clasLider.texto}</span>
+                          <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))}
+                            style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}>
+                            <option value="">Seleccionar</option>
+                            <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
+                          </select>
+                          {d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}
                         </div>
-                      ) : <span style={{ color: '#94a3b8' }}>Sin datos</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.gap ? (
-                        <span style={{
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color: Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626'
-                        }}>
-                          {d.gap > 0 ? '+' : ''}{d.gap}
-                        </span>
-                      ) : <span style={{ color: '#94a3b8' }}>-</span>}
+                      ) : <span style={{ color: '#94a3b8' }}>Sin eval</span>}
                     </td>
                     <td style={td}>
-                      {d.promLider ? clasLider.texto : '-'}
-                    </td>
-                    <td style={td}>
-                      <button onClick={() => setDetalleVisible(detalleVisible === d.colaborador.id ? null : d.colaborador.id)} style={{
-                        background: '#2563eb', color: 'white', border: 'none', borderRadius: 6,
-                        padding: '6px 12px', cursor: 'pointer', fontSize: 12
-                      }}>👁️ Detalle</button>
+                      <button onClick={() => setDetalleVisible(d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button>
                     </td>
                   </tr>
                 );
@@ -247,54 +234,26 @@ function PanelCalibracion({ colaboradores }) {
             </tbody>
           </table>
 
-          {/* Modal de detalle de calibración */}
           {detalleVisible && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                 {(() => {
                   const d = datos.find(x => x.colaborador.id === detalleVisible);
                   if (!d) return null;
                   return (
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <h3 style={{ margin: 0 }}>🎯 Calibración: {d.colaborador.full_name}</h3>
+                        <h3 style={{ margin: 0 }}>🎯 {d.colaborador.full_name}</h3>
                         <button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button>
                       </div>
-                      <p style={{ color: '#64748b', marginBottom: 20 }}>{d.colaborador.area} · {d.colaborador.seniority}</p>
-                      
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                        <div style={{ padding: 16, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 14, color: '#1e40af' }}>📝 Autoevaluación</p>
-                          <p style={{ fontSize: 36, fontWeight: 700, color: '#1e40af', margin: '8px 0' }}>{d.promAuto || '-'}</p>
-                          <p style={{ fontSize: 12, color: '#1e40af' }}>{d.autoevaluacion?.estado === 'enviado' ? '✅ Enviada' : '⏳ Pendiente'}</p>
-                        </div>
-                        <div style={{ padding: 16, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 14, color: '#92400e' }}>👥 Evaluación Líder</p>
-                          <p style={{ fontSize: 36, fontWeight: 700, color: '#92400e', margin: '8px 0' }}>{d.promLider || '-'}</p>
-                          <p style={{ fontSize: 12, color: '#92400e' }}>{d.evaluacionLider?.estado === 'enviado' ? '✅ Enviada' : '⏳ Pendiente'}</p>
-                        </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                        <div style={{ padding: 14, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>📝 Auto</p><p style={{ fontSize: 28, fontWeight: 700, color: '#1e40af', margin: '4px 0' }}>{d.promAuto || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
                       </div>
-
-                      {d.gap && (
-                        <div style={{ padding: 12, background: Math.abs(d.gap) <= 0.5 ? '#dcfce7' : '#fef3c7', borderRadius: 8, marginBottom: 20, textAlign: 'center' }}>
-                          <strong>GAP: {d.gap > 0 ? '+' : ''}{d.gap}</strong>
-                          {Math.abs(d.gap) <= 0.5 ? ' ✅ Alineado' : Math.abs(d.gap) <= 1 ? ' ⚠️ Revisar' : ' 🔴 Desvío significativo'}
-                        </div>
-                      )}
-
                       <div style={{ display: 'flex', gap: 16 }}>
-                        <div style={{ flex: 1 }}>
-                          <h4>💪 Fortalezas (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || 'No completado'}</p>
-                          <h4>📈 Oportunidades (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || 'No completado'}</p>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <h4>🎯 Plan de Acción (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || 'No completado'}</p>
-                          <h4>📚 Desarrollo (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || 'No completado'}</p>
-                        </div>
+                        <div style={{ flex: 1 }}><h4>💪 Fortalezas</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || '-'}</p><h4>📈 Oportunidades</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || '-'}</p></div>
+                        <div style={{ flex: 1 }}><h4>🎯 Plan de Acción</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || '-'}</p><h4>📚 Desarrollo</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || '-'}</p></div>
                       </div>
                     </div>
                   );
@@ -320,7 +279,6 @@ function EvaluacionesAdmin() {
       .from('evaluaciones')
       .select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name)')
       .order('created_at', { ascending: false });
-    
     setEvaluaciones(data || []);
     setCargando(false);
   }
@@ -328,62 +286,42 @@ function EvaluacionesAdmin() {
   if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando evaluaciones...</p>;
 
   return (
-    <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-      <h4 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
-      {evaluaciones.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones aún.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evaluaciones.map(ev => (
-                <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
-                  <td style={td}>{ev.colaborador?.area || '-'}</td>
-                  <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}</span></td>
-                  <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9', color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b' }}>{ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}</span></td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
-                  <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️ Ver</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {detalleVisible && (
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                {(() => {
-                  const ev = evaluaciones.find(e => e.id === detalleVisible);
-                  if (!ev) return null;
-                  return (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>📋 Detalle de Evaluación</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'} ({ev.colaborador?.email || '-'})</p>
-                        <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
-                        <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
-                        <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
-                        <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
-                        <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
-                        <hr style={{ border: '1px solid #e2e8f0' }} />
-                        <div><strong>💪 Fortalezas:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.fortalezas || 'No completado'}</p></div>
-                        <div><strong>📈 Oportunidades:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.oportunidades || 'No completado'}</p></div>
-                        <div><strong>🎯 Plan de Acción:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.plan_accion || 'No completado'}</p></div>
-                        <div><strong>📚 Desarrollo Individual:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.desarrollo_individual || 'No completado'}</p></div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+    <div style={{ ...s.tarjetaStat }}>
+      <h4 style={{ margin: '0 0 16px 0' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 750 }}>
+          <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th></tr></thead>
+          <tbody>{evaluaciones.map(ev => (
+            <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
+              <td style={td}>{ev.colaborador?.area || '-'}</td>
+              <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : '👥 Líder'}</span></td>
+              <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
+              <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : '#fef3c7', color: ev.estado === 'enviado' ? '#166534' : '#92400e' }}>{ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</span></td>
+              <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
+              <td style={td}><button onClick={() => setDetalleVisible(ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {detalleVisible && (() => { const ev = evaluaciones.find(e => e.id === detalleVisible); if (!ev) return null; return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>📋 Detalle</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
+              <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'}</p>
+              <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
+              <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
+              <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
+              <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
+              <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
+              <hr style={{ border: '1px solid #e2e8f0' }} />
+              <p><strong>💪 Fortalezas:</strong> {ev.fortalezas || '-'}</p>
+              <p><strong>📈 Oportunidades:</strong> {ev.oportunidades || '-'}</p>
+              <p><strong>🎯 Plan de Acción:</strong> {ev.plan_accion || '-'}</p>
+              <p><strong>📚 Desarrollo:</strong> {ev.desarrollo_individual || '-'}</p>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )})()}
+      </div>
     </div>
   );
 }
@@ -398,100 +336,41 @@ function PanelLider() {
   async function cargarEquipo() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('leader_id', session.user.id);
-    
+    const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id);
     setEquipo(data || []);
-
     if (data) {
       const evalsPorColaborador = {};
       for (const col of data) {
-        const { data: autoeval } = await supabase
-          .from('evaluaciones')
-          .select('*')
-          .eq('colaborador_id', col.id)
-          .eq('tipo_evaluacion', 'autoevaluacion')
-          .maybeSingle();
-        
-        const { data: evalLider } = await supabase
-          .from('evaluaciones')
-          .select('*')
-          .eq('colaborador_id', col.id)
-          .eq('tipo_evaluacion', 'evaluacion_lider')
-          .maybeSingle();
-
-        evalsPorColaborador[col.id] = {
-          autoevaluacion: autoeval,
-          evaluacionLider: evalLider
-        };
+        const { data: autoeval } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
+        const { data: evalLider } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
+        evalsPorColaborador[col.id] = { autoevaluacion: autoeval, evaluacionLider: evalLider };
       }
       setEvaluaciones(evalsPorColaborador);
     }
   }
 
-  if (colaboradorSeleccionado) {
-    return (
-      <EvaluacionLider 
-        colaborador={colaboradorSeleccionado}
-        onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }}
-      />
-    );
-  }
+  if (colaboradorSeleccionado) return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
 
   return (
     <div>
-      <h3 style={{ marginBottom: 20, color: '#1e293b' }}>👥 Mi Equipo ({equipo.length})</h3>
-      
-      {equipo.length === 0 ? (
-        <div style={s.tarjetaPlaceholder}>
-          <p style={{ fontSize: 16 }}>No tienes colaboradores asignados.</p>
-          <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 8 }}>Contacta a RRHH para configurar tu equipo.</p>
-        </div>
-      ) : (
+      <h3 style={{ marginBottom: 20 }}>👥 Mi Equipo ({equipo.length})</h3>
+      {equipo.length === 0 ? <div style={s.tarjetaPlaceholder}><p>No tienes colaboradores asignados.</p></div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {equipo.map(col => {
             const auto = evaluaciones[col.id]?.autoevaluacion;
             const lider = evaluaciones[col.id]?.evaluacionLider;
-            
             return (
-              <div key={col.id} style={{
-                ...s.tarjetaStat,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 12
-              }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <h4 style={{ margin: 0, color: '#1e293b' }}>{col.full_name || col.email}</h4>
-                  <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>
-                    {col.area || 'Sin área'} · {col.seniority || 'Sin seniority'}
-                  </p>
+              <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: 0 }}>{col.full_name || col.email}</h4>
+                  <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p>
                   <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
-                    <span>
-                      📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>
-                        {auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}
-                      </strong>
-                    </span>
-                    <span>
-                      👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>
-                        {lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}
-                      </strong>
-                    </span>
+                    <span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span>
+                    <span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {auto?.estado === 'enviado' && (
-                    <button onClick={() => setColaboradorSeleccionado(col)} style={{ ...s.btnInfo, background: '#dbeafe', color: '#1e40af', fontWeight: 600 }}>
-                      👁️ Ver Auto
-                    </button>
-                  )}
-                  <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>
-                    {lider ? '✏️ Editar Evaluación' : '📝 Evaluar'}
-                  </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
                 </div>
               </div>
             );
@@ -504,7 +383,6 @@ function PanelLider() {
 
 function EvaluacionLider({ colaborador, onVolver }) {
   const [competencias, setCompetencias] = useState([]);
-  const [autoevaluacion, setAutoevaluacion] = useState(null);
   const [puntuacionesAuto, setPuntuacionesAuto] = useState({});
   const [evaluacionLider, setEvaluacionLider] = useState(null);
   const [ratings, setRatings] = useState({});
@@ -516,50 +394,19 @@ function EvaluacionLider({ colaborador, onVolver }) {
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
-    const { data: comps } = await supabase
-      .from('competencias')
-      .select('*')
-      .eq('aplica_a', colaborador.seniority || 'Analista');
+    const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista');
     setCompetencias(comps || []);
-
-    const { data: auto } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*)')
-      .eq('colaborador_id', colaborador.id)
-      .eq('tipo_evaluacion', 'autoevaluacion')
-      .maybeSingle();
-    
-    if (auto) {
-      setAutoevaluacion(auto);
-      const pa = {};
-      (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; });
-      setPuntuacionesAuto(pa);
-    }
-
+    const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
+    if (auto) { const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); }
     const { data: { session } } = await supabase.auth.getSession();
-    const { data: liderEval } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*)')
-      .eq('colaborador_id', colaborador.id)
-      .eq('tipo_evaluacion', 'evaluacion_lider')
-      .maybeSingle();
-
+    const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
     if (liderEval) {
       setEvaluacionLider(liderEval);
       const rm = {}; const cm = {};
       (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
       setRatings(rm); setComentarios(cm);
     } else {
-      const { data: nueva } = await supabase
-        .from('evaluaciones')
-        .insert({
-          colaborador_id: colaborador.id,
-          evaluador_id: session.user.id,
-          tipo_evaluacion: 'evaluacion_lider',
-          estado: 'borrador'
-        })
-        .select()
-        .single();
+      const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador' }).select().single();
       setEvaluacionLider(nueva);
     }
     setCargando(false);
@@ -588,62 +435,22 @@ function EvaluacionLider({ colaborador, onVolver }) {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16, fontSize: 14 }}>← Volver al equipo</button>
-      
-      <h3 style={{ color: '#1e293b' }}>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
+      <h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
       <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
-
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
-          <div style={s.competenciaHeader}>
-            <div>
-              <h5 style={{ margin: 0 }}>{comp.nombre}</h5>
-              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
-            </div>
-            <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button>
-          </div>
-
-          {puntuacionesAuto[comp.id] && (
-            <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-              📝 Autoevaluación: <strong>{puntuacionesAuto[comp.id]}</strong>
-              {ratings[comp.id] && (
-                <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>
-                  | Tu evaluación: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})
-                </span>
-              )}
-            </div>
-          )}
-
-          <div style={s.ratingRow}>
-            {[1, 2, 3, 4, 5].map(r => (
-              <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>
-            ))}
-          </div>
-
-          {showInfo[comp.id] && (
-            <div style={s.ratingInfoBox}>
-              {[1, 2, 3, 4, 5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}
-            </div>
-          )}
-
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} disabled={enviada} />
+          <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
+          {puntuacionesAuto[comp.id] && (<div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong>{ratings[comp.id] && <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>| Tú: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})</span>}</div>)}
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
+          {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
-
       <CalcularPromedio ratings={ratings} competencias={competencias} />
-
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-
-      {!enviada && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
-          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
-          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button>
-        </div>
-      )}
-
-      {enviada && (
-        <div style={s.bannerEnviado}>✅ Tu evaluación como líder ha sido enviada.</div>
-      )}
+      {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
+      {enviada && <div style={s.bannerEnviado}>✅ Evaluación enviada.</div>}
     </div>
   );
 }
@@ -664,13 +471,8 @@ function PanelColaborador({ userId, seniority }) {
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
-    const { data: comps } = await supabase
-      .from('competencias')
-      .select('*')
-      .eq('aplica_a', seniority || 'Analista');
-    
+    const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', seniority || 'Analista');
     setCompetencias(comps || []);
-
     const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single();
     if (ev) {
       setEvalData(ev); setFortalezas(ev.fortalezas || ''); setOportunidades(ev.oportunidades || ''); setPlanAccion(ev.plan_accion || ''); setDesarrollo(ev.desarrollo_individual || '');
@@ -703,7 +505,7 @@ function PanelColaborador({ userId, seniority }) {
     setTimeout(() => setMensaje(''), 3000);
   }
 
-  if (cargando) return <p style={{ padding: 20 }}>Cargando competencias para {seniority || 'tu rol'}...</p>;
+  if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
   const enviada = evalData?.estado === 'enviado';
 
   return (
@@ -711,40 +513,19 @@ function PanelColaborador({ userId, seniority }) {
       <h3>📝 Mi Autoevaluación</h3>
       <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
       <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
-      
-      {competencias.length === 0 && <p style={{ color: '#f59e0b' }}>No hay competencias configuradas para tu seniority.</p>}
-
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
-          <div style={s.competenciaHeader}>
-            <div>
-              <h5 style={{ margin: 0 }}>{comp.nombre}</h5>
-              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
-              <span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span>
-            </div>
-            <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}</button>
-          </div>
-          <div style={s.ratingRow}>
-            {[1, 2, 3, 4, 5].map(r => (
-              <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>
-            ))}
-          </div>
-          {showInfo[comp.id] && (
-            <div style={s.ratingInfoBox}>
-              {[1, 2, 3, 4, 5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}
-            </div>
-          )}
+          <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p><span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
+          {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
-
       <SeccionText titulo="💪 Fortalezas" valor={fortalezas} onChange={setFortalezas} disabled={enviada} />
       <SeccionText titulo="📈 Oportunidades de Mejora" valor={oportunidades} onChange={setOportunidades} disabled={enviada} />
       <SeccionText titulo="🎯 Plan de Acción" valor={planAccion} onChange={setPlanAccion} disabled={enviada} />
       <SeccionText titulo="📚 Desarrollo Individual" valor={desarrollo} onChange={setDesarrollo} disabled={enviada} />
-
       <CalcularPromedio ratings={ratings} competencias={competencias} />
-
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
       {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>}
       {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación ha sido enviada.</div>}
@@ -760,15 +541,10 @@ function RatingDesc({ competenciaId, rating }) {
   const [desc, setDesc] = useState('Cargando...');
   useEffect(() => {
     async function load() {
-      const { data, error } = await supabase
-        .from('rating_descriptions')
-        .select('titulo, descripcion')
-        .eq('competencia_id', competenciaId)
-        .eq('rating', rating)
-        .single();
-      if (error) { setDesc('Error al cargar'); }
-      else if (data) { setDesc(`${data.titulo}: ${data.descripcion}`); }
-      else { setDesc('Sin descripción'); }
+      const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single();
+      if (error) setDesc('Error');
+      else if (data) setDesc(`${data.titulo}: ${data.descripcion}`);
+      else setDesc('Sin descripción');
     }
     load();
   }, [competenciaId, rating]);
@@ -777,38 +553,22 @@ function RatingDesc({ competenciaId, rating }) {
 
 function CalcularPromedio({ ratings, competencias }) {
   if (!ratings || Object.keys(ratings).length === 0) return null;
-  
   const valores = Object.values(ratings).filter(r => r > 0);
   if (valores.length === 0) return null;
-  
   const suma = valores.reduce((acc, val) => acc + val, 0);
   const promedio = suma / valores.length;
-  
-  let clasificacion = '';
-  let color = '';
-  let emoji = '';
-  
+  let clasificacion = '', color = '', emoji = '';
   if (promedio <= 1.4) { clasificacion = 'No adecuado'; color = '#dc2626'; emoji = '🔴'; }
   else if (promedio <= 2.4) { clasificacion = 'Por debajo de lo esperado'; color = '#f59e0b'; emoji = '🟠'; }
   else if (promedio <= 3.4) { clasificacion = 'Cumple con las expectativas'; color = '#3b82f6'; emoji = '🔵'; }
   else if (promedio <= 4.4) { clasificacion = 'Excede las expectativas'; color = '#22c55e'; emoji = '🟢'; }
   else { clasificacion = 'Desempeño distinguido'; color = '#8b5cf6'; emoji = '🟣'; }
-  
   return (
-    <div style={{
-      marginTop: 24,
-      padding: 20,
-      background: 'white',
-      borderRadius: 12,
-      border: `2px solid ${color}`,
-      textAlign: 'center'
-    }}>
+    <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: `2px solid ${color}`, textAlign: 'center' }}>
       <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p>
       <p style={{ fontSize: 48, fontWeight: 700, color, margin: '8px 0' }}>{promedio.toFixed(1)}</p>
       <p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>{emoji} {clasificacion}</p>
-      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
-        Basado en {valores.length} de {competencias?.length || 0} competencias evaluadas
-      </p>
+      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>Basado en {valores.length} de {competencias?.length || 0} competencias evaluadas</p>
     </div>
   );
 }
