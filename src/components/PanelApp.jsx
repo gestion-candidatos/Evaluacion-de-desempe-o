@@ -33,10 +33,10 @@ export default function PanelApp() {
         <div style={s.headerDer}><span style={s.email}>{profile.email}</span><button onClick={cerrarSesion} style={s.btnSalir}>Cerrar Sesión</button></div>
       </header>
       <main style={s.main}>
-        <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'}</p></div>
+        <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'} | Seniority: {profile.seniority || 'No definido'}</p></div>
         {profile.role === 'admin_rrhh' && <PanelAdmin />}
         {profile.role === 'lider' && <PanelLider />}
-        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} />}
+        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} seniority={profile.seniority} />}
       </main>
     </div>
   );
@@ -78,10 +78,11 @@ function PanelAdmin() {
         <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
         {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Rol</th></tr></thead>
+            <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
             <tbody>{colaboradores.map(c => (
               <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
+                <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : '#1e40af' }}>{c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
               </tr>
             ))}</tbody>
@@ -121,13 +122,7 @@ function EvaluacionesAdmin() {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th>
-                <th style={th}>Área</th>
-                <th style={th}>Tipo</th>
-                <th style={th}>Evaluador</th>
-                <th style={th}>Estado</th>
-                <th style={th}>Fecha</th>
-                <th style={th}>Ver</th>
+                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th>
               </tr>
             </thead>
             <tbody>
@@ -135,62 +130,24 @@ function EvaluacionesAdmin() {
                 <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
                   <td style={td}>{ev.colaborador?.area || '-'}</td>
-                  <td style={td}>
-                    <span style={{
-                      padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                      background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7',
-                      color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e'
-                    }}>
-                      {ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}
-                    </span>
-                  </td>
+                  <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}</span></td>
                   <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
-                  <td style={td}>
-                    <span style={{
-                      padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                      background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9',
-                      color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b'
-                    }}>
-                      {ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}
-                    </span>
-                  </td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
-                    {new Date(ev.created_at).toLocaleDateString('es-AR')}
-                  </td>
-                  <td style={td}>
-                    <button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{
-                      background: '#2563eb', color: 'white', border: 'none', borderRadius: 6,
-                      padding: '6px 12px', cursor: 'pointer', fontSize: 14
-                    }}>👁️ Ver</button>
-                  </td>
+                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9', color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b' }}>{ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}</span></td>
+                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
+                  <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️ Ver</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
-
-          {/* Modal de detalle */}
           {detalleVisible && (
-            <div style={{
-              position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-              backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center',
-              alignItems: 'center', zIndex: 1000, padding: 20
-            }} onClick={() => setDetalleVisible(null)}>
-              <div style={{
-                background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%',
-                maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-              }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
                 {(() => {
                   const ev = evaluaciones.find(e => e.id === detalleVisible);
                   if (!ev) return null;
                   return (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <h3 style={{ margin: 0 }}>📋 Detalle de Evaluación</h3>
-                        <button onClick={() => setDetalleVisible(null)} style={{
-                          background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px',
-                          cursor: 'pointer', fontSize: 16
-                        }}>✕</button>
-                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>📋 Detalle de Evaluación</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'} ({ev.colaborador?.email || '-'})</p>
                         <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
@@ -244,7 +201,7 @@ function PanelLider() {
   );
 }
 
-function PanelColaborador({ userId }) {
+function PanelColaborador({ userId, seniority }) {
   const [evalData, setEvalData] = useState(null);
   const [competencias, setCompetencias] = useState([]);
   const [ratings, setRatings] = useState({});
@@ -260,8 +217,13 @@ function PanelColaborador({ userId }) {
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
-    const { data: comps } = await supabase.from('competencias').select('*');
+    const { data: comps } = await supabase
+      .from('competencias')
+      .select('*')
+      .eq('aplica_a', seniority || 'Analista');
+    
     setCompetencias(comps || []);
+
     const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single();
     if (ev) {
       setEvalData(ev); setFortalezas(ev.fortalezas || ''); setOportunidades(ev.oportunidades || ''); setPlanAccion(ev.plan_accion || ''); setDesarrollo(ev.desarrollo_individual || '');
@@ -294,16 +256,27 @@ function PanelColaborador({ userId }) {
     setTimeout(() => setMensaje(''), 3000);
   }
 
-  if (cargando) return <p>Cargando...</p>;
+  if (cargando) return <p style={{ padding: 20 }}>Cargando competencias para {seniority || 'tu rol'}...</p>;
   const enviada = evalData?.estado === 'enviado';
 
   return (
     <div style={{ maxWidth: 900 }}>
       <h3>📝 Mi Autoevaluación</h3>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
       <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
+      
+      {competencias.length === 0 && <p style={{ color: '#f59e0b' }}>No hay competencias configuradas para tu seniority.</p>}
+
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
-          <div style={s.competenciaHeader}><h5 style={{ margin: 0 }}>{comp.nombre}</h5><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
+          <div style={s.competenciaHeader}>
+            <div>
+              <h5 style={{ margin: 0 }}>{comp.nombre}</h5>
+              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
+              <span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span>
+            </div>
+            <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}</button>
+          </div>
           <div style={s.ratingRow}>
             {[1, 2, 3, 4, 5].map(r => (
               <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>
@@ -333,10 +306,25 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
 }
 
 function RatingDesc({ competenciaId, rating }) {
-  const [desc, setDesc] = useState('...');
+  const [desc, setDesc] = useState('Cargando...');
   useEffect(() => {
-    supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single().then(({ data }) => { if (data) setDesc(`${data.titulo}: ${data.descripcion}`); });
-  }, []);
+    async function load() {
+      const { data, error } = await supabase
+        .from('rating_descriptions')
+        .select('titulo, descripcion')
+        .eq('competencia_id', competenciaId)
+        .eq('rating', rating)
+        .single();
+      if (error) {
+        setDesc('Error al cargar');
+      } else if (data) {
+        setDesc(`${data.titulo}: ${data.descripcion}`);
+      } else {
+        setDesc('Sin descripción');
+      }
+    }
+    load();
+  }, [competenciaId, rating]);
   return <span>{desc}</span>;
 }
 
@@ -360,6 +348,7 @@ const s = {
   seccionTitulo: { fontSize: 15, fontWeight: 600, color: '#1e293b', marginBottom: 10, paddingBottom: 8, borderBottom: '2px solid #e2e8f0' },
   competenciaCard: { background: '#f8fafc', padding: 18, borderRadius: 10, marginBottom: 14, border: '1px solid #e2e8f0' },
   competenciaHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  tipoBadge: { fontSize: 11, padding: '3px 10px', borderRadius: 12, background: '#f1f5f9', color: '#64748b', display: 'inline-block', fontWeight: 500 },
   btnInfo: { fontSize: 12, padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', color: '#475569', fontWeight: 500 },
   ratingRow: { display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' },
   ratingBtn: { width: 42, height: 42, borderRadius: 10, fontSize: 18, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' },
