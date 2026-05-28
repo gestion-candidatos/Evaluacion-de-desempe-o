@@ -69,7 +69,8 @@ function PanelAdmin() {
         <button onClick={() => setVistaActiva('dashboard')} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
         <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
         <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
-        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Colaboradores</button>
+        <button onClick={() => setVistaActiva('equipo')} style={vistaActiva === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Todos</button>
       </div>
 
       {vistaActiva === 'dashboard' && (
@@ -89,6 +90,7 @@ function PanelAdmin() {
 
       {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
       {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
+      {vistaActiva === 'equipo' && <PanelLider />}
       
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
@@ -179,7 +181,6 @@ function PanelCalibracion({ colaboradores }) {
     
     const clasif = clasificar(d.ratingFinal);
     
-    // Enviar al colaborador
     emailjs.send('service_httvcn8', 'template_ytka22b', {
       to_email: d.colaborador.email,
       to_name: d.colaborador.full_name || d.colaborador.email,
@@ -188,7 +189,6 @@ function PanelCalibracion({ colaboradores }) {
       message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}\n\nIngresa a la plataforma para ver tu evaluación completa.`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
-    // Enviar al líder
     if (d.evaluacionLider?.evaluador_id) {
       const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single();
       if (lider?.email) {
@@ -202,7 +202,6 @@ function PanelCalibracion({ colaboradores }) {
       }
     }
 
-    // Enviar a admin
     emailjs.send('service_httvcn8', 'template_ytka22b', {
       to_email: 'florencia.salvaneschi@grupo-fabric.com',
       to_name: 'Florencia Salvaneschi',
