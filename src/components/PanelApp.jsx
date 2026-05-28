@@ -95,6 +95,7 @@ function PanelAdmin() {
 function EvaluacionesAdmin() {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [detalleVisible, setDetalleVisible] = useState(null);
 
   useEffect(() => { cargarEvaluaciones(); }, []);
 
@@ -117,7 +118,7 @@ function EvaluacionesAdmin() {
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones aún.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
                 <th style={th}>Colaborador</th>
@@ -126,6 +127,7 @@ function EvaluacionesAdmin() {
                 <th style={th}>Evaluador</th>
                 <th style={th}>Estado</th>
                 <th style={th}>Fecha</th>
+                <th style={th}>Ver</th>
               </tr>
             </thead>
             <tbody>
@@ -155,10 +157,59 @@ function EvaluacionesAdmin() {
                   <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
                     {new Date(ev.created_at).toLocaleDateString('es-AR')}
                   </td>
+                  <td style={td}>
+                    <button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{
+                      background: '#2563eb', color: 'white', border: 'none', borderRadius: 6,
+                      padding: '6px 12px', cursor: 'pointer', fontSize: 14
+                    }}>👁️ Ver</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Modal de detalle */}
+          {detalleVisible && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+              backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center',
+              alignItems: 'center', zIndex: 1000, padding: 20
+            }} onClick={() => setDetalleVisible(null)}>
+              <div style={{
+                background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%',
+                maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }} onClick={e => e.stopPropagation()}>
+                {(() => {
+                  const ev = evaluaciones.find(e => e.id === detalleVisible);
+                  if (!ev) return null;
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <h3 style={{ margin: 0 }}>📋 Detalle de Evaluación</h3>
+                        <button onClick={() => setDetalleVisible(null)} style={{
+                          background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px',
+                          cursor: 'pointer', fontSize: 16
+                        }}>✕</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'} ({ev.colaborador?.email || '-'})</p>
+                        <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
+                        <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
+                        <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
+                        <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
+                        <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
+                        <hr style={{ border: '1px solid #e2e8f0' }} />
+                        <div><strong>💪 Fortalezas:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.fortalezas || 'No completado'}</p></div>
+                        <div><strong>📈 Oportunidades:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.oportunidades || 'No completado'}</p></div>
+                        <div><strong>🎯 Plan de Acción:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.plan_accion || 'No completado'}</p></div>
+                        <div><strong>📚 Desarrollo Individual:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.desarrollo_individual || 'No completado'}</p></div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
