@@ -1,18 +1,18 @@
 ---
-import Login from '../components/Login.jsx';
+import PanelApp from '../components/PanelApp.jsx';
 ---
 
 <html lang="es">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evaluación de Desempeño - Grupo Fabric</title>
+    <title>Panel - Evaluación RH</title>
     <style is:global>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; }
     </style>
   </head>
   <body>
-    <Login client:load />
+    <PanelApp client:load />
   </body>
 </html>
