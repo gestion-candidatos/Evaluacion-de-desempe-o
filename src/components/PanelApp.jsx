@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import emailjs from '@emailjs/browser';
 
 export default function PanelApp() {
   const [profile, setProfile] = useState(null);
@@ -36,7 +37,7 @@ export default function PanelApp() {
         <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'} | Seniority: {profile.seniority || 'No definido'}</p></div>
         {profile.role === 'admin_rrhh' && <PanelAdmin />}
         {profile.role === 'lider' && <PanelLider />}
-        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} seniority={profile.seniority} />}
+        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />}
       </main>
     </div>
   );
@@ -461,7 +462,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   );
 }
 
-function PanelColaborador({ userId, seniority }) {
+function PanelColaborador({ userId, seniority, email, nombre }) {
   const [evalData, setEvalData] = useState(null);
   const [competencias, setCompetencias] = useState([]);
   const [ratings, setRatings] = useState({});
@@ -507,8 +508,51 @@ function PanelColaborador({ userId, seniority }) {
   async function enviar() {
     await guardar();
     await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id);
-    setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' });
-    setTimeout(() => setMensaje(''), 3000);
+    
+    // Calcular promedio para el email
+    const valores = Object.values(ratings).filter(r => r > 0);
+    const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0';
+    let clasif = '';
+    const p = parseFloat(prom);
+    if (p <= 1.4) clasif = 'No adecuado';
+    else if (p <= 2.4) clasif = 'Por debajo de lo esperado';
+    else if (p <= 3.4) clasif = 'Cumple con las expectativas';
+    else if (p <= 4.4) clasif = 'Excede las expectativas';
+    else clasif = 'Desempeño distinguido';
+
+    // Obtener email del líder
+    const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single();
+    let leaderEmail = null;
+    let leaderName = null;
+    if (perfil?.leader_id) {
+      const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', perfil.leader_id).single();
+      leaderEmail = lider?.email;
+      leaderName = lider?.full_name;
+    }
+
+    // Enviar email al colaborador
+    emailjs.send('service_httvcn8', 'template_ytka22b', {
+      to_email: email,
+      to_name: nombre || 'Colaborador',
+      promedio: prom,
+      clasificacion: clasif,
+      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.`
+    }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
+
+    // Enviar email al líder
+    if (leaderEmail) {
+      emailjs.send('service_httvcn8', 'template_ytka22b', {
+        to_email: leaderEmail,
+        to_name: leaderName || 'Líder',
+        promedio: prom,
+        clasificacion: clasif,
+        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}. Ingresa a la plataforma para realizar tu evaluación como líder.`
+      }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
+    }
+
+    setMensaje('🎉 Evaluación enviada y notificaciones despachadas'); 
+    setEvalData({ ...evalData, estado: 'enviado' });
+    setTimeout(() => setMensaje(''), 4000);
   }
 
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
