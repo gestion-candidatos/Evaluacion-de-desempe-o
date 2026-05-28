@@ -45,6 +45,7 @@ export default function PanelApp() {
 function PanelAdmin() {
   const [stats, setStats] = useState({ total: 0, enviadas: 0, pendientes: 0 });
   const [colaboradores, setColaboradores] = useState([]);
+  const [vistaActiva, setVistaActiva] = useState('dashboard');
 
   useEffect(() => { cargarStats(); cargarColabs(); }, []);
 
@@ -63,32 +64,246 @@ function PanelAdmin() {
 
   return (
     <div>
-      <h3 style={{ marginBottom: 20, color: '#1e293b' }}>📊 Dashboard de Recursos Humanos</h3>
-      <div style={s.grid}>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Total</p><p style={{ fontSize: 36, fontWeight: 700, color: '#2563eb', margin: '8px 0' }}>{stats.total}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #22c55e' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#22c55e', margin: '8px 0' }}>{stats.enviadas}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #f59e0b' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#f59e0b', margin: '8px 0' }}>{stats.pendientes}</p></div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <button onClick={() => setVistaActiva('dashboard')} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
+        <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
+        <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
+        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Colaboradores</button>
       </div>
-      <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-        <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
-        <div style={{ background: '#e2e8f0', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #22c55e)', borderRadius: 10, transition: 'width 0.5s' }} /></div>
-      </div>
-      <EvaluacionesAdmin />
-      <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-        <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
-        {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
-            <tbody>{colaboradores.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
-                <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
-                <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : '#1e40af' }}>{c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
+
+      {vistaActiva === 'dashboard' && (
+        <div>
+          <h3 style={{ marginBottom: 20, color: '#1e293b' }}>📊 Dashboard de Recursos Humanos</h3>
+          <div style={s.grid}>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Total</p><p style={{ fontSize: 36, fontWeight: 700, color: '#2563eb', margin: '8px 0' }}>{stats.total}</p></div>
+            <div style={{ ...s.tarjetaStat, borderTop: '4px solid #22c55e' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#22c55e', margin: '8px 0' }}>{stats.enviadas}</p></div>
+            <div style={{ ...s.tarjetaStat, borderTop: '4px solid #f59e0b' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#f59e0b', margin: '8px 0' }}>{stats.pendientes}</p></div>
+          </div>
+          <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
+            <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
+            <div style={{ background: '#e2e8f0', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #22c55e)', borderRadius: 10, transition: 'width 0.5s' }} /></div>
+          </div>
+        </div>
+      )}
+
+      {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
+      {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
+      
+      {vistaActiva === 'colaboradores' && (
+        <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
+          <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
+          {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
+              <tbody>{colaboradores.map(c => (
+                <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
+                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
+                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : '#1e40af' }}>{c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelCalibracion({ colaboradores }) {
+  const [datos, setDatos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [detalleVisible, setDetalleVisible] = useState(null);
+
+  useEffect(() => { cargarDatos(); }, []);
+
+  async function cargarDatos() {
+    const resultado = [];
+    
+    for (const col of colaboradores) {
+      const { data: autoeval } = await supabase
+        .from('evaluaciones')
+        .select('*, puntuaciones(*)')
+        .eq('colaborador_id', col.id)
+        .eq('tipo_evaluacion', 'autoevaluacion')
+        .maybeSingle();
+
+      const { data: evalLider } = await supabase
+        .from('evaluaciones')
+        .select('*, puntuaciones(*)')
+        .eq('colaborador_id', col.id)
+        .eq('tipo_evaluacion', 'evaluacion_lider')
+        .maybeSingle();
+
+      // Calcular promedios
+      const calcPromedio = (puntuaciones) => {
+        if (!puntuaciones || puntuaciones.length === 0) return null;
+        const valores = puntuaciones.map(p => p.rating).filter(r => r > 0);
+        if (valores.length === 0) return null;
+        return (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
+      };
+
+      const promAuto = calcPromedio(autoeval?.puntuaciones);
+      const promLider = calcPromedio(evalLider?.puntuaciones);
+
+      resultado.push({
+        colaborador: col,
+        autoevaluacion: autoeval,
+        evaluacionLider: evalLider,
+        promAuto,
+        promLider,
+        gap: promAuto && promLider ? (parseFloat(promLider) - parseFloat(promAuto)).toFixed(1) : null
+      });
+    }
+
+    setDatos(resultado);
+    setCargando(false);
+  }
+
+  const clasificar = (prom) => {
+    if (!prom) return { texto: '-', color: '#94a3b8' };
+    const p = parseFloat(prom);
+    if (p <= 1.4) return { texto: '🔴 No adecuado', color: '#dc2626' };
+    if (p <= 2.4) return { texto: '🟠 Por debajo', color: '#f59e0b' };
+    if (p <= 3.4) return { texto: '🔵 Cumple', color: '#3b82f6' };
+    if (p <= 4.4) return { texto: '🟢 Excede', color: '#22c55e' };
+    return { texto: '🟣 Distinguido', color: '#8b5cf6' };
+  };
+
+  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando datos de calibración...</p>;
+
+  return (
+    <div style={{ ...s.tarjetaStat }}>
+      <h3 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>
+        Comparación de autoevaluación y evaluación del líder para detectar gaps y calibrar.
+      </p>
+
+      {datos.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                <th style={th}>Colaborador</th>
+                <th style={th}>Área</th>
+                <th style={th}>Seniority</th>
+                <th style={th}>Auto</th>
+                <th style={th}>Líder</th>
+                <th style={th}>GAP</th>
+                <th style={th}>Clasificación</th>
+                <th style={th}>Acción</th>
               </tr>
-            ))}</tbody>
+            </thead>
+            <tbody>
+              {datos.map(d => {
+                const clasAuto = clasificar(d.promAuto);
+                const clasLider = clasificar(d.promLider);
+                return (
+                  <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
+                    <td style={td}>{d.colaborador.area || '-'}</td>
+                    <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{d.colaborador.seniority || '-'}</span></td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {d.promAuto ? (
+                        <div>
+                          <span style={{ fontSize: 20, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span>
+                          <br /><span style={{ fontSize: 10, color: clasAuto.color }}>{clasAuto.texto}</span>
+                        </div>
+                      ) : <span style={{ color: '#94a3b8' }}>Sin datos</span>}
+                    </td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {d.promLider ? (
+                        <div>
+                          <span style={{ fontSize: 20, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span>
+                          <br /><span style={{ fontSize: 10, color: clasLider.color }}>{clasLider.texto}</span>
+                        </div>
+                      ) : <span style={{ color: '#94a3b8' }}>Sin datos</span>}
+                    </td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {d.gap ? (
+                        <span style={{
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626'
+                        }}>
+                          {d.gap > 0 ? '+' : ''}{d.gap}
+                        </span>
+                      ) : <span style={{ color: '#94a3b8' }}>-</span>}
+                    </td>
+                    <td style={td}>
+                      {d.promLider ? clasLider.texto : '-'}
+                    </td>
+                    <td style={td}>
+                      <button onClick={() => setDetalleVisible(detalleVisible === d.colaborador.id ? null : d.colaborador.id)} style={{
+                        background: '#2563eb', color: 'white', border: 'none', borderRadius: 6,
+                        padding: '6px 12px', cursor: 'pointer', fontSize: 12
+                      }}>👁️ Detalle</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
-        )}
-      </div>
+
+          {/* Modal de detalle de calibración */}
+          {detalleVisible && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+                {(() => {
+                  const d = datos.find(x => x.colaborador.id === detalleVisible);
+                  if (!d) return null;
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <h3 style={{ margin: 0 }}>🎯 Calibración: {d.colaborador.full_name}</h3>
+                        <button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button>
+                      </div>
+                      <p style={{ color: '#64748b', marginBottom: 20 }}>{d.colaborador.area} · {d.colaborador.seniority}</p>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                        <div style={{ padding: 16, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}>
+                          <p style={{ margin: 0, fontSize: 14, color: '#1e40af' }}>📝 Autoevaluación</p>
+                          <p style={{ fontSize: 36, fontWeight: 700, color: '#1e40af', margin: '8px 0' }}>{d.promAuto || '-'}</p>
+                          <p style={{ fontSize: 12, color: '#1e40af' }}>{d.autoevaluacion?.estado === 'enviado' ? '✅ Enviada' : '⏳ Pendiente'}</p>
+                        </div>
+                        <div style={{ padding: 16, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}>
+                          <p style={{ margin: 0, fontSize: 14, color: '#92400e' }}>👥 Evaluación Líder</p>
+                          <p style={{ fontSize: 36, fontWeight: 700, color: '#92400e', margin: '8px 0' }}>{d.promLider || '-'}</p>
+                          <p style={{ fontSize: 12, color: '#92400e' }}>{d.evaluacionLider?.estado === 'enviado' ? '✅ Enviada' : '⏳ Pendiente'}</p>
+                        </div>
+                      </div>
+
+                      {d.gap && (
+                        <div style={{ padding: 12, background: Math.abs(d.gap) <= 0.5 ? '#dcfce7' : '#fef3c7', borderRadius: 8, marginBottom: 20, textAlign: 'center' }}>
+                          <strong>GAP: {d.gap > 0 ? '+' : ''}{d.gap}</strong>
+                          {Math.abs(d.gap) <= 0.5 ? ' ✅ Alineado' : Math.abs(d.gap) <= 1 ? ' ⚠️ Revisar' : ' 🔴 Desvío significativo'}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <h4>💪 Fortalezas (Auto)</h4>
+                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || 'No completado'}</p>
+                          <h4>📈 Oportunidades (Auto)</h4>
+                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || 'No completado'}</p>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h4>🎯 Plan de Acción (Auto)</h4>
+                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || 'No completado'}</p>
+                          <h4>📚 Desarrollo (Auto)</h4>
+                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || 'No completado'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
