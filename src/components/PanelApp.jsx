@@ -301,14 +301,12 @@ function EvaluacionLider({ colaborador, onVolver }) {
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
-    // Cargar competencias del seniority del colaborador
     const { data: comps } = await supabase
       .from('competencias')
       .select('*')
       .eq('aplica_a', colaborador.seniority || 'Analista');
     setCompetencias(comps || []);
 
-    // Cargar autoevaluación
     const { data: auto } = await supabase
       .from('evaluaciones')
       .select('*, puntuaciones(*)')
@@ -323,7 +321,6 @@ function EvaluacionLider({ colaborador, onVolver }) {
       setPuntuacionesAuto(pa);
     }
 
-    // Cargar o crear evaluación del líder
     const { data: { session } } = await supabase.auth.getSession();
     const { data: liderEval } = await supabase
       .from('evaluaciones')
@@ -391,7 +388,6 @@ function EvaluacionLider({ colaborador, onVolver }) {
             <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button>
           </div>
 
-          {/* GAP: Autoevaluación vs Líder */}
           {puntuacionesAuto[comp.id] && (
             <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
               📝 Autoevaluación: <strong>{puntuacionesAuto[comp.id]}</strong>
@@ -418,6 +414,8 @@ function EvaluacionLider({ colaborador, onVolver }) {
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
+
+      <CalcularPromedio ratings={ratings} competencias={competencias} />
 
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
 
@@ -524,10 +522,14 @@ function PanelColaborador({ userId, seniority }) {
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
+
       <SeccionText titulo="💪 Fortalezas" valor={fortalezas} onChange={setFortalezas} disabled={enviada} />
       <SeccionText titulo="📈 Oportunidades de Mejora" valor={oportunidades} onChange={setOportunidades} disabled={enviada} />
       <SeccionText titulo="🎯 Plan de Acción" valor={planAccion} onChange={setPlanAccion} disabled={enviada} />
       <SeccionText titulo="📚 Desarrollo Individual" valor={desarrollo} onChange={setDesarrollo} disabled={enviada} />
+
+      <CalcularPromedio ratings={ratings} competencias={competencias} />
+
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
       {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>}
       {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación ha sido enviada.</div>}
@@ -556,6 +558,44 @@ function RatingDesc({ competenciaId, rating }) {
     load();
   }, [competenciaId, rating]);
   return <span>{desc}</span>;
+}
+
+function CalcularPromedio({ ratings, competencias }) {
+  if (!ratings || Object.keys(ratings).length === 0) return null;
+  
+  const valores = Object.values(ratings).filter(r => r > 0);
+  if (valores.length === 0) return null;
+  
+  const suma = valores.reduce((acc, val) => acc + val, 0);
+  const promedio = suma / valores.length;
+  
+  let clasificacion = '';
+  let color = '';
+  let emoji = '';
+  
+  if (promedio <= 1.4) { clasificacion = 'No adecuado'; color = '#dc2626'; emoji = '🔴'; }
+  else if (promedio <= 2.4) { clasificacion = 'Por debajo de lo esperado'; color = '#f59e0b'; emoji = '🟠'; }
+  else if (promedio <= 3.4) { clasificacion = 'Cumple con las expectativas'; color = '#3b82f6'; emoji = '🔵'; }
+  else if (promedio <= 4.4) { clasificacion = 'Excede las expectativas'; color = '#22c55e'; emoji = '🟢'; }
+  else { clasificacion = 'Desempeño distinguido'; color = '#8b5cf6'; emoji = '🟣'; }
+  
+  return (
+    <div style={{
+      marginTop: 24,
+      padding: 20,
+      background: 'white',
+      borderRadius: 12,
+      border: `2px solid ${color}`,
+      textAlign: 'center'
+    }}>
+      <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p>
+      <p style={{ fontSize: 48, fontWeight: 700, color, margin: '8px 0' }}>{promedio.toFixed(1)}</p>
+      <p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>{emoji} {clasificacion}</p>
+      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
+        Basado en {valores.length} de {competencias?.length || 0} competencias evaluadas
+      </p>
+    </div>
+  );
 }
 
 const th = { textAlign: 'left', padding: '10px', color: '#64748b', fontSize: '12px' };
