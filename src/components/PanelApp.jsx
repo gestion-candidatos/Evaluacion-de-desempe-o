@@ -188,9 +188,7 @@ function PanelCalibracion({ colaboradores }) {
   return (
     <div style={{ ...s.tarjetaStat }}>
       <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>
-        Comparación y calibración final de evaluaciones.
-      </p>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones.</p>
 
       {datos.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
@@ -290,7 +288,7 @@ function EvaluacionesAdmin() {
       <h4 style={{ margin: '0 0 16px 0' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 750 }}>
-          <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th></tr></thead>
+          <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Ver</th></tr></thead>
           <tbody>{evaluaciones.map(ev => (
             <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
               <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
@@ -298,6 +296,7 @@ function EvaluacionesAdmin() {
               <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : '👥 Líder'}</span></td>
               <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
               <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : '#fef3c7', color: ev.estado === 'enviado' ? '#166534' : '#92400e' }}>{ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</span></td>
+              <td style={td}>{ev.rating_calibrado ? <span style={{ fontWeight: 700, color: '#166534' }}>🎯 {ev.rating_calibrado}</span> : '-'}</td>
               <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
               <td style={td}><button onClick={() => setDetalleVisible(ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️</button></td>
             </tr>
@@ -312,6 +311,7 @@ function EvaluacionesAdmin() {
               <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
               <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
               <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
+              {ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}
               <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
               <hr style={{ border: '1px solid #e2e8f0' }} />
               <p><strong>💪 Fortalezas:</strong> {ev.fortalezas || '-'}</p>
@@ -367,6 +367,7 @@ function PanelLider() {
                   <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
                     <span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span>
                     <span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>
+                    {lider?.rating_calibrado && <span>🎯 Calibrado: <strong style={{ color: '#166534' }}>{lider.rating_calibrado}</strong></span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -437,7 +438,12 @@ function EvaluacionLider({ colaborador, onVolver }) {
     <div style={{ maxWidth: 900 }}>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
       <h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>{colaborador.area} · {colaborador.seniority}</p>
+      {evaluacionLider?.rating_calibrado && (
+        <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
+          🎯 <strong>Rating Final Calibrado: {evaluacionLider.rating_calibrado}</strong>
+        </div>
+      )}
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
@@ -512,7 +518,12 @@ function PanelColaborador({ userId, seniority }) {
     <div style={{ maxWidth: 900 }}>
       <h3>📝 Mi Autoevaluación</h3>
       <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
+      {evalData?.rating_calibrado && (
+        <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
+          🎯 <strong>Rating Final Calibrado: {evalData.rating_calibrado}</strong>
+        </div>
+      )}
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p><span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
