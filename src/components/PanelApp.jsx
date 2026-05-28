@@ -90,7 +90,7 @@ function PanelAdmin() {
 
       {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
       {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
-      {vistaActiva === 'equipo' && <PanelLider />}
+      {vistaActiva === 'equipo' && <EquipoLider />}
       
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
@@ -372,6 +372,37 @@ function EvaluacionesAdmin() {
 }
 
 function PanelLider() {
+  const [vista, setVista] = useState('equipo');
+  const [perfilLider, setPerfilLider] = useState(null);
+
+  useEffect(() => {
+    async function cargarPerfil() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        setPerfilLider(data);
+      }
+    }
+    cargarPerfil();
+  }, []);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <button onClick={() => setVista('autoevaluacion')} style={vista === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
+        <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+      </div>
+
+      {vista === 'autoevaluacion' && perfilLider && (
+        <PanelColaborador userId={perfilLider.id} seniority={perfilLider.seniority} email={perfilLider.email} nombre={perfilLider.full_name} />
+      )}
+
+      {vista === 'equipo' && <EquipoLider />}
+    </div>
+  );
+}
+
+function EquipoLider() {
   const [equipo, setEquipo] = useState([]);
   const [evaluaciones, setEvaluaciones] = useState({});
   const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
