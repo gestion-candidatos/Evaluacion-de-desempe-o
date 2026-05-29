@@ -37,7 +37,7 @@ export default function PanelApp() {
         <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'} | Seniority: {profile.seniority || 'No definido'}</p></div>
         {profile.role === 'admin_rrhh' && <PanelAdmin />}
         {profile.role === 'lider' && <PanelLider />}
-        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />}
+        {profile.role === 'colaborador' && <PanelColaboradorConEquipo userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />}
       </main>
     </div>
   );
@@ -228,7 +228,7 @@ function PanelCalibracion({ colaboradores }) {
   return (
     <div style={{ ...s.tarjetaStat }}>
       <h3 style={{ margin: '0 0 8px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones. Selecciona rating calibrado y envía el resumen.</p>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones.</p>
 
       {datos.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
@@ -372,32 +372,41 @@ function EvaluacionesAdmin() {
 }
 
 function PanelLider() {
-  const [vista, setVista] = useState('equipo');
-  const [perfilLider, setPerfilLider] = useState(null);
+  return <EquipoLider />;
+}
+
+function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
+  const [vista, setVista] = useState('autoevaluacion');
+  const [tieneEquipo, setTieneEquipo] = useState(false);
 
   useEffect(() => {
-    async function cargarPerfil() {
+    async function verificarEquipo() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        setPerfilLider(data);
+        const { count } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('leader_id', session.user.id);
+        setTieneEquipo((count || 0) > 0);
       }
     }
-    cargarPerfil();
+    verificarEquipo();
   }, []);
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <button onClick={() => setVista('autoevaluacion')} style={vista === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
-        <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        {tieneEquipo && (
+          <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        )}
       </div>
 
-      {vista === 'autoevaluacion' && perfilLider && (
-        <PanelColaborador userId={perfilLider.id} seniority={perfilLider.seniority} email={perfilLider.email} nombre={perfilLider.full_name} />
+      {vista === 'autoevaluacion' && (
+        <PanelColaborador userId={userId} seniority={seniority} email={email} nombre={nombre} />
       )}
 
-      {vista === 'equipo' && <EquipoLider />}
+      {vista === 'equipo' && tieneEquipo && <EquipoLider />}
     </div>
   );
 }
