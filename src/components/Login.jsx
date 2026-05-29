@@ -25,7 +25,8 @@ export default function Login() {
   return (
     <div style={{
       display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)', padding: '20px',
+      background: 'linear-gradient(135deg, #231F20 0%, #3a3537 50%, #231F20 100%)',
+      padding: '20px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
@@ -33,28 +34,24 @@ export default function Login() {
         boxShadow: '0 25px 50px rgba(0,0,0,0.4)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '60px', height: '60px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-            borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px', color: 'white', fontSize: '28px', fontWeight: 'bold'
-          }}>GF</div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1e293b', margin: '0 0 6px 0' }}>Evaluación de Desempeño</h1>
+          <img src="/src/Logo Fabric Group.jpg" alt="Grupo Fabric" style={{ width: '180px', marginBottom: '16px' }} />
+          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#231F20', margin: '0 0 6px 0' }}>Evaluación de Desempeño</h1>
           <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Grupo Fabric</p>
         </div>
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>Email Corporativo</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#231F20', marginBottom: '6px', textTransform: 'uppercase' }}>Email Corporativo</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu.email@grupo-fabric.com" required
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
+              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #D4D2C6', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px', textTransform: 'uppercase' }}>Contraseña</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#231F20', marginBottom: '6px', textTransform: 'uppercase' }}>Contraseña</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
+              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #D4D2C6', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
           </div>
           {error && <p style={{ color: '#dc2626', fontSize: '13px', textAlign: 'center', padding: '12px', backgroundColor: '#fef2f2', borderRadius: '8px', margin: '0' }}>{error}</p>}
           <button type="submit" disabled={loading}
-            style={{ width: '100%', padding: '15px', backgroundColor: loading ? '#94a3b8' : '#2563eb', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '8px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}>
+            style={{ width: '100%', padding: '15px', backgroundColor: loading ? '#D4D2C6' : '#231F20', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '8px', boxShadow: '0 4px 12px rgba(35, 31, 32, 0.3)' }}>
             {loading ? 'Verificando...' : 'Ingresar a la Plataforma'}
           </button>
         </form>
