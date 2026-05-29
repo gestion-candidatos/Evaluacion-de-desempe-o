@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import emailjs from '@emailjs/browser';
+import * as XLSX from 'xlsx';
 
 export default function PanelApp() {
   const [profile, setProfile] = useState(null);
@@ -67,6 +68,61 @@ function PanelAdmin({ profile }) {
 
   const pct = stats.total > 0 ? Math.round((stats.enviadas / stats.total) * 100) : 0;
 
+  async function descargarExcel(colaborador) {
+    const { data: evals } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*, competencias(nombre))')
+      .eq('colaborador_id', colaborador.id)
+      .order('created_at', { ascending: false });
+
+    if (!evals || evals.length === 0) {
+      alert('No hay evaluaciones para este colaborador');
+      return;
+    }
+
+    const rows = [];
+    evals.forEach(ev => {
+      if (ev.puntuaciones && ev.puntuaciones.length > 0) {
+        ev.puntuaciones.forEach(p => {
+          rows.push({
+            'Colaborador': colaborador.full_name,
+            'Email': colaborador.email,
+            'Área': colaborador.area,
+            'Seniority': colaborador.seniority,
+            'Tipo Evaluación': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+            'Competencia': p.competencias?.nombre || '',
+            'Rating': p.rating,
+            'Comentario': p.comentario || '',
+            'Estado': ev.estado,
+            'Rating Calibrado': ev.rating_calibrado || '',
+            'Comentarios Finales': ev.comentarios_finales || '',
+            'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+          });
+        });
+      } else {
+        rows.push({
+          'Colaborador': colaborador.full_name,
+          'Email': colaborador.email,
+          'Área': colaborador.area,
+          'Seniority': colaborador.seniority,
+          'Tipo Evaluación': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+          'Competencia': '',
+          'Rating': '',
+          'Comentario': '',
+          'Estado': ev.estado,
+          'Rating Calibrado': ev.rating_calibrado || '',
+          'Comentarios Finales': ev.comentarios_finales || '',
+          'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+        });
+      }
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
+    XLSX.writeFile(wb, `Historial_${colaborador.full_name?.replace(/\s/g, '_') || colaborador.email}.xlsx`);
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -107,12 +163,13 @@ function PanelAdmin({ profile }) {
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
           <h4 style={{ margin: '0 0 16px 0' }}>👥 Todos ({colaboradores.length})</h4>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Excel</th></tr></thead>
             <tbody>{colaboradores.map(c => (
               <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#231F20' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{c.seniority || '-'}</span></td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#231F20' : c.role === 'admin_rrhh' ? '#D4D2C6' : '#f1f5f9', color: c.role === 'lider' ? 'white' : c.role === 'admin_rrhh' ? '#231F20' : '#231F20' }}>{c.role === 'admin_rrhh' ? '🔧 Admin' : c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
+                <td style={td}><button onClick={() => descargarExcel(c)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥</button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -127,12 +184,17 @@ function PanelCalibracion({ colaboradores }) {
   const [cargando, setCargando] = useState(true);
   const [detalleVisible, setDetalleVisible] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [filtroArea, setFiltroArea] = useState('Todas');
+  const [areas, setAreas] = useState([]);
 
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
     const resultado = [];
     const colsFiltrados = colaboradores.filter(c => c.role !== 'admin_rrhh');
+    
+    const areasUnicas = ['Todas', ...new Set(colsFiltrados.map(c => c.area).filter(Boolean))];
+    setAreas(areasUnicas);
     
     for (const col of colsFiltrados) {
       const { data: autoeval } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
@@ -213,21 +275,27 @@ function PanelCalibracion({ colaboradores }) {
     return { texto: '🟣 Distinguido', color: '#8b5cf6' };
   };
 
+  const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
+
   if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>⏳ Cargando datos de calibración...</p>;
 
   return (
     <div style={{ ...s.tarjetaStat }}>
-      <h3 style={{ margin: '0 0 8px 0', color: '#231F20' }}>🎯 Calibración - Auto vs Líder</h3>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación y calibración final de evaluaciones.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <h3 style={{ margin: 0, color: '#231F20' }}>🎯 Calibración - Auto vs Líder</h3>
+        <select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>
+          {areas.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
 
-      {datos.length === 0 ? (
+      {datosFiltrados.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1050px' }}>
             <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Detalle</th><th style={th}>Enviar</th></tr></thead>
             <tbody>
-              {datos.map(d => {
+              {datosFiltrados.map(d => {
                 const clasFinal = clasificar(d.ratingFinal);
                 return (
                   <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -576,28 +644,14 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
 
     let comentariosTxt = '';
     for (const [compId, com] of Object.entries(comentarios)) {
-      if (com) {
-        const comp = competencias.find(c => c.id == compId);
-        comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`;
-      }
+      if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; }
     }
     if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`;
 
-    emailjs.send('service_httvcn8', 'template_ytka22b', {
-      to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif,
-      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}`
-    }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
+    emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
+    if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: leaderName || 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err)); }
 
-    if (leaderEmail) {
-      emailjs.send('service_httvcn8', 'template_ytka22b', {
-        to_email: leaderEmail, to_name: leaderName || 'Líder', promedio: prom, clasificacion: clasif,
-        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.`
-      }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
-    }
-
-    setMensaje('🎉 Evaluación enviada y notificaciones despachadas'); 
-    setEvalData({ ...evalData, estado: 'enviado' });
-    setTimeout(() => setMensaje(''), 4000);
+    setMensaje('🎉 Evaluación enviada y notificaciones despachadas'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 4000);
   }
 
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
@@ -633,10 +687,7 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
 function RatingDesc({ competenciaId, rating }) {
   const [desc, setDesc] = useState('Cargando...');
   useEffect(() => {
-    async function load() {
-      const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single();
-      if (error) setDesc('Error'); else if (data) setDesc(`${data.titulo}: ${data.descripcion}`); else setDesc('Sin descripción');
-    }
+    async function load() { const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (error) setDesc('Error'); else if (data) setDesc(`${data.titulo}: ${data.descripcion}`); else setDesc('Sin descripción'); }
     load();
   }, [competenciaId, rating]);
   return <span>{desc}</span>;
@@ -673,8 +724,7 @@ const s = {
   headerIzq: { display: 'flex', alignItems: 'center', gap: 12 },
   logo: { fontSize: 20, fontWeight: 700, color: '#D4D2C6', margin: 0 },
   badge: { padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#D4D2C6', color: '#231F20', border: '1px solid #D4D2C6' },
-  headerDer: { display: 'flex', alignItems: 'center', gap: 14 },
-  email: { fontSize: 14, color: '#D4D2C6' },
+  headerDer: { display: 'flex', alignItems: 'center', gap: 14 }, email: { fontSize: 14, color: '#D4D2C6' },
   btnSalir: { padding: '8px 16px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
   main: { padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' },
   tarjetaBienvenida: { background: 'white', padding: '20px 24px', borderRadius: 12, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #D4D2C6' },
