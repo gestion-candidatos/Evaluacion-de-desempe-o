@@ -51,6 +51,7 @@ function PanelAdmin({ profile }) {
   const [stats, setStats] = useState({ total: 0, enviadas: 0, pendientes: 0 });
   const [colaboradores, setColaboradores] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
+  const [seniorityCounts, setSeniorityCounts] = useState({});
   const esFlorencia = profile.email === 'florencia.salvaneschi@grupo-fabric.com';
 
   useEffect(() => { cargarStats(); cargarColabs(); }, []);
@@ -64,48 +65,71 @@ function PanelAdmin({ profile }) {
   async function cargarColabs() {
     const { data } = await supabase.from('profiles').select('*');
     setColaboradores(data || []);
+    
+    const counts = {};
+    (data || []).forEach(c => {
+      const s = c.seniority || 'Sin definir';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    setSeniorityCounts(counts);
   }
 
   const pct = stats.total > 0 ? Math.round((stats.enviadas / stats.total) * 100) : 0;
 
-  async function descargarExcel(colaborador) {
-    const { data: evals } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*, competencias(nombre))')
-      .eq('colaborador_id', colaborador.id)
-      .order('created_at', { ascending: false });
+  async function toggleActivo(colaborador) {
+    const nuevoEstado = !colaborador.activo;
+    await supabase.from('profiles').update({ activo: nuevoEstado }).eq('id', colaborador.id);
+    cargarColabs();
+  }
 
-    if (!evals || evals.length === 0) {
-      alert('No hay evaluaciones para este colaborador');
-      return;
-    }
+  async function descargarExcelCompleto() {
+    const wb = XLSX.utils.book_new();
+    
+    // Hoja resumen
+    const resumen = colaboradores.map(c => ({
+      'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 'Seniority': c.seniority || '',
+      'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No'
+    }));
+    const wsResumen = XLSX.utils.json_to_sheet(resumen);
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
-    const rows = [];
-    evals.forEach(ev => {
-      if (ev.puntuaciones && ev.puntuaciones.length > 0) {
-        ev.puntuaciones.forEach(p => {
-          rows.push({
-            'Colaborador': colaborador.full_name, 'Email': colaborador.email, 'Área': colaborador.area, 'Seniority': colaborador.seniority,
-            'Tipo Evaluación': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
-            'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '',
-            'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '',
-            'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
-          });
-        });
-      } else {
-        rows.push({
-          'Colaborador': colaborador.full_name, 'Email': colaborador.email, 'Área': colaborador.area, 'Seniority': colaborador.seniority,
-          'Tipo Evaluación': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
-          'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '',
-          'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+    // Hoja por cada colaborador
+    for (const col of colaboradores) {
+      const { data: evals } = await supabase
+        .from('evaluaciones')
+        .select('*, puntuaciones(*, competencias(nombre))')
+        .eq('colaborador_id', col.id)
+        .order('created_at', { ascending: false });
+
+      const rows = [];
+      if (evals && evals.length > 0) {
+        evals.forEach(ev => {
+          if (ev.puntuaciones && ev.puntuaciones.length > 0) {
+            ev.puntuaciones.forEach(p => {
+              rows.push({
+                'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+                'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '',
+                'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '',
+                'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+              });
+            });
+          } else {
+            rows.push({
+              'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+              'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado,
+              'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '',
+              'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+            });
+          }
         });
       }
-    });
+      
+      const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]);
+      const nombreHoja = (col.full_name || col.email).substring(0, 31).replace(/[\\\/\*\?\[\]:]/g, '');
+      XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+    }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
-    XLSX.writeFile(wb, `Historial_${colaborador.full_name?.replace(/\s/g, '_') || colaborador.email}.xlsx`);
+    XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
   }
 
   return (
@@ -118,17 +142,32 @@ function PanelAdmin({ profile }) {
         <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
         <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
         <button onClick={() => setVistaActiva('equipo')} style={vistaActiva === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
-        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Todos</button>
+        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Gestionar</button>
+        <button onClick={descargarExcelCompleto} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white' }}>📥 Exportar Todo</button>
       </div>
 
       {vistaActiva === 'dashboard' && (
         <div>
           <h3 style={{ marginBottom: 20, color: '#231F20' }}>📊 Dashboard de Recursos Humanos</h3>
           <div style={s.grid}>
-            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Total</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Total Colaboradores</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colaboradores.length}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div>
           </div>
+          
+          <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
+            <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>📊 Por Seniority</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+              {Object.entries(seniorityCounts).map(([seniority, count]) => (
+                <div key={seniority} style={{ padding: 12, background: '#D4D2C6', borderRadius: 8, textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, color: '#231F20', margin: 0 }}>{seniority}</p>
+                  <p style={{ fontSize: 24, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
             <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
             <div style={{ background: '#D4D2C6', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: '#231F20', borderRadius: 10, transition: 'width 0.5s' }} /></div>
@@ -146,15 +185,36 @@ function PanelAdmin({ profile }) {
       
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>👥 Todos ({colaboradores.length})</h4>
+          <h4 style={{ margin: '0 0 16px 0' }}>👥 Gestionar Colaboradores ({colaboradores.length})</h4>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Excel</th></tr></thead>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Estado</th><th style={th}>Excel</th></tr></thead>
             <tbody>{colaboradores.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: c.activo ? 1 : 0.5 }}>
                 <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#231F20' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{c.seniority || '-'}</span></td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#231F20' : c.role === 'admin_rrhh' ? '#D4D2C6' : '#f1f5f9', color: c.role === 'lider' ? 'white' : c.role === 'admin_rrhh' ? '#231F20' : '#231F20' }}>{c.role === 'admin_rrhh' ? '🔧 Admin' : c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
-                <td style={td}><button onClick={() => descargarExcel(c)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥</button></td>
+                <td style={td}>
+                  <button onClick={() => toggleActivo(c)} style={{
+                    padding: '4px 12px', borderRadius: 12, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: c.activo ? '#dcfce7' : '#fee2e2', color: c.activo ? '#166534' : '#dc2626'
+                  }}>
+                    {c.activo ? '✅ Activo' : '❌ Inactivo'}
+                  </button>
+                </td>
+                <td style={td}><button onClick={async () => {
+                  const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', c.id).order('created_at', { ascending: false });
+                  const rows = [];
+                  (evals || []).forEach(ev => {
+                    if (ev.puntuaciones?.length > 0) {
+                      ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
+                    } else {
+                      rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
+                    }
+                  });
+                  const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]);
+                  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
+                  XLSX.writeFile(wb, `Historial_${(c.full_name || c.email).replace(/\s/g, '_')}.xlsx`);
+                }} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥</button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -176,7 +236,7 @@ function PanelCalibracion({ colaboradores }) {
 
   async function cargarDatos() {
     const resultado = [];
-    const colsFiltrados = colaboradores.filter(c => c.email !== 'adrian.galvan@grupo-fabric.com');
+    const colsFiltrados = colaboradores.filter(c => c.seniority !== 'Gerente');
     
     const areasUnicas = ['Todas', ...new Set(colsFiltrados.map(c => c.area).filter(Boolean))];
     setAreas(areasUnicas);
@@ -224,7 +284,6 @@ function PanelCalibracion({ colaboradores }) {
     const clasif = clasificar(d.ratingFinal);
     const comentariosAuto = construirComentarios(d.autoevaluacion);
     const comentariosLider = construirComentarios(d.evaluacionLider);
-    
     emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: d.colaborador.email, to_name: d.colaborador.full_name || d.colaborador.email, promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
     if (d.evaluacionLider?.evaluador_id) { const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single(); if (lider?.email) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: lider.email, to_name: lider.full_name || 'Líder', promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err)); } }
     emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: 'florencia.salvaneschi@grupo-fabric.com', to_name: 'Florencia Salvaneschi', promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email admin:', err));
@@ -299,10 +358,7 @@ function PanelCalibracion({ colaboradores }) {
                   if (!d) return null;
                   return (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <h3 style={{ margin: 0, color: '#231F20' }}>🎯 {d.colaborador.full_name}</h3>
-                        <button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button>
-                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0, color: '#231F20' }}>🎯 {d.colaborador.full_name}</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
                         <div style={{ padding: 14, background: '#D4D2C6', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#231F20' }}>📝 Auto</p><p style={{ fontSize: 28, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{d.promAuto || '-'}</p></div>
                         <div style={{ padding: 14, background: '#231F20', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#D4D2C6' }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#D4D2C6', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
