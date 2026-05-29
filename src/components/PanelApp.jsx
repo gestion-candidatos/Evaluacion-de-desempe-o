@@ -52,6 +52,7 @@ function PanelAdmin({ profile }) {
   const [colaboradores, setColaboradores] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
   const [seniorityCounts, setSeniorityCounts] = useState({});
+  const [senioritySeleccionado, setSenioritySeleccionado] = useState(null);
   const esFlorencia = profile.email === 'florencia.salvaneschi@grupo-fabric.com';
 
   useEffect(() => { cargarStats(); cargarColabs(); }, []);
@@ -85,15 +86,12 @@ function PanelAdmin({ profile }) {
   async function descargarExcelCompleto() {
     const wb = XLSX.utils.book_new();
     
-    // Hoja resumen
     const resumen = colaboradores.map(c => ({
       'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 'Seniority': c.seniority || '',
       'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No'
     }));
-    const wsResumen = XLSX.utils.json_to_sheet(resumen);
-    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen');
 
-    // Hoja por cada colaborador
     for (const col of colaboradores) {
       const { data: evals } = await supabase
         .from('evaluaciones')
@@ -132,10 +130,14 @@ function PanelAdmin({ profile }) {
     XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
   }
 
+  const colaboradoresFiltrados = senioritySeleccionado 
+    ? colaboradores.filter(c => (c.seniority || 'Sin definir') === senioritySeleccionado)
+    : [];
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button onClick={() => setVistaActiva('dashboard')} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
+        <button onClick={() => { setVistaActiva('dashboard'); setSenioritySeleccionado(null); }} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
         {esFlorencia && (
           <button onClick={() => setVistaActiva('mievaluacion')} style={vistaActiva === 'mievaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
         )}
@@ -160,13 +162,31 @@ function PanelAdmin({ profile }) {
             <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>📊 Por Seniority</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
               {Object.entries(seniorityCounts).map(([seniority, count]) => (
-                <div key={seniority} style={{ padding: 12, background: '#D4D2C6', borderRadius: 8, textAlign: 'center' }}>
-                  <p style={{ fontSize: 12, color: '#231F20', margin: 0 }}>{seniority}</p>
-                  <p style={{ fontSize: 24, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{count}</p>
+                <div key={seniority} onClick={() => setSenioritySeleccionado(seniority === senioritySeleccionado ? null : seniority)} 
+                  style={{ padding: 12, background: seniority === senioritySeleccionado ? '#231F20' : '#D4D2C6', borderRadius: 8, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}>
+                  <p style={{ fontSize: 12, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', margin: 0 }}>{seniority}</p>
+                  <p style={{ fontSize: 24, fontWeight: 700, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', margin: '4px 0' }}>{count}</p>
                 </div>
               ))}
             </div>
           </div>
+
+          {senioritySeleccionado && (
+            <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#231F20' }}>👥 {senioritySeleccionado} ({colaboradoresFiltrados.length})</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {colaboradoresFiltrados.map(c => (
+                  <div key={c.id} style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong style={{ color: '#231F20' }}>{c.full_name || c.email}</strong>
+                      <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{c.area || 'Sin área'} · {c.role === 'admin_rrhh' ? 'Admin' : c.role === 'lider' ? 'Líder' : 'Colaborador'}</p>
+                    </div>
+                    <span style={{ fontSize: 11, color: c.activo ? '#22c55e' : '#dc2626' }}>{c.activo ? 'Activo' : 'Inactivo'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
             <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
