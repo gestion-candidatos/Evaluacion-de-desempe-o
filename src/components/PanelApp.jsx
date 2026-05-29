@@ -31,7 +31,7 @@ export default function PanelApp() {
     <div>
       <header style={s.header}>
         <div style={s.headerIzq}>
-          <img src="/Logo_Fabric_Group.jpg" alt="Grupo Fabric" style={{ height: '32px' }} />
+          <img src="/logo.jpg" alt="Grupo Fabric" style={{ height: '32px' }} />
           <span style={s.badge}>{emojiRol} {nombreRol}</span>
         </div>
         <div style={s.headerDer}><span style={s.email}>{profile.email}</span><button onClick={cerrarSesion} style={s.btnSalir}>Cerrar Sesión</button></div>
