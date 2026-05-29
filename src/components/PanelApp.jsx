@@ -79,34 +79,16 @@ function PanelAdmin({ profile }) {
   }
 
   async function descargarExcelCompleto() {
-    const { data: todasEvals } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)')
-      .order('created_at', { ascending: false });
-
+    const { data: todasEvals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)').order('created_at', { ascending: false });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({ 'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 'Seniority': c.seniority || '', 'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No' }))), 'Resumen');
-
     const porColaborador = {};
-    (todasEvals || []).forEach(ev => {
-      if (!ev.colaborador) return;
-      if (!porColaborador[ev.colaborador_id]) porColaborador[ev.colaborador_id] = [];
-      porColaborador[ev.colaborador_id].push(ev);
-    });
-
+    (todasEvals || []).forEach(ev => { if (!ev.colaborador) return; if (!porColaborador[ev.colaborador_id]) porColaborador[ev.colaborador_id] = []; porColaborador[ev.colaborador_id].push(ev); });
     for (const [colId, evals] of Object.entries(porColaborador)) {
-      const col = evals[0].colaborador;
-      const rows = [];
-      evals.forEach(ev => {
-        if (ev.puntuaciones?.length > 0) {
-          ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
-        } else {
-          rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
-        }
-      });
+      const col = evals[0].colaborador; const rows = [];
+      evals.forEach(ev => { if (ev.puntuaciones?.length > 0) ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') })); else rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }); });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]), (col.full_name || col.email).substring(0, 31).replace(/[\\\/\*\?\[\]:]/g, ''));
     }
-
     XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
   }
 
@@ -206,53 +188,18 @@ function PanelCalibracion({ colaboradores }) {
 
   async function cargarDatos() {
     setCargando(true);
-    
-    const { data: todasEvals } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)')
-      .in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider'])
-      .order('created_at', { ascending: false });
-
+    const { data: todasEvals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)').in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']).order('created_at', { ascending: false });
     const mapa = {};
-    (todasEvals || []).forEach(ev => {
-      if (!ev.colaborador || ev.colaborador.seniority === 'Gerente') return;
-      if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null };
-      if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev;
-      if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev;
-    });
-
-    colaboradores.forEach(col => {
-      if (col.seniority !== 'Gerente' && !mapa[col.id]) {
-        mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null };
-      }
-    });
-
-    const resultado = Object.values(mapa).map(d => {
-      const calcPromedio = (puntuaciones) => {
-        if (!puntuaciones || puntuaciones.length === 0) return null;
-        const v = puntuaciones.map(p => p.rating).filter(r => r > 0);
-        return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1);
-      };
-      return {
-        ...d,
-        promAuto: calcPromedio(d.autoevaluacion?.puntuaciones),
-        promLider: calcPromedio(d.evaluacionLider?.puntuaciones),
-        gap: calcPromedio(d.autoevaluacion?.puntuaciones) && calcPromedio(d.evaluacionLider?.puntuaciones) ? (parseFloat(calcPromedio(d.evaluacionLider?.puntuaciones)) - parseFloat(calcPromedio(d.autoevaluacion?.puntuaciones))).toFixed(1) : null,
-        ratingFinal: d.evaluacionLider?.rating_calibrado || null
-      };
-    });
-
+    (todasEvals || []).forEach(ev => { if (!ev.colaborador || ev.colaborador.seniority === 'Gerente') return; if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null }; if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev; if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev; });
+    colaboradores.forEach(col => { if (col.seniority !== 'Gerente' && !mapa[col.id]) mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null }; });
+    const resultado = Object.values(mapa).map(d => { const calc = (p) => { if (!p || p.length === 0) return null; const v = p.map(x => x.rating).filter(r => r > 0); return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1); }; return { ...d, promAuto: calc(d.autoevaluacion?.puntuaciones), promLider: calc(d.evaluacionLider?.puntuaciones), gap: calc(d.autoevaluacion?.puntuaciones) && calc(d.evaluacionLider?.puntuaciones) ? (parseFloat(calc(d.evaluacionLider?.puntuaciones)) - parseFloat(calc(d.autoevaluacion?.puntuaciones))).toFixed(1) : null, ratingFinal: d.evaluacionLider?.rating_calibrado || null }; });
     setAreas(['Todas', ...new Set(resultado.map(d => d.colaborador.area).filter(Boolean))]);
-    setDatos(resultado);
-    setCargando(false);
+    setDatos(resultado); setCargando(false);
   }
 
   async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
-
   function construirComentarios(evaluacion) { if (!evaluacion) return 'Sin comentarios'; let t = ''; if (evaluacion.puntuaciones) evaluacion.puntuaciones.forEach(p => { if (p.comentario) t += `• ${p.competencias?.nombre || 'Competencia'}: ${p.comentario}\n`; }); if (evaluacion.comentarios_finales) t += `\n📝 Final: ${evaluacion.comentarios_finales}`; return t || 'Sin comentarios'; }
-
   async function enviarResumenCalibracion(d) { if (!d.ratingFinal) return; const clasif = clasificar(d.ratingFinal); const ca = construirComentarios(d.autoevaluacion); const cl = construirComentarios(d.evaluacionLider); emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: d.colaborador.email, to_name: d.colaborador.full_name || d.colaborador.email, promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Calibración final.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Auto:\n${ca}\n\n📝 Líder:\n${cl}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (d.evaluacionLider?.evaluador_id) { const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single(); if (lider?.email) emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: lider.email, to_name: lider.full_name || 'Líder', promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Calibración de ${d.colaborador.full_name}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Auto:\n${ca}\n\n📝 Líder:\n${cl}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: 'florencia.salvaneschi@grupo-fabric.com', to_name: 'Florencia', promedio: d.ratingFinal, clasificacion: clasif.texto, message: `Historial - ${d.colaborador.full_name}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Auto:\n${ca}\n\n📝 Líder:\n${cl}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); alert('✅ Resumen enviado'); }
-
   const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: '🔴 No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: '🟠 Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: '🔵 Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: '🟢 Excede', color: '#22c55e' }; return { texto: '🟣 Distinguido', color: '#8b5cf6' }; };
   const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
 
@@ -284,7 +231,7 @@ function PanelCalibracion({ colaboradores }) {
 
           {detalleVisible && datos.find(d => d.colaborador.id === detalleVisible) && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 900, width: '95%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                 {(() => {
                   const d = datos.find(x => x.colaborador.id === detalleVisible);
                   return (
@@ -298,9 +245,17 @@ function PanelCalibracion({ colaboradores }) {
                         <div style={{ padding: 14, background: '#231F20', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#D4D2C6' }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#D4D2C6', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
                         <div style={{ padding: 14, background: '#f1f5f9', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#231F20' }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
                       </div>
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <div style={{ flex: 1 }}><h4>📝 Auto</h4>{d.autoevaluacion?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}<p style={{ fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.autoevaluacion?.comentarios_finales || '-'}</p></div>
-                        <div style={{ flex: 1 }}><h4>👥 Líder</h4>{d.evaluacionLider?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}<p style={{ fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.evaluacionLider?.comentarios_finales || '-'}</p></div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 280 }}>
+                          <h4 style={{ color: '#231F20' }}>📝 Comentarios Autoevaluación</h4>
+                          {d.autoevaluacion?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: '4px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
+                          <p style={{ color: '#231F20', fontSize: 14, marginTop: 12, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}><strong>Final:</strong> {d.autoevaluacion?.comentarios_finales || '-'}</p>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 280 }}>
+                          <h4 style={{ color: '#231F20' }}>👥 Comentarios Líder</h4>
+                          {d.evaluacionLider?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: '4px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
+                          <p style={{ color: '#231F20', fontSize: 14, marginTop: 12, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}><strong>Final:</strong> {d.evaluacionLider?.comentarios_finales || '-'}</p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -341,7 +296,7 @@ function EvaluacionesAdmin() {
         </table>
         {detalleVisible && evaluaciones.find(e => e.id === detalleVisible) && (() => { const ev = evaluaciones.find(e => e.id === detalleVisible); return (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 900, width: '95%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0, color: '#231F20' }}>📋 Detalle</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
               <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'}</p>
               <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
@@ -351,11 +306,11 @@ function EvaluacionesAdmin() {
               {ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}
               <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
               <hr style={{ border: '1px solid #D4D2C6' }} />
-              <h4>📝 Comentarios por Competencia</h4>
-              {ev.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 13, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
+              <h4 style={{ color: '#231F20' }}>📝 Comentarios por Competencia</h4>
+              {ev.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: '4px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
               {(!ev.puntuaciones || ev.puntuaciones.filter(p => p.comentario).length === 0) && <p style={{ color: '#94a3b8' }}>Sin comentarios por competencia</p>}
-              <h4 style={{ marginTop: 16 }}>📝 Comentarios Finales</h4>
-              <p>{ev.comentarios_finales || 'Sin comentarios'}</p>
+              <h4 style={{ marginTop: 16, color: '#231F20' }}>📝 Comentarios Finales</h4>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{ev.comentarios_finales || 'Sin comentarios'}</p>
             </div>
           </div>
         )})()}
@@ -419,14 +374,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   useEffect(() => { cargarDatos(); }, []);
   async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista'); setCompetencias(comps || []); const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); if (auto) { const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); } const { data: { session } } = await supabase.auth.getSession(); const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); if (liderEval) { setEvaluacionLider(liderEval); setComentariosFinales(liderEval.comentarios_finales || ''); const rm = {}; const cm = {}; (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador' }).select().single(); setEvaluacionLider(nueva); } setCargando(false); }
   async function guardar() { await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evaluacionLider.id); for (const [compId, rating] of Object.entries(ratings)) { const com = comentarios[compId] || ''; const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evaluacionLider.id).eq('competencia_id', compId).maybeSingle(); if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); } else { await supabase.from('puntuaciones').insert({ evaluacion_id: evaluacionLider.id, competencia_id: compId, rating, comentario: com }); } } setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500); }
-  async function enviar() {
-    const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim());
-    if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; }
-    if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; }
-    await guardar();
-    await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evaluacionLider.id);
-    setMensaje('🎉 Evaluación enviada'); setEvaluacionLider({ ...evaluacionLider, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000);
-  }
+  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evaluacionLider.id); setMensaje('🎉 Evaluación enviada'); setEvaluacionLider({ ...evaluacionLider, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
   if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
   const enviada = evaluacionLider?.estado === 'enviado';
   return (
@@ -465,21 +413,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   useEffect(() => { cargarDatos(); }, []);
   async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', seniority || 'Analista'); setCompetencias(comps || []); const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single(); if (ev) { setEvalData(ev); setComentariosFinales(ev.comentarios_finales || ''); const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id); const rm = {}; const cm = {}; (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador' }).select().single(); setEvalData(nueva); } setCargando(false); }
   async function guardar() { await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evalData.id); for (const [compId, rating] of Object.entries(ratings)) { const com = comentarios[compId] || ''; const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evalData.id).eq('competencia_id', compId).single(); if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); } else { await supabase.from('puntuaciones').insert({ evaluacion_id: evalData.id, competencia_id: compId, rating, comentario: com }); } } setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500); }
-  async function enviar() {
-    const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim());
-    if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; }
-    if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; }
-    await guardar();
-    await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id);
-    const valores = Object.values(ratings).filter(r => r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0';
-    let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido';
-    const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null, leaderName = null;
-    if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; leaderName = lider?.full_name; }
-    let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`;
-    emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err));
-    if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: leaderName || 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); }
-    setMensaje('🎉 Evaluación enviada y notificaciones despachadas'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 4000);
-  }
+  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id); const valores = Object.values(ratings).filter(r => r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0'; let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido'; const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null, leaderName = null; if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; leaderName = lider?.full_name; } let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`; emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: leaderName || 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } setMensaje('🎉 Evaluación enviada y notificaciones despachadas'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 4000); }
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
   const enviada = evalData?.estado === 'enviado';
   return (
