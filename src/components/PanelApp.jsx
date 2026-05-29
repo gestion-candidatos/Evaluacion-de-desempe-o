@@ -221,6 +221,13 @@ function PanelCalibracion({ colaboradores }) {
       if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev;
     });
 
+    // Agregar todos los colaboradores que faltan (sin evaluaciones)
+    colaboradores.forEach(col => {
+      if (col.seniority !== 'Gerente' && !mapa[col.id]) {
+        mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null };
+      }
+    });
+
     const resultado = Object.values(mapa).map(d => {
       const calcPromedio = (puntuaciones) => {
         if (!puntuaciones || puntuaciones.length === 0) return null;
