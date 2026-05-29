@@ -79,17 +79,34 @@ function PanelAdmin({ profile }) {
   }
 
   async function descargarExcelCompleto() {
+    const { data: todasEvals } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)')
+      .order('created_at', { ascending: false });
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({ 'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 'Seniority': c.seniority || '', 'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No' }))), 'Resumen');
-    for (const col of colaboradores) {
-      const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).order('created_at', { ascending: false });
+
+    const porColaborador = {};
+    (todasEvals || []).forEach(ev => {
+      if (!ev.colaborador) return;
+      if (!porColaborador[ev.colaborador_id]) porColaborador[ev.colaborador_id] = [];
+      porColaborador[ev.colaborador_id].push(ev);
+    });
+
+    for (const [colId, evals] of Object.entries(porColaborador)) {
+      const col = evals[0].colaborador;
       const rows = [];
-      (evals || []).forEach(ev => {
-        if (ev.puntuaciones?.length > 0) ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
-        else rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
+      evals.forEach(ev => {
+        if (ev.puntuaciones?.length > 0) {
+          ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
+        } else {
+          rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
+        }
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]), (col.full_name || col.email).substring(0, 31).replace(/[\\\/\*\?\[\]:]/g, ''));
     }
+
     XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
   }
 
@@ -188,16 +205,40 @@ function PanelCalibracion({ colaboradores }) {
   useEffect(() => { cargarDatos(); }, []);
 
   async function cargarDatos() {
-    const resultado = [];
-    const colsFiltrados = colaboradores.filter(c => c.seniority !== 'Gerente');
-    setAreas(['Todas', ...new Set(colsFiltrados.map(c => c.area).filter(Boolean))]);
-    for (const col of colsFiltrados) {
-      const { data: autoeval } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
-      const { data: evalLider } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
-      const calcPromedio = (puntuaciones) => { if (!puntuaciones || puntuaciones.length === 0) return null; const v = puntuaciones.map(p => p.rating).filter(r => r > 0); return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1); };
-      resultado.push({ colaborador: col, autoevaluacion: autoeval, evaluacionLider: evalLider, promAuto: calcPromedio(autoeval?.puntuaciones), promLider: calcPromedio(evalLider?.puntuaciones), gap: calcPromedio(autoeval?.puntuaciones) && calcPromedio(evalLider?.puntuaciones) ? (parseFloat(calcPromedio(evalLider?.puntuaciones)) - parseFloat(calcPromedio(autoeval?.puntuaciones))).toFixed(1) : null, ratingFinal: evalLider?.rating_calibrado || null });
-    }
-    setDatos(resultado); setCargando(false);
+    setCargando(true);
+    
+    const { data: todasEvals } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)')
+      .in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider'])
+      .order('created_at', { ascending: false });
+
+    const mapa = {};
+    (todasEvals || []).forEach(ev => {
+      if (!ev.colaborador || ev.colaborador.seniority === 'Gerente') return;
+      if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null };
+      if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev;
+      if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev;
+    });
+
+    const resultado = Object.values(mapa).map(d => {
+      const calcPromedio = (puntuaciones) => {
+        if (!puntuaciones || puntuaciones.length === 0) return null;
+        const v = puntuaciones.map(p => p.rating).filter(r => r > 0);
+        return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1);
+      };
+      return {
+        ...d,
+        promAuto: calcPromedio(d.autoevaluacion?.puntuaciones),
+        promLider: calcPromedio(d.evaluacionLider?.puntuaciones),
+        gap: calcPromedio(d.autoevaluacion?.puntuaciones) && calcPromedio(d.evaluacionLider?.puntuaciones) ? (parseFloat(calcPromedio(d.evaluacionLider?.puntuaciones)) - parseFloat(calcPromedio(d.autoevaluacion?.puntuaciones))).toFixed(1) : null,
+        ratingFinal: d.evaluacionLider?.rating_calibrado || null
+      };
+    });
+
+    setAreas(['Todas', ...new Set(resultado.map(d => d.colaborador.area).filter(Boolean))]);
+    setDatos(resultado);
+    setCargando(false);
   }
 
   async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
