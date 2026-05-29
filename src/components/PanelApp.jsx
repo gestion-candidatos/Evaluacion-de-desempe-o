@@ -35,7 +35,7 @@ export default function PanelApp() {
       </header>
       <main style={s.main}>
         <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'} | Seniority: {profile.seniority || 'No definido'}</p></div>
-        {profile.role === 'admin_rrhh' && <PanelAdmin />}
+        {profile.role === 'admin_rrhh' && <PanelAdmin profile={profile} />}
         {profile.role === 'lider' && <PanelLider />}
         {profile.role === 'colaborador' && <PanelColaboradorConEquipo userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />}
       </main>
@@ -43,10 +43,11 @@ export default function PanelApp() {
   );
 }
 
-function PanelAdmin() {
+function PanelAdmin({ profile }) {
   const [stats, setStats] = useState({ total: 0, enviadas: 0, pendientes: 0 });
   const [colaboradores, setColaboradores] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
+  const esFlorencia = profile.email === 'florencia.salvaneschi@grupo-fabric.com';
 
   useEffect(() => { cargarStats(); cargarColabs(); }, []);
 
@@ -67,6 +68,9 @@ function PanelAdmin() {
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <button onClick={() => setVistaActiva('dashboard')} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
+        {esFlorencia && (
+          <button onClick={() => setVistaActiva('mievaluacion')} style={vistaActiva === 'mievaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
+        )}
         <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
         <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
         <button onClick={() => setVistaActiva('equipo')} style={vistaActiva === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
@@ -86,6 +90,10 @@ function PanelAdmin() {
             <div style={{ background: '#e2e8f0', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #22c55e)', borderRadius: 10, transition: 'width 0.5s' }} /></div>
           </div>
         </div>
+      )}
+
+      {vistaActiva === 'mievaluacion' && esFlorencia && (
+        <PanelColaborador userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />
       )}
 
       {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
