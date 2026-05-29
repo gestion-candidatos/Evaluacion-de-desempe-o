@@ -34,7 +34,7 @@ export default function Login() {
         boxShadow: '0 25px 50px rgba(0,0,0,0.4)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img src="/src/Logo Fabric Group.jpg" alt="Grupo Fabric" style={{ width: '180px', marginBottom: '16px' }} />
+          <img src="/logo.jpg" alt="Grupo Fabric" style={{ width: '180px', marginBottom: '16px' }} />
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#231F20', margin: '0 0 6px 0' }}>Evaluación de Desempeño</h1>
           <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Grupo Fabric</p>
         </div>
