@@ -221,7 +221,6 @@ function PanelCalibracion({ colaboradores }) {
       if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev;
     });
 
-    // Agregar todos los colaboradores que faltan (sin evaluaciones)
     colaboradores.forEach(col => {
       if (col.seniority !== 'Gerente' && !mapa[col.id]) {
         mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null };
@@ -282,6 +281,33 @@ function PanelCalibracion({ colaboradores }) {
               </tr>
             )})}</tbody>
           </table>
+
+          {detalleVisible && datos.find(d => d.colaborador.id === detalleVisible) && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                {(() => {
+                  const d = datos.find(x => x.colaborador.id === detalleVisible);
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <h3 style={{ margin: 0, color: '#231F20' }}>🎯 {d.colaborador.full_name}</h3>
+                        <button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                        <div style={{ padding: 14, background: '#D4D2C6', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#231F20' }}>📝 Auto</p><p style={{ fontSize: 28, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{d.promAuto || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#231F20', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#D4D2C6' }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#D4D2C6', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#f1f5f9', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#231F20' }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <div style={{ flex: 1 }}><h4>📝 Auto</h4>{d.autoevaluacion?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}<p style={{ fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.autoevaluacion?.comentarios_finales || '-'}</p></div>
+                        <div style={{ flex: 1 }}><h4>👥 Líder</h4>{d.evaluacionLider?.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}<p style={{ fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.evaluacionLider?.comentarios_finales || '-'}</p></div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -313,6 +339,26 @@ function EvaluacionesAdmin() {
             </tr>
           ))}</tbody>
         </table>
+        {detalleVisible && evaluaciones.find(e => e.id === detalleVisible) && (() => { const ev = evaluaciones.find(e => e.id === detalleVisible); return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0, color: '#231F20' }}>📋 Detalle</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
+              <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'}</p>
+              <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
+              <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
+              <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
+              <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
+              {ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}
+              <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
+              <hr style={{ border: '1px solid #D4D2C6' }} />
+              <h4>📝 Comentarios por Competencia</h4>
+              {ev.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ fontSize: 13, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
+              {(!ev.puntuaciones || ev.puntuaciones.filter(p => p.comentario).length === 0) && <p style={{ color: '#94a3b8' }}>Sin comentarios por competencia</p>}
+              <h4 style={{ marginTop: 16 }}>📝 Comentarios Finales</h4>
+              <p>{ev.comentarios_finales || 'Sin comentarios'}</p>
+            </div>
+          </div>
+        )})()}
       </div>
     </div>
   );
