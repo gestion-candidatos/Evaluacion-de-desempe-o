@@ -134,14 +134,14 @@ function PanelCalibracion({ colaboradores }) {
     for (const col of colsFiltrados) {
       const { data: autoeval } = await supabase
         .from('evaluaciones')
-        .select('*, puntuaciones(*)')
+        .select('*, puntuaciones(*, competencias(nombre))')
         .eq('colaborador_id', col.id)
         .eq('tipo_evaluacion', 'autoevaluacion')
         .maybeSingle();
 
       const { data: evalLider } = await supabase
         .from('evaluaciones')
-        .select('*, puntuaciones(*)')
+        .select('*, puntuaciones(*, competencias(nombre))')
         .eq('colaborador_id', col.id)
         .eq('tipo_evaluacion', 'evaluacion_lider')
         .maybeSingle();
@@ -173,51 +173,50 @@ function PanelCalibracion({ colaboradores }) {
 
   async function guardarCalibracion(evaluacionId, rating) {
     setGuardando(true);
-    await supabase
-      .from('evaluaciones')
-      .update({ rating_calibrado: rating })
-      .eq('id', evaluacionId);
-    
-    setDatos(prev => prev.map(d => 
-      d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d
-    ));
+    await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId);
+    setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d));
     setGuardando(false);
+  }
+
+  function construirComentarios(evaluacion) {
+    if (!evaluacion) return 'Sin comentarios';
+    let texto = '';
+    if (evaluacion.puntuaciones) {
+      evaluacion.puntuaciones.forEach(p => {
+        if (p.comentario) texto += `• ${p.competencias?.nombre || 'Competencia'}: ${p.comentario}\n`;
+      });
+    }
+    if (evaluacion.comentarios_finales) texto += `\n📝 Final: ${evaluacion.comentarios_finales}`;
+    return texto || 'Sin comentarios';
   }
 
   async function enviarResumenCalibracion(d) {
     if (!d.ratingFinal) return;
-    
     const clasif = clasificar(d.ratingFinal);
-    const comentariosAuto = d.autoevaluacion?.comentarios_finales || 'Sin comentarios';
-    const comentariosLider = d.evaluacionLider?.comentarios_finales || 'Sin comentarios';
+    const comentariosAuto = construirComentarios(d.autoevaluacion);
+    const comentariosLider = construirComentarios(d.evaluacionLider);
     
     emailjs.send('service_httvcn8', 'template_ytka22b', {
       to_email: d.colaborador.email,
       to_name: d.colaborador.full_name || d.colaborador.email,
       promedio: d.ratingFinal,
       clasificacion: clasif.texto,
-      message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}\n\nIngresa a la plataforma para ver tu evaluación completa.`
+      message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
     if (d.evaluacionLider?.evaluador_id) {
       const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single();
       if (lider?.email) {
         emailjs.send('service_httvcn8', 'template_ytka22b', {
-          to_email: lider.email,
-          to_name: lider.full_name || 'Líder',
-          promedio: d.ratingFinal,
-          clasificacion: clasif.texto,
-          message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}`
+          to_email: lider.email, to_name: lider.full_name || 'Líder', promedio: d.ratingFinal, clasificacion: clasif.texto,
+          message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}`
         }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
       }
     }
 
     emailjs.send('service_httvcn8', 'template_ytka22b', {
-      to_email: 'florencia.salvaneschi@grupo-fabric.com',
-      to_name: 'Florencia Salvaneschi',
-      promedio: d.ratingFinal,
-      clasificacion: clasif.texto,
-      message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}`
+      to_email: 'florencia.salvaneschi@grupo-fabric.com', to_name: 'Florencia Salvaneschi', promedio: d.ratingFinal, clasificacion: clasif.texto,
+      message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto:\n${comentariosAuto}\n\n📝 Comentarios Líder:\n${comentariosLider}`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email admin:', err));
 
     alert('✅ Resumen enviado al colaborador, líder y admin');
@@ -273,13 +272,9 @@ function PanelCalibracion({ colaboradores }) {
                         </div>
                       ) : <span style={{ color: '#94a3b8' }}>Sin eval</span>}
                     </td>
+                    <td style={td}><button onClick={() => setDetalleVisible(d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button></td>
                     <td style={td}>
-                      <button onClick={() => setDetalleVisible(d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button>
-                    </td>
-                    <td style={td}>
-                      {d.ratingFinal ? (
-                        <button onClick={() => enviarResumenCalibracion(d)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }} title="Enviar resumen por email">📧</button>
-                      ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>-</span>}
+                      {d.ratingFinal ? <button onClick={() => enviarResumenCalibracion(d)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>📧</button> : <span style={{ color: '#94a3b8', fontSize: 12 }}>-</span>}
                     </td>
                   </tr>
                 );
@@ -304,10 +299,22 @@ function PanelCalibracion({ colaboradores }) {
                         <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
                         <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
                       </div>
-                      <h4>📝 Comentarios Autoevaluación</h4>
-                      <p style={{ color: '#475569', fontSize: 13, marginBottom: 16 }}>{d.autoevaluacion?.comentarios_finales || 'Sin comentarios'}</p>
-                      <h4>👥 Comentarios Líder</h4>
-                      <p style={{ color: '#475569', fontSize: 13 }}>{d.evaluacionLider?.comentarios_finales || 'Sin comentarios'}</p>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <h4>📝 Comentarios Autoevaluación</h4>
+                          {d.autoevaluacion?.puntuaciones?.filter(p => p.comentario).map(p => (
+                            <p key={p.id} style={{ color: '#475569', fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>
+                          ))}
+                          <p style={{ color: '#1e40af', fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.autoevaluacion?.comentarios_finales || '-'}</p>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h4>👥 Comentarios Líder</h4>
+                          {d.evaluacionLider?.puntuaciones?.filter(p => p.comentario).map(p => (
+                            <p key={p.id} style={{ color: '#475569', fontSize: 12, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>
+                          ))}
+                          <p style={{ color: '#92400e', fontSize: 13, marginTop: 8 }}><strong>Final:</strong> {d.evaluacionLider?.comentarios_finales || '-'}</p>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
@@ -330,7 +337,7 @@ function EvaluacionesAdmin() {
   async function cargarEvaluaciones() {
     const { data } = await supabase
       .from('evaluaciones')
-      .select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name)')
+      .select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name), puntuaciones(*, competencias(nombre))')
       .order('created_at', { ascending: false });
     setEvaluaciones(data || []);
     setCargando(false);
@@ -369,7 +376,12 @@ function EvaluacionesAdmin() {
               {ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}
               <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
               <hr style={{ border: '1px solid #e2e8f0' }} />
-              <h4>📝 Comentarios Finales</h4>
+              <h4>📝 Comentarios por Competencia</h4>
+              {ev.puntuaciones?.filter(p => p.comentario).map(p => (
+                <p key={p.id} style={{ color: '#475569', fontSize: 13, margin: '2px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>
+              ))}
+              {(!ev.puntuaciones || ev.puntuaciones.filter(p => p.comentario).length === 0) && <p style={{ color: '#94a3b8' }}>Sin comentarios por competencia</p>}
+              <h4 style={{ marginTop: 16 }}>📝 Comentarios Finales</h4>
               <p style={{ color: '#475569' }}>{ev.comentarios_finales || 'Sin comentarios'}</p>
             </div>
           </div>
@@ -391,10 +403,7 @@ function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
     async function verificarEquipo() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const { count } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('leader_id', session.user.id);
+        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('leader_id', session.user.id);
         setTieneEquipo((count || 0) > 0);
       }
     }
@@ -405,15 +414,9 @@ function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <button onClick={() => setVista('autoevaluacion')} style={vista === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
-        {tieneEquipo && (
-          <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
-        )}
+        {tieneEquipo && <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>}
       </div>
-
-      {vista === 'autoevaluacion' && (
-        <PanelColaborador userId={userId} seniority={seniority} email={email} nombre={nombre} />
-      )}
-
+      {vista === 'autoevaluacion' && <PanelColaborador userId={userId} seniority={seniority} email={email} nombre={nombre} />}
       {vista === 'equipo' && tieneEquipo && <EquipoLider />}
     </div>
   );
@@ -454,18 +457,14 @@ function EquipoLider() {
             const lider = evaluaciones[col.id]?.evaluacionLider;
             return (
               <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: 0 }}>{col.full_name || col.email}</h4>
-                  <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p>
+                <div style={{ flex: 1 }}><h4 style={{ margin: 0 }}>{col.full_name || col.email}</h4><p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p>
                   <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
                     <span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span>
                     <span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>
                     {lider?.rating_calibrado && <span>🎯 Calibrado: <strong style={{ color: '#166534' }}>{lider.rating_calibrado}</strong></span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
-                </div>
+                <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
               </div>
             );
           })}
@@ -496,8 +495,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
     const { data: { session } } = await supabase.auth.getSession();
     const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
     if (liderEval) {
-      setEvaluacionLider(liderEval);
-      setComentariosFinales(liderEval.comentarios_finales || '');
+      setEvaluacionLider(liderEval); setComentariosFinales(liderEval.comentarios_finales || '');
       const rm = {}; const cm = {};
       (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
       setRatings(rm); setComentarios(cm);
@@ -534,18 +532,14 @@ function EvaluacionLider({ colaborador, onVolver }) {
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
       <h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
       <p style={{ color: '#64748b', marginBottom: 4 }}>{colaborador.area} · {colaborador.seniority}</p>
-      {evaluacionLider?.rating_calibrado && (
-        <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
-          🎯 <strong>Rating Final Calibrado: {evaluacionLider.rating_calibrado}</strong>
-        </div>
-      )}
+      {evaluacionLider?.rating_calibrado && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>🎯 <strong>Rating Final Calibrado: {evaluacionLider.rating_calibrado}</strong></div>}
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
           {puntuacionesAuto[comp.id] && (<div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong>{ratings[comp.id] && <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>| Tú: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})</span>}</div>)}
           <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
       <CalcularPromedio ratings={ratings} competencias={competencias} />
@@ -574,8 +568,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     setCompetencias(comps || []);
     const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single();
     if (ev) {
-      setEvalData(ev);
-      setComentariosFinales(ev.comentarios_finales || '');
+      setEvalData(ev); setComentariosFinales(ev.comentarios_finales || '');
       const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id);
       const rm = {}; const cm = {};
       (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
@@ -604,38 +597,34 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     
     const valores = Object.values(ratings).filter(r => r > 0);
     const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0';
-    let clasif = '';
-    const p = parseFloat(prom);
-    if (p <= 1.4) clasif = 'No adecuado';
-    else if (p <= 2.4) clasif = 'Por debajo de lo esperado';
-    else if (p <= 3.4) clasif = 'Cumple con las expectativas';
-    else if (p <= 4.4) clasif = 'Excede las expectativas';
-    else clasif = 'Desempeño distinguido';
+    let clasif = ''; const p = parseFloat(prom);
+    if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido';
 
     const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single();
-    let leaderEmail = null;
-    let leaderName = null;
+    let leaderEmail = null, leaderName = null;
     if (perfil?.leader_id) {
       const { data: lider } = await supabase.from('profiles').select('email, full_name').eq('id', perfil.leader_id).single();
-      leaderEmail = lider?.email;
-      leaderName = lider?.full_name;
+      leaderEmail = lider?.email; leaderName = lider?.full_name;
     }
 
+    let comentariosTxt = '';
+    for (const [compId, com] of Object.entries(comentarios)) {
+      if (com) {
+        const comp = competencias.find(c => c.id == compId);
+        comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`;
+      }
+    }
+    if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`;
+
     emailjs.send('service_httvcn8', 'template_ytka22b', {
-      to_email: email,
-      to_name: nombre || 'Colaborador',
-      promedio: prom,
-      clasificacion: clasif,
-      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios Finales: ${comentariosFinales || 'Sin comentarios'}`
+      to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif,
+      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
     if (leaderEmail) {
       emailjs.send('service_httvcn8', 'template_ytka22b', {
-        to_email: leaderEmail,
-        to_name: leaderName || 'Líder',
-        promedio: prom,
-        clasificacion: clasif,
-        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios Finales: ${comentariosFinales || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.`
+        to_email: leaderEmail, to_name: leaderName || 'Líder', promedio: prom, clasificacion: clasif,
+        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.`
       }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
     }
 
@@ -652,17 +641,13 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
       <h3>📝 Mi Autoevaluación</h3>
       <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
       <p style={{ color: '#64748b', marginBottom: 4 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
-      {evalData?.rating_calibrado && (
-        <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
-          🎯 <strong>Rating Final Calibrado: {evalData.rating_calibrado}</strong>
-        </div>
-      )}
+      {evalData?.rating_calibrado && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>🎯 <strong>Rating Final Calibrado: {evalData.rating_calibrado}</strong></div>}
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p><span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
           <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
       <CalcularPromedio ratings={ratings} competencias={competencias} />
@@ -683,9 +668,7 @@ function RatingDesc({ competenciaId, rating }) {
   useEffect(() => {
     async function load() {
       const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single();
-      if (error) setDesc('Error');
-      else if (data) setDesc(`${data.titulo}: ${data.descripcion}`);
-      else setDesc('Sin descripción');
+      if (error) setDesc('Error'); else if (data) setDesc(`${data.titulo}: ${data.descripcion}`); else setDesc('Sin descripción');
     }
     load();
   }, [competenciaId, rating]);
@@ -720,11 +703,9 @@ const td = { padding: '10px', fontSize: '14px' };
 const s = {
   centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 100 },
-  headerIzq: { display: 'flex', alignItems: 'center', gap: 12 },
-  logo: { fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 },
+  headerIzq: { display: 'flex', alignItems: 'center', gap: 12 }, logo: { fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 },
   badge: { padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' },
-  headerDer: { display: 'flex', alignItems: 'center', gap: 14 },
-  email: { fontSize: 14, color: '#64748b' },
+  headerDer: { display: 'flex', alignItems: 'center', gap: 14 }, email: { fontSize: 14, color: '#64748b' },
   btnSalir: { padding: '8px 16px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
   main: { padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' },
   tarjetaBienvenida: { background: 'white', padding: '20px 24px', borderRadius: 12, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' },
