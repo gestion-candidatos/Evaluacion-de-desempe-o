@@ -188,13 +188,15 @@ function PanelCalibracion({ colaboradores }) {
     if (!d.ratingFinal) return;
     
     const clasif = clasificar(d.ratingFinal);
+    const comentariosAuto = d.autoevaluacion?.comentarios_finales || 'Sin comentarios';
+    const comentariosLider = d.evaluacionLider?.comentarios_finales || 'Sin comentarios';
     
     emailjs.send('service_httvcn8', 'template_ytka22b', {
       to_email: d.colaborador.email,
       to_name: d.colaborador.full_name || d.colaborador.email,
       promedio: d.ratingFinal,
       clasificacion: clasif.texto,
-      message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}\n\nIngresa a la plataforma para ver tu evaluación completa.`
+      message: `Calibración final completada.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}\n\nIngresa a la plataforma para ver tu evaluación completa.`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
     if (d.evaluacionLider?.evaluador_id) {
@@ -205,7 +207,7 @@ function PanelCalibracion({ colaboradores }) {
           to_name: lider.full_name || 'Líder',
           promedio: d.ratingFinal,
           clasificacion: clasif.texto,
-          message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}`
+          message: `Calibración final de ${d.colaborador.full_name || d.colaborador.email}.\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}`
         }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
       }
     }
@@ -215,7 +217,7 @@ function PanelCalibracion({ colaboradores }) {
       to_name: 'Florencia Salvaneschi',
       promedio: d.ratingFinal,
       clasificacion: clasif.texto,
-      message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n📝 Comentarios: ${d.evaluacionLider?.fortalezas || 'Sin comentarios'}`
+      message: `Historial de calibración - ${d.colaborador.full_name || d.colaborador.email}\n\n📊 Auto: ${d.promAuto || 'N/A'}\n👥 Líder: ${d.promLider || 'N/A'}\n✅ Calibrado: ${d.ratingFinal}\n\n📝 Comentarios Auto: ${comentariosAuto}\n📝 Comentarios Líder: ${comentariosLider}`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email admin:', err));
 
     alert('✅ Resumen enviado al colaborador, líder y admin');
@@ -302,10 +304,10 @@ function PanelCalibracion({ colaboradores }) {
                         <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
                         <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12 }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
                       </div>
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <div style={{ flex: 1 }}><h4>💪 Fortalezas</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || '-'}</p><h4>📈 Oportunidades</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || '-'}</p></div>
-                        <div style={{ flex: 1 }}><h4>🎯 Plan de Acción</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || '-'}</p><h4>📚 Desarrollo</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || '-'}</p></div>
-                      </div>
+                      <h4>📝 Comentarios Autoevaluación</h4>
+                      <p style={{ color: '#475569', fontSize: 13, marginBottom: 16 }}>{d.autoevaluacion?.comentarios_finales || 'Sin comentarios'}</p>
+                      <h4>👥 Comentarios Líder</h4>
+                      <p style={{ color: '#475569', fontSize: 13 }}>{d.evaluacionLider?.comentarios_finales || 'Sin comentarios'}</p>
                     </div>
                   );
                 })()}
@@ -367,10 +369,8 @@ function EvaluacionesAdmin() {
               {ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}
               <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
               <hr style={{ border: '1px solid #e2e8f0' }} />
-              <p><strong>💪 Fortalezas:</strong> {ev.fortalezas || '-'}</p>
-              <p><strong>📈 Oportunidades:</strong> {ev.oportunidades || '-'}</p>
-              <p><strong>🎯 Plan de Acción:</strong> {ev.plan_accion || '-'}</p>
-              <p><strong>📚 Desarrollo:</strong> {ev.desarrollo_individual || '-'}</p>
+              <h4>📝 Comentarios Finales</h4>
+              <p style={{ color: '#475569' }}>{ev.comentarios_finales || 'Sin comentarios'}</p>
             </div>
           </div>
         )})()}
@@ -481,6 +481,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   const [evaluacionLider, setEvaluacionLider] = useState(null);
   const [ratings, setRatings] = useState({});
   const [comentarios, setComentarios] = useState({});
+  const [comentariosFinales, setComentariosFinales] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(true);
   const [showInfo, setShowInfo] = useState({});
@@ -496,6 +497,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
     const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
     if (liderEval) {
       setEvaluacionLider(liderEval);
+      setComentariosFinales(liderEval.comentarios_finales || '');
       const rm = {}; const cm = {};
       (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
       setRatings(rm); setComentarios(cm);
@@ -507,7 +509,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   }
 
   async function guardar() {
-    await supabase.from('evaluaciones').update({ updated_at: new Date() }).eq('id', evaluacionLider.id);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evaluacionLider.id);
     for (const [compId, rating] of Object.entries(ratings)) {
       const com = comentarios[compId] || '';
       const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evaluacionLider.id).eq('competencia_id', compId).maybeSingle();
@@ -547,6 +549,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
         </div>
       ))}
       <CalcularPromedio ratings={ratings} competencias={competencias} />
+      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={setComentariosFinales} disabled={enviada} />
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
       {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
       {enviada && <div style={s.bannerEnviado}>✅ Evaluación enviada.</div>}
@@ -559,10 +562,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   const [competencias, setCompetencias] = useState([]);
   const [ratings, setRatings] = useState({});
   const [comentarios, setComentarios] = useState({});
-  const [fortalezas, setFortalezas] = useState('');
-  const [oportunidades, setOportunidades] = useState('');
-  const [planAccion, setPlanAccion] = useState('');
-  const [desarrollo, setDesarrollo] = useState('');
+  const [comentariosFinales, setComentariosFinales] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(true);
   const [showInfo, setShowInfo] = useState({});
@@ -574,7 +574,8 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     setCompetencias(comps || []);
     const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single();
     if (ev) {
-      setEvalData(ev); setFortalezas(ev.fortalezas || ''); setOportunidades(ev.oportunidades || ''); setPlanAccion(ev.plan_accion || ''); setDesarrollo(ev.desarrollo_individual || '');
+      setEvalData(ev);
+      setComentariosFinales(ev.comentarios_finales || '');
       const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id);
       const rm = {}; const cm = {};
       (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
@@ -587,7 +588,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   }
 
   async function guardar() {
-    await supabase.from('evaluaciones').update({ fortalezas, oportunidades, plan_accion: planAccion, desarrollo_individual: desarrollo, updated_at: new Date() }).eq('id', evalData.id);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evalData.id);
     for (const [compId, rating] of Object.entries(ratings)) {
       const com = comentarios[compId] || '';
       const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evalData.id).eq('competencia_id', compId).single();
@@ -625,7 +626,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
       to_name: nombre || 'Colaborador',
       promedio: prom,
       clasificacion: clasif,
-      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.`
+      message: `Has completado tu autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios Finales: ${comentariosFinales || 'Sin comentarios'}`
     }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email colaborador:', err));
 
     if (leaderEmail) {
@@ -634,7 +635,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
         to_name: leaderName || 'Líder',
         promedio: prom,
         clasificacion: clasif,
-        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}. Ingresa a la plataforma para realizar tu evaluación como líder.`
+        message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación con un promedio de ${prom} - ${clasif}.\n\n📝 Comentarios Finales: ${comentariosFinales || 'Sin comentarios'}\n\nIngresa a la plataforma para realizar tu evaluación como líder.`
       }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Email líder:', err));
     }
 
@@ -664,11 +665,8 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
         </div>
       ))}
-      <SeccionText titulo="💪 Fortalezas" valor={fortalezas} onChange={setFortalezas} disabled={enviada} />
-      <SeccionText titulo="📈 Oportunidades de Mejora" valor={oportunidades} onChange={setOportunidades} disabled={enviada} />
-      <SeccionText titulo="🎯 Plan de Acción" valor={planAccion} onChange={setPlanAccion} disabled={enviada} />
-      <SeccionText titulo="📚 Desarrollo Individual" valor={desarrollo} onChange={setDesarrollo} disabled={enviada} />
       <CalcularPromedio ratings={ratings} competencias={competencias} />
+      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={setComentariosFinales} disabled={enviada} />
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
       {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>}
       {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación ha sido enviada.</div>}
