@@ -88,11 +88,59 @@ function PanelAdmin({ profile }) {
 
   async function descargarExcelCompleto() {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({ 
-      'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 
-      'Seniority': c.seniority || '', 'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No' 
-    }))), 'Resumen');
-    XLSX.writeFile(wb, 'Colaboradores.xlsx');
+    
+    // Hoja Dashboard
+    const dashboardRows = [
+      { 'Indicador': 'Total Colaboradores', 'Valor': colaboradores.length },
+      { 'Indicador': 'Total Evaluaciones', 'Valor': stats.total },
+      { 'Indicador': 'Completadas', 'Valor': stats.enviadas },
+      { 'Indicador': 'Pendientes', 'Valor': stats.pendientes },
+      { 'Indicador': 'Progreso', 'Valor': pct + '%' },
+      ...Object.entries(seniorityCounts).map(([s, c]) => ({ 'Indicador': `Seniority: ${s}`, 'Valor': c }))
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dashboardRows), 'Dashboard');
+
+    // Hoja por colaborador
+    for (const col of colaboradores) {
+      const { data: evals } = await supabase
+        .from('evaluaciones')
+        .select('*, puntuaciones(*, competencias(nombre))')
+        .eq('colaborador_id', col.id)
+        .order('created_at', { ascending: false });
+
+      const rows = [];
+      if (evals && evals.length > 0) {
+        evals.forEach(ev => {
+          if (ev.puntuaciones && ev.puntuaciones.length > 0) {
+            ev.puntuaciones.forEach(p => {
+              rows.push({
+                'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+                'Competencia': p.competencias?.nombre || '',
+                'Rating': p.rating,
+                'Comentario': p.comentario || '',
+                'Estado': ev.estado,
+                'Rating Calibrado': ev.rating_calibrado || '',
+                'Comentarios Finales': ev.comentarios_finales || '',
+                'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+              });
+            });
+          } else {
+            rows.push({
+              'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+              'Competencia': '', 'Rating': '', 'Comentario': '',
+              'Estado': ev.estado,
+              'Rating Calibrado': ev.rating_calibrado || '',
+              'Comentarios Finales': ev.comentarios_finales || '',
+              'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+            });
+          }
+        });
+      }
+      const nombreHoja = (col.full_name || col.email).substring(0, 31).replace(/[\\\/\*\?\[\]:]/g, '');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]), nombreHoja);
+    }
+
+    XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
   }
 
   const colaboradoresFiltrados = senioritySeleccionado ? colaboradores.filter(c => (c.seniority || 'Sin definir') === senioritySeleccionado) : [];
