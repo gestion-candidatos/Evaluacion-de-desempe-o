@@ -88,7 +88,6 @@ function PanelAdmin({ profile }) {
 
   async function descargarExcelCompleto() {
     const wb = XLSX.utils.book_new();
-    
     const dashboardRows = [
       { 'Indicador': 'Total Colaboradores', 'Valor': colaboradores.length },
       { 'Indicador': 'Total Evaluaciones', 'Valor': stats.total },
@@ -100,13 +99,11 @@ function PanelAdmin({ profile }) {
       ...Object.entries(seniorityCounts).map(([s, c]) => ({ 'Indicador': s, 'Valor': c }))
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dashboardRows), 'Dashboard');
-    
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({
       'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '',
       'Seniority': c.seniority || '', 'Rol': c.role === 'admin_rrhh' ? 'Admin' : c.role === 'lider' ? 'Líder' : 'Colaborador',
       'Estado': c.activo ? 'Activo' : 'Inactivo'
     }))), 'Colaboradores');
-
     XLSX.writeFile(wb, 'Dashboard_RRHH.xlsx');
   }
 
@@ -216,6 +213,24 @@ function PanelCalibracion({ colaboradores }) {
 
   async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
 
+  async function descargarExcelIndividual(d) {
+    const col = d.colaborador;
+    const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).order('created_at', { ascending: false });
+    const rows = [];
+    if (evals && evals.length > 0) {
+      evals.forEach(ev => {
+        if (ev.puntuaciones && ev.puntuaciones.length > 0) {
+          ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
+        } else {
+          rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
+        }
+      });
+    }
+    const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Historial');
+    XLSX.writeFile(wb, `Historial_${(col.full_name || col.email).replace(/\s/g, '_')}.xlsx`);
+  }
+
   function clasificarFull(prom) {
     if (!prom) return { texto: '-', desc: '' };
     const p = parseFloat(prom);
@@ -233,25 +248,14 @@ function PanelCalibracion({ colaboradores }) {
     const pageWidth = 210;
     const marginX = 15;
     let y = 20;
-    
-    function agregarCabecera() {
-      pdf.addImage('/logo.jpg', 'JPEG', marginX, 10, 30, 15);
-      pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5);
-      pdf.line(marginX, 28, pageWidth - marginX, 28);
-    }
-    function agregarPie() {
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8');
-      pdf.text('Fabric Group - Documento generado el ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
-    }
-    
+    function agregarCabecera() { pdf.addImage('/logo.jpg', 'JPEG', marginX, 10, 30, 15); pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 28, pageWidth - marginX, 28); }
+    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - Documento generado el ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
     agregarCabecera(); y = 35;
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO);
-    pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 8;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 8;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
     pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5.5;
     pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5.5;
     pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 10;
-    
     const autoPunts = {}, autoComs = {};
     (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
     const liderPunts = {}, liderComs = {};
@@ -259,15 +263,11 @@ function PanelCalibracion({ colaboradores }) {
     const todasComps = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
     const compsInfo = {};
     (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
-    
     if (todasComps.length > 0) {
       const colComp = marginX, colAutoR = 57, colAutoC = 68, colLiderR = 118, colLiderC = 129;
       pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 8, 'F');
       pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5);
-      pdf.text('Competencia', colComp + 1, y + 5.5); pdf.text('A', colAutoR, y + 5.5);
-      pdf.text('Comentario Autoevaluación', colAutoC, y + 5.5); pdf.text('L', colLiderR, y + 5.5);
-      pdf.text('Comentario Líder', colLiderC, y + 5.5); y += 10; pdf.setTextColor(NEGRO);
-      
+      pdf.text('Competencia', colComp + 1, y + 5.5); pdf.text('A', colAutoR, y + 5.5); pdf.text('Comentario Autoevaluación', colAutoC, y + 5.5); pdf.text('L', colLiderR, y + 5.5); pdf.text('Comentario Líder', colLiderC, y + 5.5); y += 10; pdf.setTextColor(NEGRO);
       todasComps.forEach((compId, index) => {
         const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18);
         const autoR = String(autoPunts[compId] || '-'), liderR = String(liderPunts[compId] || '-');
@@ -283,22 +283,12 @@ function PanelCalibracion({ colaboradores }) {
         lineasLider.forEach((l, i) => pdf.text(l, colLiderC, y + (i * 3.5)));
         y += altura + 1.5; pdf.setDrawColor(220, 220, 220); pdf.line(marginX, y, pageWidth - marginX, y);
       });
-      
-      y += 8;
-      if (y > 230) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
+      y += 8; if (y > 230) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text('COMENTARIOS FINALES', marginX, y); y += 6;
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
-      if (d.autoevaluacion?.comentarios_finales) {
-        pdf.text('Autoevaluación:', marginX, y); y += 4;
-        pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; }); y += 3;
-      }
-      if (d.evaluacionLider?.comentarios_finales) {
-        if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
-        pdf.text('Líder:', marginX, y); y += 4;
-        pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; });
-      }
+      if (d.autoevaluacion?.comentarios_finales) { pdf.text('Autoevaluación:', marginX, y); y += 4; pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; }); y += 3; }
+      if (d.evaluacionLider?.comentarios_finales) { if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text('Líder:', marginX, y); y += 4; pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; }); }
     }
-    
     y += 10; if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
     const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
     pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 22, 'F');
@@ -313,16 +303,10 @@ function PanelCalibracion({ colaboradores }) {
   function verPDF(d) { const pdf = generarPDF(d); pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
 
   function enviarPDF(d) {
-    const pdf = generarPDF(d);
-    pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`);
+    const pdf = generarPDF(d); pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`);
     let liderEmail = '';
-    if (d.evaluacionLider?.evaluador_id) {
-      supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => {
-        abrirGmail(d.colaborador.email, lider?.email || '');
-      });
-    } else {
-      abrirGmail(d.colaborador.email, '');
-    }
+    if (d.evaluacionLider?.evaluador_id) { supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => { abrirGmail(d.colaborador.email, lider?.email || ''); }); }
+    else { abrirGmail(d.colaborador.email, ''); }
   }
 
   const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
@@ -338,8 +322,8 @@ function PanelCalibracion({ colaboradores }) {
       </div>
       {datosFiltrados.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos.</p> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>PDF</th><th style={th}>Excel</th><th style={th}>Enviar</th></tr></thead>
             <tbody>{datosFiltrados.map(d => { const clasFinal = clasificar(d.ratingFinal); return (
               <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td><td style={td}>{d.colaborador.area || '-'}</td>
@@ -349,6 +333,7 @@ function PanelCalibracion({ colaboradores }) {
                 <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
                 <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Seleccionar</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select>{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</div> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}</td>
                 <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>👁️ PDF</button></td>
+                <td style={td}><button onClick={() => descargarExcelIndividual(d)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥 Excel</button></td>
                 <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
               </tr>
             )})}</tbody>
