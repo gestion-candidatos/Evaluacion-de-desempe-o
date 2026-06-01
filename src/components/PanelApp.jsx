@@ -222,33 +222,18 @@ function PanelCalibracion({ colaboradores }) {
     if (p <= 4.4) return { texto: 'Excede las expectativas', desc: 'Su desempeño es superior a lo esperado, genera valor agregado.' };
     return { texto: 'Desempeño distinguido', desc: 'Su desempeño es muy superior a lo esperado, genera valor agregado de manera significativa y constante.' };
   }
-function generarPDF(d) {
+
+  function generarPDF(d) {
     const pdf = new jsPDF();
-    const NEGRO = '#231F20';
-    const BEIGE = '#D4D2C6';
-    const pageWidth = 210;
-    const marginX = 15;
-    let y = 28;
-
-    function agregarCabecera() {
-      pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15);
-      pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5);
-      pdf.line(marginX, 26, pageWidth - marginX, 26);
-    }
-    function agregarPie() {
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8');
-      pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
-    }
-
+    const NEGRO = '#231F20'; const BEIGE = '#D4D2C6'; const pageWidth = 210; const marginX = 15; let y = 28;
+    function agregarCabecera() { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26); }
+    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
     agregarCabecera();
-
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO);
-    pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 7;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 7;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
     pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5;
     pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5;
     pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 8;
-
     const autoPunts = {}, autoComs = {};
     (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
     const liderPunts = {}, liderComs = {};
@@ -256,84 +241,45 @@ function generarPDF(d) {
     const todasComps = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
     const compsInfo = {};
     (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
-
     if (todasComps.length > 0) {
       const colComp = marginX, colAutoR = 57, colAutoC = 68, colLiderR = 118, colLiderC = 129;
-      
-      // Cabecera de tabla
       pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F');
       pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6);
-      pdf.text('Competencia', colComp + 1, y + 5); pdf.text('A', colAutoR, y + 5);
-      pdf.text('Comentario Autoevaluación', colAutoC, y + 5); pdf.text('L', colLiderR, y + 5);
-      pdf.text('Comentario Líder', colLiderC, y + 5);
-      y += 9;
-      pdf.setTextColor(NEGRO);
-
+      pdf.text('Competencia', colComp + 1, y + 5); pdf.text('A', colAutoR, y + 5); pdf.text('Comentario Autoevaluación', colAutoC, y + 5); pdf.text('L', colLiderR, y + 5); pdf.text('Comentario Líder', colLiderC, y + 5);
+      y += 9; pdf.setTextColor(NEGRO);
       todasComps.forEach((compId, index) => {
         const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18);
         const autoR = String(autoPunts[compId] || '-'), liderR = String(liderPunts[compId] || '-');
         const autoC = autoComs[compId] || '-', liderC = liderComs[compId] || '-';
         const lineasAuto = pdf.splitTextToSize(autoC, 44), lineasLider = pdf.splitTextToSize(liderC, 58);
         const altura = Math.max(7, Math.max(lineasAuto.length, lineasLider.length) * 3.5);
-
         if (y + altura > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-
         if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), altura + 1, 'F'); }
-
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6); pdf.text(nombre, colComp + 1, y);
-        pdf.setFont('helvetica', 'normal');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
         pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5); pdf.text(autoR, colAutoR + 2.5, y + 0.5);
         lineasAuto.forEach((l, i) => pdf.text(l, colAutoC, y + (i * 3.2)));
         pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(6.5); pdf.text(liderR, colLiderR + 2.5, y + 0.5); pdf.setTextColor(NEGRO);
         lineasLider.forEach((l, i) => pdf.text(l, colLiderC, y + (i * 3.2)));
-        y += altura + 1;
-        pdf.setDrawColor(230, 230, 230); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
+        y += altura + 1; pdf.setDrawColor(230, 230, 230); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
       });
-
-      y += 5;
-      if (y > 235) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-
+      y += 5; if (y > 235) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
       const tieneComentarios = d.autoevaluacion?.comentarios_finales || d.evaluacionLider?.comentarios_finales;
       if (tieneComentarios) {
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('COMENTARIOS FINALES', marginX, y); y += 5;
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
-
-        if (d.autoevaluacion?.comentarios_finales) {
-          if (y > 270) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-          pdf.text('Autoevaluación:', marginX, y); y += 4;
-          pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => {
-            if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-            pdf.text(linea, marginX + 2, y); y += 3.5;
-          });
-          y += 2;
-        }
-
-        if (d.evaluacionLider?.comentarios_finales) {
-          if (y > 265) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-          pdf.text('Líder:', marginX, y); y += 4;
-          pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => {
-            if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-            pdf.text(linea, marginX + 2, y); y += 3.5;
-          });
-        }
+        if (d.autoevaluacion?.comentarios_finales) { if (y > 270) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } pdf.text('Autoevaluación:', marginX, y); y += 4; pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } pdf.text(linea, marginX + 2, y); y += 3.5; }); y += 2; }
+        if (d.evaluacionLider?.comentarios_finales) { if (y > 265) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } pdf.text('Líder:', marginX, y); y += 4; pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } pdf.text(linea, marginX + 2, y); y += 3.5; }); }
       }
     }
-
-    y += 8;
-    if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-
-    const rf = d.ratingFinal || '-';
-    const clasif = clasificarFull(rf);
+    y += 8; if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
+    const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
     pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 20, 'F');
     pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11); pdf.text('RESULTADO FINAL', marginX + 4, y + 8);
-    pdf.setFontSize(15); pdf.text(`${rf}`, marginX + 4, y + 17);
+    pdf.setFontSize(11); pdf.text('RESULTADO FINAL', marginX + 4, y + 8); pdf.setFontSize(15); pdf.text(`${rf}`, marginX + 4, y + 17);
     pdf.setFontSize(9); pdf.text(`${clasif.texto}`, marginX + 18, y + 15);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.text(clasif.desc, marginX + 18, y + 19);
-    agregarPie();
-    return pdf;
+    agregarPie(); return pdf;
   }
-  
 
   function verPDF(d) { generarPDF(d).save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
   function enviarPDF(d) { generarPDF(d).save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); let liderEmail = ''; if (d.evaluacionLider?.evaluador_id) { supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: l }) => { abrirGmail(d.colaborador.email, l?.email || ''); }); } else { abrirGmail(d.colaborador.email, ''); } }
@@ -461,6 +407,7 @@ function EquipoLider() {
 function EvaluacionLider({ colaborador, onVolver }) {
   const [competencias, setCompetencias] = useState([]);
   const [puntuacionesAuto, setPuntuacionesAuto] = useState({});
+  const [autoevaluacion, setAutoevaluacion] = useState(null);
   const [evaluacionLider, setEvaluacionLider] = useState(null);
   const [ratings, setRatings] = useState({});
   const [comentarios, setComentarios] = useState({});
@@ -469,7 +416,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   const [cargando, setCargando] = useState(true);
   const [showInfo, setShowInfo] = useState({});
   useEffect(() => { cargarDatos(); }, []);
-  async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista'); setCompetencias(comps || []); const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); if (auto) { const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); } const { data: { session } } = await supabase.auth.getSession(); const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); if (liderEval) { setEvaluacionLider(liderEval); setComentariosFinales(liderEval.comentarios_finales || ''); const rm = {}; const cm = {}; (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador' }).select().single(); setEvaluacionLider(nueva); } setCargando(false); }
+  async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista'); setCompetencias(comps || []); const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); if (auto) { setAutoevaluacion(auto); const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); } const { data: { session } } = await supabase.auth.getSession(); const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); if (liderEval) { setEvaluacionLider(liderEval); setComentariosFinales(liderEval.comentarios_finales || ''); const rm = {}; const cm = {}; (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador' }).select().single(); setEvaluacionLider(nueva); } setCargando(false); }
   async function guardar() { await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evaluacionLider.id); for (const [compId, rating] of Object.entries(ratings)) { const com = comentarios[compId] || ''; const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evaluacionLider.id).eq('competencia_id', compId).maybeSingle(); if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); } else { await supabase.from('puntuaciones').insert({ evaluacion_id: evaluacionLider.id, competencia_id: compId, rating, comentario: com }); } } setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500); }
   async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evaluacionLider.id); setMensaje('🎉 Evaluación enviada'); setEvaluacionLider({ ...evaluacionLider, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
   if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
@@ -483,7 +430,21 @@ function EvaluacionLider({ colaborador, onVolver }) {
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0, color: '#231F20' }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
-          {puntuacionesAuto[comp.id] && (<div style={{ padding: '8px 12px', background: '#D4D2C6', borderRadius: 6, marginBottom: 8, fontSize: 13, color: '#231F20' }}>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong>{ratings[comp.id] && <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#231F20' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>| Tú: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})</span>}</div>)}
+          {puntuacionesAuto[comp.id] && (
+            <div style={{ padding: '10px 12px', background: '#D4D2C6', borderRadius: 6, marginBottom: 8, fontSize: 13, color: '#231F20' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <span>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong></span>
+                {ratings[comp.id] && (
+                  <span style={{ color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>
+                    Tu eval: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})
+                  </span>
+                )}
+              </div>
+              <div style={{ marginTop: 6, padding: '6px 8px', background: 'white', borderRadius: 4, fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
+                "{autoevaluacion?.puntuaciones?.find(p => p.competencia_id == comp.id)?.comentario || 'Sin comentario'}"
+              </div>
+            </div>
+          )}
           <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #231F20' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia (obligatorio)" style={{ ...s.textareaSmall, borderColor: enviada ? '#D4D2C6' : (comentarios[comp.id]?.trim() ? '#D4D2C6' : '#dc2626') }} disabled={enviada} />
