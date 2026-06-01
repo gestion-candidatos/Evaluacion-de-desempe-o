@@ -215,20 +215,48 @@ function PanelCalibracion({ colaboradores }) {
 
   async function descargarExcelIndividual(d) {
     const col = d.colaborador;
-    const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).order('created_at', { ascending: false });
+    const { data: evals, error } = await supabase
+      .from('evaluaciones')
+      .select('*, puntuaciones(*, competencias(nombre))')
+      .eq('colaborador_id', col.id)
+      .order('created_at', { ascending: false });
+
+    if (error) { alert('Error al cargar datos'); return; }
+
     const rows = [];
     if (evals && evals.length > 0) {
       evals.forEach(ev => {
         if (ev.puntuaciones && ev.puntuaciones.length > 0) {
-          ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
+          ev.puntuaciones.forEach(p => {
+            rows.push({
+              'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+              'Competencia': p.competencias?.nombre || '',
+              'Rating': p.rating,
+              'Comentario': p.comentario || '',
+              'Estado': ev.estado,
+              'Rating Calibrado': ev.rating_calibrado || '',
+              'Comentarios Finales': ev.comentarios_finales || '',
+              'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+            });
+          });
         } else {
-          rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
+          rows.push({
+            'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
+            'Competencia': '', 'Rating': '', 'Comentario': '',
+            'Estado': ev.estado,
+            'Rating Calibrado': ev.rating_calibrado || '',
+            'Comentarios Finales': ev.comentarios_finales || '',
+            'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
+          });
         }
       });
     }
+
     const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]);
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Historial');
-    XLSX.writeFile(wb, `Historial_${(col.full_name || col.email).replace(/\s/g, '_')}.xlsx`);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Historial');
+    const nombreArchivo = `Historial_${(col.full_name || col.email).replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    XLSX.writeFile(wb, nombreArchivo);
   }
 
   function clasificarFull(prom) {
@@ -243,13 +271,9 @@ function PanelCalibracion({ colaboradores }) {
 
   function generarPDF(d) {
     const pdf = new jsPDF();
-    const NEGRO = '#231F20';
-    const BEIGE = '#D4D2C6';
-    const pageWidth = 210;
-    const marginX = 15;
-    let y = 20;
+    const NEGRO = '#231F20'; const BEIGE = '#D4D2C6'; const pageWidth = 210; const marginX = 15; let y = 20;
     function agregarCabecera() { pdf.addImage('/logo.jpg', 'JPEG', marginX, 10, 30, 15); pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 28, pageWidth - marginX, 28); }
-    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - Documento generado el ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
+    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
     agregarCabecera(); y = 35;
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 8;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
@@ -293,21 +317,14 @@ function PanelCalibracion({ colaboradores }) {
     const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
     pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 22, 'F');
     pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(12); pdf.text('RESULTADO FINAL', marginX + 5, y + 9);
-    pdf.setFontSize(16); pdf.text(`${rf}`, marginX + 5, y + 19);
+    pdf.setFontSize(12); pdf.text('RESULTADO FINAL', marginX + 5, y + 9); pdf.setFontSize(16); pdf.text(`${rf}`, marginX + 5, y + 19);
     pdf.setFontSize(10); pdf.text(`${clasif.texto}`, marginX + 20, y + 17);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.text(clasif.desc, marginX + 20, y + 21);
     agregarPie(); return pdf;
   }
 
-  function verPDF(d) { const pdf = generarPDF(d); pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
-
-  function enviarPDF(d) {
-    const pdf = generarPDF(d); pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`);
-    let liderEmail = '';
-    if (d.evaluacionLider?.evaluador_id) { supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => { abrirGmail(d.colaborador.email, lider?.email || ''); }); }
-    else { abrirGmail(d.colaborador.email, ''); }
-  }
+  function verPDF(d) { generarPDF(d).save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
+  function enviarPDF(d) { generarPDF(d).save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); let liderEmail = ''; if (d.evaluacionLider?.evaluador_id) { supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: l }) => { abrirGmail(d.colaborador.email, l?.email || ''); }); } else { abrirGmail(d.colaborador.email, ''); } }
 
   const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
   const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
