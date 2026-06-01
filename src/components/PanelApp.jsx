@@ -199,6 +199,16 @@ function PanelCalibracion({ colaboradores }) {
 
   async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
 
+  function clasificarFull(prom) {
+    if (!prom) return { texto: '-', desc: '' };
+    const p = parseFloat(prom);
+    if (p <= 1.4) return { texto: 'No adecuado', desc: 'Desempeño muy por debajo de lo esperado para el rol. Punto crítico.' };
+    if (p <= 2.4) return { texto: 'Por debajo de lo esperado', desc: 'Desempeño no acorde a lo esperado en el rol.' };
+    if (p <= 3.4) return { texto: 'Cumple con las expectativas', desc: 'Cumple con lo esperado para su rol.' };
+    if (p <= 4.4) return { texto: 'Excede las expectativas', desc: 'Su desempeño es superior a lo esperado, genera valor agregado.' };
+    return { texto: 'Desempeño distinguido', desc: 'Su desempeño es muy superior a lo esperado, genera valor agregado de manera significativa y constante.' };
+  }
+
   function generarPDF(d) {
     const pdf = new jsPDF();
     const NEGRO = '#231F20';
@@ -209,13 +219,9 @@ function PanelCalibracion({ colaboradores }) {
     
     function agregarCabecera() {
       pdf.addImage('/logo.jpg', 'JPEG', marginX, 10, 30, 15);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(13);
-      pdf.setTextColor(NEGRO);
-      pdf.text('Resumen de Evaluación - Fabric Group', marginX, 32);
       pdf.setDrawColor(BEIGE);
       pdf.setLineWidth(0.5);
-      pdf.line(marginX, 35, pageWidth - marginX, 35);
+      pdf.line(marginX, 28, pageWidth - marginX, 28);
     }
     
     function agregarPie() {
@@ -226,19 +232,17 @@ function PanelCalibracion({ colaboradores }) {
     }
     
     agregarCabecera();
-    y = 40;
+    y = 35;
     
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(9);
+    pdf.setFontSize(11);
     pdf.setTextColor(NEGRO);
-    pdf.text('DATOS DEL COLABORADOR', marginX, y); y += 6;
+    pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 8;
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.text(`Nombre: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 4.5;
-    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 4.5;
-    pdf.text(`Área: ${d.colaborador.area || '-'}`, marginX, y);
-    pdf.text(`Seniority: ${d.colaborador.seniority || '-'}`, marginX + 80, y); y += 4.5;
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 8;
+    pdf.setFontSize(9);
+    pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5.5;
+    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5.5;
+    pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 10;
     
     const autoPunts = {}, autoComs = {};
     (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
@@ -248,76 +252,80 @@ function PanelCalibracion({ colaboradores }) {
     const compsInfo = {};
     (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
     
-    if (todasComps.length === 0) { pdf.text('No hay datos de evaluación disponibles.', marginX, y); agregarPie(); return pdf; }
-    
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(9);
-    pdf.text('DETALLE POR COMPETENCIA', marginX, y); y += 6;
-    
-    const colComp = marginX;
-    const colAutoR = 57;
-    const colAutoC = 70;
-    const colLiderR = 120;
-    const colLiderC = 133;
-    
-    pdf.setFillColor(NEGRO);
-    pdf.rect(marginX, y, pageWidth - (marginX * 2), 8, 'F');
-    pdf.setTextColor('#FFFFFF');
-    pdf.setFontSize(6.5);
-    pdf.text('Competencia', colComp + 1, y + 5.5);
-    pdf.text('A', colAutoR, y + 5.5);
-    pdf.text('Comentario Autoevaluación', colAutoC, y + 5.5);
-    pdf.text('L', colLiderR, y + 5.5);
-    pdf.text('Comentario Líder', colLiderC, y + 5.5);
-    y += 10;
-    pdf.setTextColor(NEGRO);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(6.5);
-    
-    todasComps.forEach((compId, index) => {
-      const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18);
-      const autoR = String(autoPunts[compId] || '-');
-      const liderR = String(liderPunts[compId] || '-');
-      const autoC = autoComs[compId] || '-';
-      const liderC = liderComs[compId] || '-';
-      const lineasAuto = pdf.splitTextToSize(autoC, 45);
-      const lineasLider = pdf.splitTextToSize(liderC, 60);
-      const alturaNecesaria = Math.max(8, Math.max(lineasAuto.length, lineasLider.length) * 4);
-      if (y + alturaNecesaria > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; }
-      if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 3, pageWidth - (marginX * 2), alturaNecesaria + 1, 'F'); }
-      pdf.setFont('helvetica', 'bold'); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
-      pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 2, 4, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(7); pdf.text(autoR, colAutoR + 2, y + 0.5); pdf.setFontSize(6.5);
-      lineasAuto.forEach((linea, i) => pdf.text(linea, colAutoC, y + (i * 3.5)));
-      pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 2, 4, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(7); pdf.text(liderR, colLiderR + 2, y + 0.5); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5);
-      lineasLider.forEach((linea, i) => pdf.text(linea, colLiderC, y + (i * 3.5)));
-      y += alturaNecesaria + 1.5;
-      pdf.setDrawColor(220, 220, 220); pdf.line(marginX, y, pageWidth - marginX, y);
-    });
-    
-    y += 8;
-    if (y > 230) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; }
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('COMENTARIOS FINALES', marginX, y); y += 6;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
-    if (d.autoevaluacion?.comentarios_finales) {
-      pdf.text('Autoevaluación:', marginX, y); y += 4;
-      pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; } pdf.text(linea, marginX + 3, y); y += 4; });
-      y += 3;
-    }
-    if (d.evaluacionLider?.comentarios_finales) {
-      if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; }
-      pdf.text('Líder:', marginX, y); y += 4;
-      pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; } pdf.text(linea, marginX + 3, y); y += 4; });
+    if (todasComps.length > 0) {
+      const colComp = marginX;
+      const colAutoR = 57;
+      const colAutoC = 68;
+      const colLiderR = 118;
+      const colLiderC = 129;
+      
+      pdf.setFillColor(NEGRO);
+      pdf.rect(marginX, y, pageWidth - (marginX * 2), 8, 'F');
+      pdf.setTextColor('#FFFFFF');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.text('Competencia', colComp + 1, y + 5.5);
+      pdf.text('A', colAutoR, y + 5.5);
+      pdf.text('Comentario Autoevaluación', colAutoC, y + 5.5);
+      pdf.text('L', colLiderR, y + 5.5);
+      pdf.text('Comentario Líder', colLiderC, y + 5.5);
+      y += 10;
+      pdf.setTextColor(NEGRO);
+      
+      todasComps.forEach((compId, index) => {
+        const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18);
+        const autoR = String(autoPunts[compId] || '-');
+        const liderR = String(liderPunts[compId] || '-');
+        const autoC = autoComs[compId] || '-';
+        const liderC = liderComs[compId] || '-';
+        const lineasAuto = pdf.splitTextToSize(autoC, 44);
+        const lineasLider = pdf.splitTextToSize(liderC, 58);
+        const alturaNecesaria = Math.max(8, Math.max(lineasAuto.length, lineasLider.length) * 3.8);
+        if (y + alturaNecesaria > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
+        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 3, pageWidth - (marginX * 2), alturaNecesaria + 1, 'F'); }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.text(nombre, colComp + 1, y);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 2, 4, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(7); pdf.text(autoR, colAutoR + 2, y + 0.5); pdf.setFontSize(6.5);
+        lineasAuto.forEach((linea, i) => pdf.text(linea, colAutoC, y + (i * 3.5)));
+        pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 2, 4, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(7); pdf.text(liderR, colLiderR + 2, y + 0.5); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5);
+        lineasLider.forEach((linea, i) => pdf.text(linea, colLiderC, y + (i * 3.5)));
+        y += alturaNecesaria + 1.5;
+        pdf.setDrawColor(220, 220, 220); pdf.line(marginX, y, pageWidth - marginX, y);
+      });
+      
+      y += 8;
+      if (y > 230) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text('COMENTARIOS FINALES', marginX, y); y += 6;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+      if (d.autoevaluacion?.comentarios_finales) {
+        pdf.text('Autoevaluación:', marginX, y); y += 4;
+        pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; });
+        y += 3;
+      }
+      if (d.evaluacionLider?.comentarios_finales) {
+        if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
+        pdf.text('Líder:', marginX, y); y += 4;
+        pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; });
+      }
     }
     
     y += 10;
-    if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 40; }
-    pdf.setFillColor(NEGRO);
-    pdf.rect(marginX, y, pageWidth - (marginX * 2), 16, 'F');
-    pdf.setTextColor('#FFFFFF');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+    if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
     const rf = d.ratingFinal || '-';
-    const clasif = clasificar(rf);
-    pdf.text(`RESULTADO FINAL CALIBRADO: ${rf} - ${clasif.texto}`, marginX + 5, y + 11);
+    const clasif = clasificarFull(rf);
+    pdf.setFillColor(NEGRO);
+    pdf.rect(marginX, y, pageWidth - (marginX * 2), 22, 'F');
+    pdf.setTextColor('#FFFFFF');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.text('RESULTADO FINAL', marginX + 5, y + 9);
+    pdf.setFontSize(16);
+    pdf.text(`${rf}`, marginX + 5, y + 19);
+    pdf.setFontSize(10);
+    pdf.text(`${clasif.texto}`, marginX + 20, y + 17);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.text(clasif.desc, marginX + 20, y + 21);
     agregarPie();
     return pdf;
   }
@@ -329,7 +337,7 @@ function PanelCalibracion({ colaboradores }) {
     const pdfBase64 = pdf.output('datauristring').split(',')[1];
     const nombre = d.colaborador.full_name || d.colaborador.email;
     const rf = d.ratingFinal || '-';
-    const clasif = clasificar(rf);
+    const clasif = clasificarFull(rf);
     emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: d.colaborador.email, to_name: nombre, promedio: rf, clasificacion: clasif.texto, message: 'Adjunto encontrarás el resumen de tu evaluación de desempeño.\n\nFabric Group.', attachment: pdfBase64, filename: `Evaluacion_${nombre}.pdf` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Error colaborador:', err));
     if (d.evaluacionLider?.evaluador_id) {
       supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => {
@@ -339,7 +347,7 @@ function PanelCalibracion({ colaboradores }) {
     alert('✅ PDF enviado al colaborador y líder');
   }
 
-  const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: '🔴 No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: '🟠 Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: '🔵 Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: '🟢 Excede', color: '#22c55e' }; return { texto: '🟣 Distinguido', color: '#8b5cf6' }; };
+  const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
   const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
 
   if (cargando) return <p style={{ padding: 20 }}>⏳ Cargando...</p>;
