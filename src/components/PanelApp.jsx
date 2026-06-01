@@ -213,52 +213,6 @@ function PanelCalibracion({ colaboradores }) {
 
   async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
 
-  async function descargarExcelIndividual(d) {
-    const col = d.colaborador;
-    const { data: evals, error } = await supabase
-      .from('evaluaciones')
-      .select('*, puntuaciones(*, competencias(nombre))')
-      .eq('colaborador_id', col.id)
-      .order('created_at', { ascending: false });
-
-    if (error) { alert('Error al cargar datos'); return; }
-
-    const rows = [];
-    if (evals && evals.length > 0) {
-      evals.forEach(ev => {
-        if (ev.puntuaciones && ev.puntuaciones.length > 0) {
-          ev.puntuaciones.forEach(p => {
-            rows.push({
-              'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
-              'Competencia': p.competencias?.nombre || '',
-              'Rating': p.rating,
-              'Comentario': p.comentario || '',
-              'Estado': ev.estado,
-              'Rating Calibrado': ev.rating_calibrado || '',
-              'Comentarios Finales': ev.comentarios_finales || '',
-              'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
-            });
-          });
-        } else {
-          rows.push({
-            'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder',
-            'Competencia': '', 'Rating': '', 'Comentario': '',
-            'Estado': ev.estado,
-            'Rating Calibrado': ev.rating_calibrado || '',
-            'Comentarios Finales': ev.comentarios_finales || '',
-            'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR')
-          });
-        }
-      });
-    }
-
-    const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Historial');
-    const nombreArchivo = `Historial_${(col.full_name || col.email).replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
-    XLSX.writeFile(wb, nombreArchivo);
-  }
-
   function clasificarFull(prom) {
     if (!prom) return { texto: '-', desc: '' };
     const p = parseFloat(prom);
@@ -339,18 +293,17 @@ function PanelCalibracion({ colaboradores }) {
       </div>
       {datosFiltrados.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos.</p> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>PDF</th><th style={th}>Excel</th><th style={th}>Enviar</th></tr></thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1050px' }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
             <tbody>{datosFiltrados.map(d => { const clasFinal = clasificar(d.ratingFinal); return (
               <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td><td style={td}>{d.colaborador.area || '-'}</td>
                 <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
-                <td style={{ ...td, textAlign: 'center', fontSize: 18, fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
-                <td style={{ ...td, textAlign: 'center', fontSize: 18, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
-                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
-                <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Seleccionar</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select>{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</div> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}</td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 14, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
+                <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '4px 8px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 13, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Sel.</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select>{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</div> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}</td>
                 <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>👁️ PDF</button></td>
-                <td style={td}><button onClick={() => descargarExcelIndividual(d)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥 Excel</button></td>
                 <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
               </tr>
             )})}</tbody>
@@ -529,8 +482,8 @@ function SeccionText({ titulo, valor, onChange, disabled }) { return <div style=
 function RatingDesc({ competenciaId, rating }) { const [desc, setDesc] = useState('Cargando...'); useEffect(() => { (async () => { const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (error) setDesc('Error'); else if (data) setDesc(`${data.titulo}: ${data.descripcion}`); else setDesc('Sin descripción'); })(); }, [competenciaId, rating]); return <span>{desc}</span>; }
 function CalcularPromedio({ ratings, competencias }) { if (!ratings || Object.keys(ratings).length === 0) return null; const valores = Object.values(ratings).filter(r => r > 0); if (valores.length === 0) return null; const suma = valores.reduce((a, b) => a + b, 0); const promedio = suma / valores.length; let clasificacion = '', color = '', emoji = ''; if (promedio <= 1.4) { clasificacion = 'No adecuado'; color = '#dc2626'; emoji = '🔴'; } else if (promedio <= 2.4) { clasificacion = 'Por debajo de lo esperado'; color = '#f59e0b'; emoji = '🟠'; } else if (promedio <= 3.4) { clasificacion = 'Cumple con las expectativas'; color = '#3b82f6'; emoji = '🔵'; } else if (promedio <= 4.4) { clasificacion = 'Excede las expectativas'; color = '#22c55e'; emoji = '🟢'; } else { clasificacion = 'Desempeño distinguido'; color = '#8b5cf6'; emoji = '🟣'; } return (<div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid #231F20', textAlign: 'center' }}><p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p><p style={{ fontSize: 48, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{promedio.toFixed(1)}</p><p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>{emoji} {clasificacion}</p><p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>Basado en {valores.length} de {competencias?.length || 0} competencias evaluadas</p></div>); }
 
-const th = { textAlign: 'left', padding: '10px', color: '#231F20', fontSize: '12px' };
-const td = { padding: '10px', fontSize: '14px' };
+const th = { textAlign: 'left', padding: '6px 8px', color: '#231F20', fontSize: '11px' };
+const td = { padding: '6px 8px', fontSize: '13px' };
 const s = {
   centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', background: '#231F20', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 100 },
