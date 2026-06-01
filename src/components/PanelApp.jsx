@@ -225,15 +225,31 @@ function PanelCalibracion({ colaboradores }) {
 
   function generarPDF(d) {
     const pdf = new jsPDF();
-    const NEGRO = '#231F20'; const BEIGE = '#D4D2C6'; const pageWidth = 210; const marginX = 15; let y = 20;
-    function agregarCabecera() { pdf.addImage('/logo.jpg', 'JPEG', marginX, 10, 30, 15); pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 28, pageWidth - marginX, 28); }
-    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
-    agregarCabecera(); y = 35;
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 8;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
-    pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5.5;
-    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5.5;
-    pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 10;
+    const NEGRO = '#231F20';
+    const BEIGE = '#D4D2C6';
+    const pageWidth = 210;
+    const marginX = 15;
+    let y = 14;
+
+    function agregarCabecera() {
+      pdf.addImage('/logo.jpg', 'JPEG', marginX, 6, 28, 14);
+      pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.4);
+      pdf.line(marginX, 22, pageWidth - marginX, 22);
+    }
+    function agregarPie() {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(5.5); pdf.setTextColor('#94a3b8');
+      pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 294);
+    }
+
+    agregarCabecera();
+
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(NEGRO);
+    pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 5;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+    pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 4;
+    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 4;
+    pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 7;
+
     const autoPunts = {}, autoComs = {};
     (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
     const liderPunts = {}, liderComs = {};
@@ -241,40 +257,76 @@ function PanelCalibracion({ colaboradores }) {
     const todasComps = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
     const compsInfo = {};
     (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
+
     if (todasComps.length > 0) {
       const colComp = marginX, colAutoR = 57, colAutoC = 68, colLiderR = 118, colLiderC = 129;
-      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 8, 'F');
-      pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5);
-      pdf.text('Competencia', colComp + 1, y + 5.5); pdf.text('A', colAutoR, y + 5.5); pdf.text('Comentario Autoevaluación', colAutoC, y + 5.5); pdf.text('L', colLiderR, y + 5.5); pdf.text('Comentario Líder', colLiderC, y + 5.5); y += 10; pdf.setTextColor(NEGRO);
+      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F');
+      pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6);
+      pdf.text('Competencia', colComp + 1, y + 5); pdf.text('A', colAutoR, y + 5); pdf.text('Comentario Autoevaluación', colAutoC, y + 5); pdf.text('L', colLiderR, y + 5); pdf.text('Comentario Líder', colLiderC, y + 5);
+      y += 8; pdf.setTextColor(NEGRO);
+
       todasComps.forEach((compId, index) => {
         const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18);
         const autoR = String(autoPunts[compId] || '-'), liderR = String(liderPunts[compId] || '-');
         const autoC = autoComs[compId] || '-', liderC = liderComs[compId] || '-';
         const lineasAuto = pdf.splitTextToSize(autoC, 44), lineasLider = pdf.splitTextToSize(liderC, 58);
-        const altura = Math.max(8, Math.max(lineasAuto.length, lineasLider.length) * 3.8);
-        if (y + altura > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
-        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 3, pageWidth - (marginX * 2), altura + 1, 'F'); }
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
-        pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 2, 4, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(7); pdf.text(autoR, colAutoR + 2, y + 0.5); pdf.setFontSize(6.5);
-        lineasAuto.forEach((l, i) => pdf.text(l, colAutoC, y + (i * 3.5)));
-        pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 2, 4, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(7); pdf.text(liderR, colLiderR + 2, y + 0.5); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5);
-        lineasLider.forEach((l, i) => pdf.text(l, colLiderC, y + (i * 3.5)));
-        y += altura + 1.5; pdf.setDrawColor(220, 220, 220); pdf.line(marginX, y, pageWidth - marginX, y);
+        const altura = Math.max(6, Math.max(lineasAuto.length, lineasLider.length) * 3.2);
+
+        if (y + altura > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+
+        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), altura + 1, 'F'); }
+
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
+        pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5); pdf.text(autoR, colAutoR + 2.5, y + 0.5);
+        lineasAuto.forEach((l, i) => pdf.text(l, colAutoC, y + (i * 3)));
+        pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(6.5); pdf.text(liderR, colLiderR + 2.5, y + 0.5); pdf.setTextColor(NEGRO);
+        lineasLider.forEach((l, i) => pdf.text(l, colLiderC, y + (i * 3)));
+        y += altura + 1;
+        pdf.setDrawColor(230, 230, 230); pdf.line(marginX, y, pageWidth - marginX, y);
       });
-      y += 8; if (y > 230) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text('COMENTARIOS FINALES', marginX, y); y += 6;
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
-      if (d.autoevaluacion?.comentarios_finales) { pdf.text('Autoevaluación:', marginX, y); y += 4; pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; }); y += 3; }
-      if (d.evaluacionLider?.comentarios_finales) { if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text('Líder:', marginX, y); y += 4; pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => { if (y > 278) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; } pdf.text(linea, marginX + 3, y); y += 4; }); }
+
+      y += 5;
+      if (y > 235) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+
+      const tieneComentarios = d.autoevaluacion?.comentarios_finales || d.evaluacionLider?.comentarios_finales;
+      if (tieneComentarios) {
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('COMENTARIOS FINALES', marginX, y); y += 5;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+
+        if (d.autoevaluacion?.comentarios_finales) {
+          if (y > 270) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+          pdf.text('Autoevaluación:', marginX, y); y += 3.5;
+          pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => {
+            if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+            pdf.text(linea, marginX + 2, y); y += 3.5;
+          });
+          y += 2;
+        }
+
+        if (d.evaluacionLider?.comentarios_finales) {
+          if (y > 265) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+          pdf.text('Líder:', marginX, y); y += 3.5;
+          pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2)).forEach(linea => {
+            if (y > 282) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+            pdf.text(linea, marginX + 2, y); y += 3.5;
+          });
+        }
+      }
     }
-    y += 10; if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 35; }
-    const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
-    pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 22, 'F');
+
+    y += 8;
+    if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 25; }
+
+    const rf = d.ratingFinal || '-';
+    const clasif = clasificarFull(rf);
+    pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 20, 'F');
     pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(12); pdf.text('RESULTADO FINAL', marginX + 5, y + 9); pdf.setFontSize(16); pdf.text(`${rf}`, marginX + 5, y + 19);
-    pdf.setFontSize(10); pdf.text(`${clasif.texto}`, marginX + 20, y + 17);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.text(clasif.desc, marginX + 20, y + 21);
-    agregarPie(); return pdf;
+    pdf.setFontSize(11); pdf.text('RESULTADO FINAL', marginX + 4, y + 8);
+    pdf.setFontSize(15); pdf.text(`${rf}`, marginX + 4, y + 17);
+    pdf.setFontSize(9); pdf.text(`${clasif.texto}`, marginX + 18, y + 15);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.text(clasif.desc, marginX + 18, y + 19);
+    agregarPie();
+    return pdf;
   }
 
   function verPDF(d) { generarPDF(d).save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
