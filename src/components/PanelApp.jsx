@@ -21,6 +21,15 @@ export default function PanelApp() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
     const { data: perfil } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+    
+    // Bloquear acceso a usuarios inactivos
+    if (perfil && perfil.activo === false) {
+      await supabase.auth.signOut();
+      alert('Tu cuenta ha sido desactivada. Contacta a RRHH.');
+      window.location.href = '/';
+      return;
+    }
+    
     setProfile(perfil);
     setLoading(false);
   }
