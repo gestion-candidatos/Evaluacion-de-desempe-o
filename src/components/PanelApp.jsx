@@ -4,6 +4,13 @@ import emailjs from '@emailjs/browser';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 
+function abrirGmail(colaboradorEmail, liderEmail) {
+  const to = colaboradorEmail + (liderEmail ? `,${liderEmail}` : '');
+  const subject = 'Evaluación de Desempeño - Fabric Group';
+  const body = 'Adjunto encontrarás el resumen de la evaluación de desempeño.%0D%0A%0D%0AFabric Group.';
+  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${encodeURIComponent(subject)}&body=${body}`, '_blank');
+}
+
 export default function PanelApp() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -81,23 +88,11 @@ function PanelAdmin({ profile }) {
 
   async function descargarExcelCompleto() {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({ 'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 'Seniority': c.seniority || '', 'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No' }))), 'Resumen');
-    for (const col of colaboradores) {
-      const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', col.id).order('created_at', { ascending: false });
-      const rows = [];
-      if (evals && evals.length > 0) {
-        evals.forEach(ev => {
-          if (ev.puntuaciones && ev.puntuaciones.length > 0) {
-            ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }));
-          } else {
-            rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Rating Calibrado': ev.rating_calibrado || '', 'Comentarios Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') });
-          }
-        });
-      }
-      const nombreHoja = (col.full_name || col.email).substring(0, 31).replace(/[\\\/\*\?\[\]:]/g, '');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]), nombreHoja);
-    }
-    XLSX.writeFile(wb, 'Evaluaciones_Completas.xlsx');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(colaboradores.map(c => ({ 
+      'Nombre': c.full_name || '', 'Email': c.email, 'Área': c.area || '', 
+      'Seniority': c.seniority || '', 'Rol': c.role, 'Activo': c.activo ? 'Sí' : 'No' 
+    }))), 'Resumen');
+    XLSX.writeFile(wb, 'Colaboradores.xlsx');
   }
 
   const colaboradoresFiltrados = senioritySeleccionado ? colaboradores.filter(c => (c.seniority || 'Sin definir') === senioritySeleccionado) : [];
@@ -301,16 +296,18 @@ function PanelCalibracion({ colaboradores }) {
   }
 
   function verPDF(d) { const pdf = generarPDF(d); pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`); }
+
   function enviarPDF(d) {
-    const pdf = generarPDF(d); const pdfBase64 = pdf.output('datauristring').split(',')[1];
-    const nombre = d.colaborador.full_name || d.colaborador.email; const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
-    emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: d.colaborador.email, to_name: nombre, promedio: rf, clasificacion: clasif.texto, message: 'Adjunto encontrarás el resumen de tu evaluación de desempeño.\n\nFabric Group.', attachment: pdfBase64, filename: `Evaluacion_${nombre}.pdf` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Error colaborador:', err));
+    const pdf = generarPDF(d);
+    pdf.save(`Evaluacion_${d.colaborador.full_name || d.colaborador.email}.pdf`);
+    let liderEmail = '';
     if (d.evaluacionLider?.evaluador_id) {
-      supabase.from('profiles').select('email, full_name').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => {
-        if (lider?.email) emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: lider.email, to_name: lider.full_name || 'Líder', promedio: rf, clasificacion: clasif.texto, message: `Adjunto encontrarás el resumen de la evaluación de ${nombre}.\n\nFabric Group.`, attachment: pdfBase64, filename: `Evaluacion_${nombre}.pdf` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log('Error líder:', err));
+      supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: lider }) => {
+        abrirGmail(d.colaborador.email, lider?.email || '');
       });
+    } else {
+      abrirGmail(d.colaborador.email, '');
     }
-    alert('✅ PDF enviado al colaborador y líder');
   }
 
   const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
