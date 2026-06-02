@@ -1,639 +1,805 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
-
-export default function PanelApp() {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { cargarPerfil(); }, []);
-
-  async function cargarPerfil() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { window.location.href = '/'; return; }
-    const { data: perfil } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    setProfile(perfil);
-    setLoading(false);
-  }
-
-  async function cerrarSesion() {
-    await supabase.auth.signOut();
-    window.location.href = '/';
-  }
-
-  if (loading) return <div style={s.centrado}><p>Cargando panel...</p></div>;
-  if (!profile) return <div style={s.centrado}><h2>Error al cargar perfil</h2><button onClick={cerrarSesion} style={s.btnSalir}>Volver</button></div>;
-
-  const nombreRol = profile.role === 'admin_rrhh' ? 'Admin RRHH' : profile.role === 'lider' ? 'Líder' : 'Colaborador';
-  const emojiRol = profile.role === 'admin_rrhh' ? '🔧' : profile.role === 'lider' ? '👥' : '👤';
-
-  return (
-    <div>
-      <header style={s.header}>
-        <div style={s.headerIzq}><h1 style={s.logo}>EvalRH</h1><span style={s.badge}>{emojiRol} {nombreRol}</span></div>
-        <div style={s.headerDer}><span style={s.email}>{profile.email}</span><button onClick={cerrarSesion} style={s.btnSalir}>Cerrar Sesión</button></div>
-      </header>
-      <main style={s.main}>
-        <div style={s.tarjetaBienvenida}><h2>👋 Bienvenido/a{profile.full_name ? `, ${profile.full_name}` : ''}</h2><p>Rol: <strong>{nombreRol}</strong> | Área: {profile.area || 'No asignada'} | Seniority: {profile.seniority || 'No definido'}</p></div>
-        {profile.role === 'admin_rrhh' && <PanelAdmin />}
-        {profile.role === 'lider' && <PanelLider />}
-        {profile.role === 'colaborador' && <PanelColaborador userId={profile.id} seniority={profile.seniority} />}
-      </main>
-    </div>
-  );
-}
-
-function PanelAdmin() {
-  const [stats, setStats] = useState({ total: 0, enviadas: 0, pendientes: 0 });
-  const [colaboradores, setColaboradores] = useState([]);
-  const [vistaActiva, setVistaActiva] = useState('dashboard');
-
-  useEffect(() => { cargarStats(); cargarColabs(); }, []);
-
-  async function cargarStats() {
-    const { count: t } = await supabase.from('evaluaciones').select('*', { count: 'exact', head: true });
-    const { count: e } = await supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('estado', 'enviado');
-    setStats({ total: t || 0, enviadas: e || 0, pendientes: (t || 0) - (e || 0) });
-  }
-
-  async function cargarColabs() {
-    const { data } = await supabase.from('profiles').select('*').neq('role', 'admin_rrhh');
-    setColaboradores(data || []);
-  }
-
-  const pct = stats.total > 0 ? Math.round((stats.enviadas / stats.total) * 100) : 0;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button onClick={() => setVistaActiva('dashboard')} style={vistaActiva === 'dashboard' ? s.btnPrimario : s.btnInfo}>📊 Dashboard</button>
-        <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
-        <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
-        <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Colaboradores</button>
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Capacitaciones</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+      color: #333;
+    }
+    
+    .container { max-width: 1400px; margin: 0 auto; }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    
+    .header h1 { font-size: 24px; font-weight: 600; }
+    
+    .header-right { display: flex; gap: 10px; align-items: center; }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    
+    .btn-refresh { background: white; color: #667eea; }
+    .btn-refresh:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    
+    .btn-export { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+    .btn-export:hover { background: rgba(255,255,255,0.3); }
+    
+    .filters-container {
+      background: white;
+      padding: 20px 25px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      border: 2px solid #e8e8e8;
+    }
+    
+    .filters-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    
+    .filters-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    
+    .filter-group label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    
+    .filter-select {
+      padding: 10px 35px 10px 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #fafafa;
+      cursor: pointer;
+      transition: all 0.3s;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%23666' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      width: 100%;
+      font-weight: 500;
+    }
+    
+    .filter-select:hover { border-color: #667eea; background-color: #f5f7ff; }
+    .filter-select:focus { border-color: #667eea; outline: none; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15); background-color: white; }
+    
+    .filter-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+    }
+    
+    .btn-filter {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .btn-apply { background: #667eea; color: white; }
+    .btn-apply:hover { background: #5a6fd6; transform: translateY(-1px); }
+    
+    .btn-clear { background: #f5f5f5; color: #666; }
+    .btn-clear:hover { background: #e8e8e8; }
+    
+    .results-badge {
+      font-size: 13px;
+      color: #667eea;
+      padding: 8px 16px;
+      background: #f0f2ff;
+      border-radius: 20px;
+      font-weight: 700;
+      border: 2px solid #667eea;
+    }
+    
+    .active-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    
+    .filter-tag {
+      background: #667eea;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: fadeIn 0.3s;
+      font-weight: 500;
+    }
+    
+    .filter-tag .remove { cursor: pointer; font-weight: bold; font-size: 18px; line-height: 1; opacity: 0.8; }
+    .filter-tag .remove:hover { opacity: 1; color: #ffc107; }
+    
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .kpi-card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border-left: 4px solid #667eea;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 5px 20px rgba(0,0,0,0.12); }
+    .kpi-card.active { border-left-color: #667eea; }
+    .kpi-card.warning { border-left-color: #ffc107; }
+    .kpi-card.success { border-left-color: #43e97b; }
+    .kpi-card.info { border-left-color: #4facfe; }
+    .kpi-card.purple { border-left-color: #764ba2; }
+    
+    .kpi-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 8px; }
+    .kpi-value { font-size: 32px; font-weight: bold; color: #333; }
+    
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .chart-card {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    
+    .chart-card.full-width { grid-column: 1 / -1; }
+    .chart-card h3 { font-size: 16px; color: #333; margin-bottom: 20px; font-weight: 600; }
+    .chart-container { position: relative; height: 300px; width: 100%; }
+    .chart-container.large { height: 350px; }
+    
+    .table-container {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      overflow-x: auto;
+    }
+    
+    .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    
+    thead th {
+      background: #f8f9fa;
+      padding: 12px 15px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #e0e0e0;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+    
+    thead th:hover { background: #e9ecef; }
+    tbody td { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; }
+    tbody tr:hover { background: #f8f9ff; }
+    
+    .progress-bar { background: #e9ecef; border-radius: 10px; height: 22px; overflow: hidden; min-width: 100px; }
+    
+    .progress-fill {
+      height: 100%;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      transition: width 0.6s ease;
+      border-radius: 10px;
+    }
+    
+    .badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-block;
+    }
+    
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .header { flex-direction: column; gap: 15px; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .filters-grid { grid-template-columns: 1fr; }
+      .filter-actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Dashboard de Capacitaciones</h1>
+      <div class="header-right">
+        <button class="btn btn-export" onclick="exportarDatos()">📥 Exportar CSV</button>
+        <button class="btn btn-refresh" onclick="cargarDatos()">🔄 Actualizar</button>
       </div>
-
-      {vistaActiva === 'dashboard' && (
-        <div>
-          <h3 style={{ marginBottom: 20, color: '#1e293b' }}>📊 Dashboard de Recursos Humanos</h3>
-          <div style={s.grid}>
-            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Total</p><p style={{ fontSize: 36, fontWeight: 700, color: '#2563eb', margin: '8px 0' }}>{stats.total}</p></div>
-            <div style={{ ...s.tarjetaStat, borderTop: '4px solid #22c55e' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#22c55e', margin: '8px 0' }}>{stats.enviadas}</p></div>
-            <div style={{ ...s.tarjetaStat, borderTop: '4px solid #f59e0b' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#f59e0b', margin: '8px 0' }}>{stats.pendientes}</p></div>
-          </div>
-          <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-            <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso: {pct}%</p>
-            <div style={{ background: '#e2e8f0', borderRadius: 10, height: 24, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #2563eb, #22c55e)', borderRadius: 10, transition: 'width 0.5s' }} /></div>
-          </div>
-        </div>
-      )}
-
-      {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
-      {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
+    </div>
+    
+    <div id="errorContainer"></div>
+    
+    <div id="loadingContainer" style="text-align: center; padding: 60px; background: white; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+      <div style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+      <p style="color: #666; font-size: 15px;">Cargando datos del Google Sheet...</p>
+    </div>
+    
+    <div id="mainContent" style="display: none;">
       
-      {vistaActiva === 'colaboradores' && (
-        <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>👥 Colaboradores ({colaboradores.length})</h4>
-          {colaboradores.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>No hay colaboradores.</p> : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ borderBottom: '2px solid #e2e8f0' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th></tr></thead>
-              <tbody>{colaboradores.map(c => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{c.full_name || '-'}</td><td style={{ ...td, color: '#2563eb' }}>{c.email}</td><td style={td}>{c.area || '-'}</td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{c.seniority || '-'}</span></td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#fef3c7' : '#dbeafe', color: c.role === 'lider' ? '#92400e' : '#1e40af' }}>{c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
+      <!-- FILTROS -->
+      <div class="filters-container">
+        <div class="filters-header">
+          <div class="filters-title">
+            <span>🔍</span> Filtros de Búsqueda
+          </div>
+          <div class="results-badge" id="contadorResultados">Mostrando 0 de 0</div>
         </div>
-      )}
+        
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label>🏢 Departamento</label>
+            <select class="filter-select" id="filtroDepartamento" onchange="aplicarFiltros()">
+              <option value="">Todos los departamentos</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>📚 Tipo de Capacitación</label>
+            <select class="filter-select" id="filtroTipo" onchange="aplicarFiltros()">
+              <option value="">Todos los tipos</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>📌 Estado</label>
+            <select class="filter-select" id="filtroEstado" onchange="aplicarFiltros()">
+              <option value="">Todos los estados</option>
+              <option value="En curso">🔄 En curso</option>
+              <option value="Completada">✅ Completada</option>
+              <option value="Pendiente">⏳ Pendiente</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>👤 Empleado</label>
+            <select class="filter-select" id="filtroEmpleado" onchange="aplicarFiltros()">
+              <option value="">Todos los empleados</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>💼 Puesto</label>
+            <select class="filter-select" id="filtroPuesto" onchange="aplicarFiltros()">
+              <option value="">Todos los puestos</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>📊 Progreso Mínimo</label>
+            <select class="filter-select" id="filtroProgreso" onchange="aplicarFiltros()">
+              <option value="">Cualquier progreso</option>
+              <option value="0">0% o más</option>
+              <option value="25">25% o más</option>
+              <option value="50">50% o más</option>
+              <option value="75">75% o más</option>
+              <option value="100">100% (Completado)</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="active-filters" id="filtrosActivos"></div>
+        
+        <div class="filter-actions">
+          <div style="display: flex; gap: 10px;">
+            <button class="btn-filter btn-clear" onclick="limpiarFiltros()">✖ Limpiar Todo</button>
+          </div>
+          <span style="font-size: 12px; color: #999;">💡 Selecciona un filtro para actualizar automáticamente</span>
+        </div>
+      </div>
+      
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card active">
+          <div class="kpi-label">📚 Total Capacitaciones</div>
+          <div class="kpi-value" id="kpi-total">0</div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-label">🔄 En Curso</div>
+          <div class="kpi-value" id="kpi-activas">0</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">✅ Completadas</div>
+          <div class="kpi-value" id="kpi-completadas">0</div>
+        </div>
+        <div class="kpi-card info">
+          <div class="kpi-label">👥 Empleados</div>
+          <div class="kpi-value" id="kpi-empleados">0</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">📈 Progreso Promedio</div>
+          <div class="kpi-value" id="kpi-progreso">0%</div>
+        </div>
+      </div>
+      
+      <!-- GRÁFICOS -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>🍩 Distribución por Tipo de Capacitación</h3>
+          <div class="chart-container"><canvas id="chartTipos"></canvas></div>
+        </div>
+        
+        <div class="chart-card">
+          <h3>📊 Progreso Promedio por Tipo</h3>
+          <div class="chart-container"><canvas id="chartProgreso"></canvas></div>
+        </div>
+        
+        <div class="chart-card full-width">
+          <h3>🏢 Capacitaciones por Departamento y Estado</h3>
+          <div class="chart-container large"><canvas id="chartDeptos"></canvas></div>
+        </div>
+        
+        <div class="chart-card full-width">
+          <h3>👤 Top 10 Empleados con Más Capacitaciones</h3>
+          <div class="chart-container large"><canvas id="chartEmpleados"></canvas></div>
+        </div>
+      </div>
+      
+      <!-- TABLA -->
+      <div class="table-container">
+        <div class="table-header">
+          <h3 style="font-size: 16px; font-weight: 600;">📋 Detalle de Capacitaciones</h3>
+          <span style="font-size: 13px; color: #666;" id="tablaInfo"></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th onclick="ordenarTabla('id')">ID ↕</th>
+              <th onclick="ordenarTabla('capacitacion')">Capacitación ↕</th>
+              <th onclick="ordenarTabla('tipo')">Tipo ↕</th>
+              <th onclick="ordenarTabla('empleado')">Empleado ↕</th>
+              <th onclick="ordenarTabla('puesto')">Puesto ↕</th>
+              <th onclick="ordenarTabla('departamento')">Departamento ↕</th>
+              <th onclick="ordenarTabla('progreso')">Progreso ↕</th>
+              <th onclick="ordenarTabla('estado')">Estado ↕</th>
+              <th>Fechas</th>
+            </tr>
+          </thead>
+          <tbody id="tablaBody">
+            <tr><td colspan="9" style="text-align: center; padding: 30px; color: #999;">Cargando datos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
     </div>
-  );
-}
-
-function EvaluacionesAdmin() {
-  const [evaluaciones, setEvaluaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [detalleVisible, setDetalleVisible] = useState(null);
-
-  useEffect(() => { cargarEvaluaciones(); }, []);
-
-  async function cargarEvaluaciones() {
-    const { data } = await supabase
-      .from('evaluaciones')
-      .select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name)')
-      .order('created_at', { ascending: false });
+  </div>
+  
+  <script>
+    let todosLosDatos = [];
+    let datosFiltrados = [];
+    let graficos = {};
+    let ordenActual = { campo: null, ascendente: true };
     
-    setEvaluaciones(data || []);
-    setCargando(false);
-  }
-
-  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando evaluaciones...</p>;
-
-  return (
-    <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
-      <h4 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
-      {evaluaciones.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones aún.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evaluaciones.map(ev => (
-                <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td>
-                  <td style={td}>{ev.colaborador?.area || '-'}</td>
-                  <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}</span></td>
-                  <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
-                  <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9', color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b' }}>{ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}</span></td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
-                  <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️ Ver</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {detalleVisible && (
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                {(() => {
-                  const ev = evaluaciones.find(e => e.id === detalleVisible);
-                  if (!ev) return null;
-                  return (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>📋 Detalle de Evaluación</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'} ({ev.colaborador?.email || '-'})</p>
-                        <p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p>
-                        <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
-                        <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
-                        <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
-                        <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
-                        <hr style={{ border: '1px solid #e2e8f0' }} />
-                        <div><strong>💪 Fortalezas:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.fortalezas || 'No completado'}</p></div>
-                        <div><strong>📈 Oportunidades:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.oportunidades || 'No completado'}</p></div>
-                        <div><strong>🎯 Plan de Acción:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.plan_accion || 'No completado'}</p></div>
-                        <div><strong>📚 Desarrollo Individual:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.desarrollo_individual || 'No completado'}</p></div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+    window.addEventListener('load', cargarDatos);
+    
+    function cargarDatos() {
+      document.getElementById('loadingContainer').style.display = 'block';
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('errorContainer').innerHTML = '';
+      
+      google.script.run
+        .withSuccessHandler(procesarDatos)
+        .withFailureHandler(error => {
+          document.getElementById('loadingContainer').style.display = 'none';
+          document.getElementById('errorContainer').innerHTML = `
+            <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+              <strong>⚠️ Error de conexión:</strong> ${error.message}
+              <br><br>
+              <button class="btn btn-refresh" onclick="cargarDatos()" style="background: #dc3545; color: white;">🔄 Reintentar</button>
             </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PanelCalibracion({ colaboradores }) {
-  const [datos, setDatos] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [detalleVisible, setDetalleVisible] = useState(null);
-  const [guardando, setGuardando] = useState(false);
-
-  useEffect(() => { cargarDatos(); }, []);
-
-  async function cargarDatos() {
-    const resultado = [];
+          `;
+        })
+        .obtenerDatosCompletos();
+    }
     
-    for (const col of colaboradores) {
-      const { data: autoeval } = await supabase
-        .from('evaluaciones')
-        .select('*, puntuaciones(*)')
-        .eq('colaborador_id', col.id)
-        .eq('tipo_evaluacion', 'autoevaluacion')
-        .maybeSingle();
-
-      const { data: evalLider } = await supabase
-        .from('evaluaciones')
-        .select('*, puntuaciones(*)')
-        .eq('colaborador_id', col.id)
-        .eq('tipo_evaluacion', 'evaluacion_lider')
-        .maybeSingle();
-
-      const calcPromedio = (puntuaciones) => {
-        if (!puntuaciones || puntuaciones.length === 0) return null;
-        const valores = puntuaciones.map(p => p.rating).filter(r => r > 0);
-        if (valores.length === 0) return null;
-        return (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
+    function procesarDatos(response) {
+      document.getElementById('loadingContainer').style.display = 'none';
+      
+      if (!response.success) {
+        document.getElementById('errorContainer').innerHTML = `
+          <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <strong>⚠️ Error:</strong> ${response.error}
+          </div>
+        `;
+        return;
+      }
+      
+      document.getElementById('mainContent').style.display = 'block';
+      todosLosDatos = response.datos;
+      datosFiltrados = [...todosLosDatos];
+      
+      actualizarKPIs(response.stats);
+      llenarFiltros(response.stats);
+      destruirGraficos();
+      crearGraficos(response);
+      aplicarFiltros();
+    }
+    
+    function actualizarKPIs(stats) {
+      document.getElementById('kpi-total').textContent = stats.total || 0;
+      document.getElementById('kpi-activas').textContent = stats.activas || 0;
+      document.getElementById('kpi-completadas').textContent = stats.completadas || 0;
+      document.getElementById('kpi-empleados').textContent = stats.empleados || 0;
+      document.getElementById('kpi-progreso').textContent = (stats.progresoPromedio || 0) + '%';
+    }
+    
+    function actualizarKPIsFiltrados() {
+      const activas = datosFiltrados.filter(d => d.estado === 'En curso').length;
+      const completadas = datosFiltrados.filter(d => d.estado === 'Completada').length;
+      const empleadosUnicos = new Set(datosFiltrados.map(d => d.empleado)).size;
+      const progresoPromedio = datosFiltrados.length > 0 ? 
+        Math.round(datosFiltrados.reduce((sum, d) => sum + d.progreso, 0) / datosFiltrados.length) : 0;
+      
+      document.getElementById('kpi-total').textContent = datosFiltrados.length;
+      document.getElementById('kpi-activas').textContent = activas;
+      document.getElementById('kpi-completadas').textContent = completadas;
+      document.getElementById('kpi-empleados').textContent = empleadosUnicos;
+      document.getElementById('kpi-progreso').textContent = progresoPromedio + '%';
+    }
+    
+    function llenarFiltros(stats) {
+      const opciones = {
+        'filtroDepartamento': stats.departamentos || [],
+        'filtroTipo': stats.tipos || [],
+        'filtroEmpleado': stats.empleadosLista || [],
+        'filtroPuesto': stats.puestos || []
       };
-
-      const promAuto = calcPromedio(autoeval?.puntuaciones);
-      const promLider = calcPromedio(evalLider?.puntuaciones);
-
-      resultado.push({
-        colaborador: col,
-        autoevaluacion: autoeval,
-        evaluacionLider: evalLider,
-        promAuto,
-        promLider,
-        gap: promAuto && promLider ? (parseFloat(promLider) - parseFloat(promAuto)).toFixed(1) : null,
-        ratingFinal: evalLider?.rating_calibrado || null
+      
+      Object.entries(opciones).forEach(([id, items]) => {
+        const select = document.getElementById(id);
+        if (select && items.length > 0) {
+          const valorActual = select.value;
+          const textoDefault = select.options[0]?.text || 'Todos';
+          select.innerHTML = `<option value="">${textoDefault}</option>`;
+          items.forEach(item => {
+            select.innerHTML += `<option value="${item}">${item}</option>`;
+          });
+          select.value = valorActual;
+        }
       });
     }
-
-    setDatos(resultado);
-    setCargando(false);
-  }
-
-  async function guardarCalibracion(evaluacionId, rating) {
-    setGuardando(true);
-    await supabase
-      .from('evaluaciones')
-      .update({ rating_calibrado: rating })
-      .eq('id', evaluacionId);
     
-    setDatos(prev => prev.map(d => 
-      d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d
-    ));
-    setGuardando(false);
-  }
-
-  const clasificar = (prom) => {
-    if (!prom) return { texto: '-', color: '#94a3b8' };
-    const p = parseFloat(prom);
-    if (p <= 1.4) return { texto: '🔴 No adecuado', color: '#dc2626' };
-    if (p <= 2.4) return { texto: '🟠 Por debajo', color: '#f59e0b' };
-    if (p <= 3.4) return { texto: '🔵 Cumple', color: '#3b82f6' };
-    if (p <= 4.4) return { texto: '🟢 Excede', color: '#22c55e' };
-    return { texto: '🟣 Distinguido', color: '#8b5cf6' };
-  };
-
-  if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando datos de calibración...</p>;
-
-  return (
-    <div style={{ ...s.tarjetaStat }}>
-      <h3 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>
-        Comparación de autoevaluación y evaluación del líder. Define el rating final calibrado.
-      </p>
-
-      {datos.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {datos.map(d => {
-                const clasAuto = clasificar(d.promAuto);
-                const clasLider = clasificar(d.promLider);
-                const clasFinal = clasificar(d.ratingFinal);
-                return (
-                  <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
-                    <td style={td}>{d.colaborador.area || '-'}</td>
-                    <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{d.colaborador.seniority || '-'}</span></td>
-                    <td style={{ ...td, textAlign: 'center' }}>{d.promAuto ? <span style={{ fontSize: 18, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <span style={{ fontSize: 18, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.gap ? <span style={{ fontSize: 16, fontWeight: 700, color: Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626' }}>{d.gap > 0 ? '+' : ''}{d.gap}</span> : <span style={{ color: '#94a3b8' }}>-</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.promLider ? (
-                        <div>
-                          <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}>
-                            <option value="">Seleccionar</option>
-                            <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
-                          </select>
-                          {d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}
-                        </div>
-                      ) : <span style={{ color: '#94a3b8' }}>Sin eval</span>}
-                    </td>
-                    <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === d.colaborador.id ? null : d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {detalleVisible && (
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 800, width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                {(() => {
-                  const d = datos.find(x => x.colaborador.id === detalleVisible);
-                  if (!d) return null;
-                  return (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>🎯 Calibración: {d.colaborador.full_name}</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
-                      <p style={{ color: '#64748b', marginBottom: 20 }}>{d.colaborador.area} · {d.colaborador.seniority}</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-                        <div style={{ padding: 14, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#1e40af' }}>📝 Auto</p><p style={{ fontSize: 28, fontWeight: 700, color: '#1e40af', margin: '4px 0' }}>{d.promAuto || '-'}</p></div>
-                        <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#92400e' }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
-                        <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#166534' }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <div style={{ flex: 1 }}><h4>💪 Fortalezas (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || '-'}</p><h4>📈 Oportunidades (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || '-'}</p></div>
-                        <div style={{ flex: 1 }}><h4>🎯 Plan de Acción (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || '-'}</p><h4>📚 Desarrollo (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || '-'}</p></div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PanelLider() {
-  const [equipo, setEquipo] = useState([]);
-  const [evaluaciones, setEvaluaciones] = useState({});
-  const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
-
-  useEffect(() => { cargarEquipo(); }, []);
-
-  async function cargarEquipo() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id);
-    setEquipo(data || []);
-
-    if (data) {
-      const evalsPorColaborador = {};
-      for (const col of data) {
-        const { data: autoeval } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
-        const { data: evalLider } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
-        evalsPorColaborador[col.id] = { autoevaluacion: autoeval, evaluacionLider: evalLider };
+    function aplicarFiltros() {
+      const filtros = {
+        departamento: document.getElementById('filtroDepartamento').value,
+        tipo: document.getElementById('filtroTipo').value,
+        estado: document.getElementById('filtroEstado').value,
+        empleado: document.getElementById('filtroEmpleado').value,
+        puesto: document.getElementById('filtroPuesto').value,
+        progresoMin: document.getElementById('filtroProgreso').value
+      };
+      
+      datosFiltrados = todosLosDatos.filter(d => {
+        return (!filtros.departamento || d.departamento === filtros.departamento) &&
+               (!filtros.tipo || d.tipo === filtros.tipo) &&
+               (!filtros.estado || d.estado === filtros.estado) &&
+               (!filtros.empleado || d.empleado === filtros.empleado) &&
+               (!filtros.puesto || d.puesto === filtros.puesto) &&
+               (!filtros.progresoMin || d.progreso >= parseInt(filtros.progresoMin));
+      });
+      
+      const filtrosActivos = [];
+      if (filtros.departamento) filtrosActivos.push({ label: 'Departamento', value: filtros.departamento });
+      if (filtros.tipo) filtrosActivos.push({ label: 'Tipo', value: filtros.tipo });
+      if (filtros.estado) filtrosActivos.push({ label: 'Estado', value: filtros.estado });
+      if (filtros.empleado) filtrosActivos.push({ label: 'Empleado', value: filtros.empleado });
+      if (filtros.puesto) filtrosActivos.push({ label: 'Puesto', value: filtros.puesto });
+      if (filtros.progresoMin) filtrosActivos.push({ label: 'Progreso ≥', value: filtros.progresoMin + '%' });
+      
+      document.getElementById('filtrosActivos').innerHTML = filtrosActivos.map(f => `
+        <span class="filter-tag">
+          ${f.label}: <strong>${f.value}</strong>
+          <span class="remove" onclick="removerFiltro('${f.label}')" title="Quitar filtro">×</span>
+        </span>
+      `).join('');
+      
+      document.getElementById('contadorResultados').textContent = `Mostrando ${datosFiltrados.length} de ${todosLosDatos.length}`;
+      document.getElementById('tablaInfo').textContent = `${datosFiltrados.length} capacitaciones encontradas`;
+      
+      actualizarKPIsFiltrados();
+      actualizarGraficosFiltrados();
+      
+      if (ordenActual.campo) {
+        ordenarDatos();
+      } else {
+        mostrarTabla(datosFiltrados);
       }
-      setEvaluaciones(evalsPorColaborador);
     }
-  }
-
-  if (colaboradorSeleccionado) {
-    return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
-  }
-
-  return (
-    <div>
-      <h3 style={{ marginBottom: 20, color: '#1e293b' }}>👥 Mi Equipo ({equipo.length})</h3>
-      {equipo.length === 0 ? (
-        <div style={s.tarjetaPlaceholder}><p style={{ fontSize: 16 }}>No tienes colaboradores asignados.</p></div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {equipo.map(col => {
-            const auto = evaluaciones[col.id]?.autoevaluacion;
-            const lider = evaluaciones[col.id]?.evaluacionLider;
-            return (
-              <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <h4 style={{ margin: 0, color: '#1e293b' }}>{col.full_name || col.email}</h4>
-                  <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area || 'Sin área'} · {col.seniority || 'Sin seniority'}</p>
-                  <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
-                    <span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span>
-                    <span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#22c55e' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>
-                  </div>
-                </div>
-                <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EvaluacionLider({ colaborador, onVolver }) {
-  const [competencias, setCompetencias] = useState([]);
-  const [autoevaluacion, setAutoevaluacion] = useState(null);
-  const [puntuacionesAuto, setPuntuacionesAuto] = useState({});
-  const [evaluacionLider, setEvaluacionLider] = useState(null);
-  const [ratings, setRatings] = useState({});
-  const [comentarios, setComentarios] = useState({});
-  const [mensaje, setMensaje] = useState('');
-  const [cargando, setCargando] = useState(true);
-  const [showInfo, setShowInfo] = useState({});
-
-  useEffect(() => { cargarDatos(); }, []);
-
-  async function cargarDatos() {
-    const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista');
-    setCompetencias(comps || []);
-
-    const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
-    if (auto) { setAutoevaluacion(auto); const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); }
-
-    const { data: { session } } = await supabase.auth.getSession();
-    const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
-
-    if (liderEval) {
-      setEvaluacionLider(liderEval);
-      const rm = {}; const cm = {};
-      (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
-      setRatings(rm); setComentarios(cm);
-    } else {
-      const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador' }).select().single();
-      setEvaluacionLider(nueva);
+    
+    function removerFiltro(label) {
+      const mapa = {
+        'Departamento': 'filtroDepartamento',
+        'Tipo': 'filtroTipo',
+        'Estado': 'filtroEstado',
+        'Empleado': 'filtroEmpleado',
+        'Puesto': 'filtroPuesto',
+        'Progreso ≥': 'filtroProgreso'
+      };
+      
+      const selectId = mapa[label];
+      if (selectId) {
+        document.getElementById(selectId).value = '';
+        aplicarFiltros();
+      }
     }
-    setCargando(false);
-  }
-
-  async function guardar() {
-    await supabase.from('evaluaciones').update({ updated_at: new Date() }).eq('id', evaluacionLider.id);
-    for (const [compId, rating] of Object.entries(ratings)) {
-      const com = comentarios[compId] || '';
-      const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evaluacionLider.id).eq('competencia_id', compId).maybeSingle();
-      if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); }
-      else { await supabase.from('puntuaciones').insert({ evaluacion_id: evaluacionLider.id, competencia_id: compId, rating, comentario: com }); }
+    
+    function limpiarFiltros() {
+      ['filtroDepartamento', 'filtroTipo', 'filtroEstado', 'filtroEmpleado', 'filtroPuesto', 'filtroProgreso'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      aplicarFiltros();
     }
-    setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500);
-  }
-
-  async function enviar() {
-    await guardar();
-    await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evaluacionLider.id);
-    setMensaje('🎉 Evaluación enviada'); setEvaluacionLider({ ...evaluacionLider, estado: 'enviado' });
-    setTimeout(() => setMensaje(''), 3000);
-  }
-
-  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
-  const enviada = evaluacionLider?.estado === 'enviado';
-
-  return (
-    <div style={{ maxWidth: 900 }}>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16, fontSize: 14 }}>← Volver al equipo</button>
-      <h3 style={{ color: '#1e293b' }}>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
-
-      {competencias.map(comp => (
-        <div key={comp.id} style={s.competenciaCard}>
-          <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
-          {puntuacionesAuto[comp.id] && (<div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>📝 Autoevaluación: <strong>{puntuacionesAuto[comp.id]}</strong>{ratings[comp.id] && <span style={{ marginLeft: 12, color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>| Tu evaluación: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})</span>}</div>)}
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => (<button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer'}} disabled={enviada}>{r}</button>))}</div>
-          {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
-        </div>
-      ))}
-      <CalcularPromedio ratings={ratings} competencias={competencias} />
-      {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>}
-      {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación como líder ha sido enviada.</div>}
-    </div>
-  );
-}
-
-function PanelColaborador({ userId, seniority }) {
-  const [evalData, setEvalData] = useState(null);
-  const [competencias, setCompetencias] = useState([]);
-  const [ratings, setRatings] = useState({});
-  const [comentarios, setComentarios] = useState({});
-  const [fortalezas, setFortalezas] = useState('');
-  const [oportunidades, setOportunidades] = useState('');
-  const [planAccion, setPlanAccion] = useState('');
-  const [desarrollo, setDesarrollo] = useState('');
-  const [mensaje, setMensaje] = useState('');
-  const [cargando, setCargando] = useState(true);
-  const [showInfo, setShowInfo] = useState({});
-
-  useEffect(() => { cargarDatos(); }, []);
-
-  async function cargarDatos() {
-    const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', seniority || 'Analista');
-    setCompetencias(comps || []);
-    const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single();
-    if (ev) {
-      setEvalData(ev); setFortalezas(ev.fortalezas || ''); setOportunidades(ev.oportunidades || ''); setPlanAccion(ev.plan_accion || ''); setDesarrollo(ev.desarrollo_individual || '');
-      const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id);
-      const rm = {}; const cm = {};
-      (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
-      setRatings(rm); setComentarios(cm);
-    } else {
-      const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador' }).select().single();
-      setEvalData(nueva);
+    
+    function ordenarTabla(campo) {
+      if (ordenActual.campo === campo) {
+        ordenActual.ascendente = !ordenActual.ascendente;
+      } else {
+        ordenActual.campo = campo;
+        ordenActual.ascendente = true;
+      }
+      ordenarDatos();
     }
-    setCargando(false);
-  }
-
-  async function guardar() {
-    await supabase.from('evaluaciones').update({ fortalezas, oportunidades, plan_accion: planAccion, desarrollo_individual: desarrollo, updated_at: new Date() }).eq('id', evalData.id);
-    for (const [compId, rating] of Object.entries(ratings)) {
-      const com = comentarios[compId] || '';
-      const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evalData.id).eq('competencia_id', compId).single();
-      if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); }
-      else { await supabase.from('puntuaciones').insert({ evaluacion_id: evalData.id, competencia_id: compId, rating, comentario: com }); }
+    
+    function ordenarDatos() {
+      const datosOrdenados = [...datosFiltrados].sort((a, b) => {
+        let valA = a[ordenActual.campo];
+        let valB = b[ordenActual.campo];
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA < valB) return ordenActual.ascendente ? -1 : 1;
+        if (valA > valB) return ordenActual.ascendente ? 1 : -1;
+        return 0;
+      });
+      mostrarTabla(datosOrdenados);
     }
-    setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500);
-  }
-
-  async function enviar() {
-    await guardar();
-    await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id);
-    setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' });
-    setTimeout(() => setMensaje(''), 3000);
-  }
-
-  if (cargando) return <p style={{ padding: 20 }}>Cargando competencias para {seniority || 'tu rol'}...</p>;
-  const enviada = evalData?.estado === 'enviado';
-
-  return (
-    <div style={{ maxWidth: 900 }}>
-      <h3>📝 Mi Autoevaluación</h3>
-      <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
-      {competencias.length === 0 && <p style={{ color: '#f59e0b' }}>No hay competencias configuradas para tu seniority.</p>}
-      {competencias.map(comp => (
-        <div key={comp.id} style={s.competenciaCard}>
-          <div style={s.competenciaHeader}><div><h5 style={{ margin: 0 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p><span style={{ ...s.tipoBadge, marginTop: 4, display: 'inline-block' }}>{comp.tipo === 'generica' ? '🌐 Genérica' : '🎯 Específica'}</span></div><button onClick={() => setShowInfo({...showInfo, [comp.id]: !showInfo[comp.id]})} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}</button></div>
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => (<button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#2563eb' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #1d4ed8' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer'}} disabled={enviada}>{r}</button>))}</div>
-          {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario..." style={s.textareaSmall} disabled={enviada} />
-        </div>
-      ))}
-      <SeccionText titulo="💪 Fortalezas" valor={fortalezas} onChange={setFortalezas} disabled={enviada} />
-      <SeccionText titulo="📈 Oportunidades de Mejora" valor={oportunidades} onChange={setOportunidades} disabled={enviada} />
-      <SeccionText titulo="🎯 Plan de Acción" valor={planAccion} onChange={setPlanAccion} disabled={enviada} />
-      <SeccionText titulo="📚 Desarrollo Individual" valor={desarrollo} onChange={setDesarrollo} disabled={enviada} />
-      <CalcularPromedio ratings={ratings} competencias={competencias} />
-      {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      {!enviada && <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>}
-      {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación ha sido enviada.</div>}
-    </div>
-  );
-}
-
-function SeccionText({ titulo, valor, onChange, disabled }) {
-  return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={e => onChange(e.target.value)} style={s.textarea} disabled={disabled} /></div>;
-}
-
-function RatingDesc({ competenciaId, rating }) {
-  const [desc, setDesc] = useState('Cargando...');
-  useEffect(() => {
-    async function load() {
-      const { data, error } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single();
-      if (error) { setDesc('Error al cargar'); }
-      else if (data) { setDesc(`${data.titulo}: ${data.descripcion}`); }
-      else { setDesc('Sin descripción'); }
+    
+    function mostrarTabla(datos) {
+      const tbody = document.getElementById('tablaBody');
+      if (datos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: #999;">No se encontraron resultados con los filtros aplicados</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = datos.map(d => {
+        let badgeClass = 'badge-warning';
+        if (d.estado === 'Completada') badgeClass = 'badge-success';
+        else if (d.estado === 'Pendiente') badgeClass = 'badge-danger';
+        const progresoColor = d.progreso >= 80 ? '#43e97b' : d.progreso >= 40 ? '#667eea' : '#fa709a';
+        
+        return `<tr>
+          <td><strong>${d.id}</strong></td>
+          <td>${d.capacitacion}</td>
+          <td>${d.tipo}</td>
+          <td>${d.empleado}</td>
+          <td>${d.puesto}</td>
+          <td>${d.departamento}</td>
+          <td><div class="progress-bar"><div class="progress-fill" style="width: ${d.progreso}%; background: ${progresoColor};">${d.progreso}%</div></div></td>
+          <td><span class="badge ${badgeClass}">${d.estado}</span></td>
+          <td style="font-size: 11px;">📅 ${d.fechaInicio}<br>📅 ${d.fechaFin}</td>
+        </tr>`;
+      }).join('');
     }
-    load();
-  }, [competenciaId, rating]);
-  return <span>{desc}</span>;
-}
-
-function CalcularPromedio({ ratings, competencias }) {
-  if (!ratings || Object.keys(ratings).length === 0) return null;
-  const valores = Object.values(ratings).filter(r => r > 0);
-  if (valores.length === 0) return null;
-  const suma = valores.reduce((acc, val) => acc + val, 0);
-  const promedio = suma / valores.length;
-  let clasificacion = '', color = '', emoji = '';
-  if (promedio <= 1.4) { clasificacion = 'No adecuado'; color = '#dc2626'; emoji = '🔴'; }
-  else if (promedio <= 2.4) { clasificacion = 'Por debajo de lo esperado'; color = '#f59e0b'; emoji = '🟠'; }
-  else if (promedio <= 3.4) { clasificacion = 'Cumple con las expectativas'; color = '#3b82f6'; emoji = '🔵'; }
-  else if (promedio <= 4.4) { clasificacion = 'Excede las expectativas'; color = '#22c55e'; emoji = '🟢'; }
-  else { clasificacion = 'Desempeño distinguido'; color = '#8b5cf6'; emoji = '🟣'; }
-  return (
-    <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: `2px solid ${color}`, textAlign: 'center' }}>
-      <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p>
-      <p style={{ fontSize: 48, fontWeight: 700, color, margin: '8px 0' }}>{promedio.toFixed(1)}</p>
-      <p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>{emoji} {clasificacion}</p>
-      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>Basado en {valores.length} de {competencias?.length || 0} competencias evaluadas</p>
-    </div>
-  );
-}
-
-const th = { textAlign: 'left', padding: '10px', color: '#64748b', fontSize: '12px' };
-const td = { padding: '10px', fontSize: '14px' };
-
-const s = {
-  centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 100 },
-  headerIzq: { display: 'flex', alignItems: 'center', gap: 12 },
-  logo: { fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 },
-  badge: { padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' },
-  headerDer: { display: 'flex', alignItems: 'center', gap: 14 },
-  email: { fontSize: 14, color: '#64748b' },
-  btnSalir: { padding: '8px 16px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 13 },
-  main: { padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' },
-  tarjetaBienvenida: { background: 'white', padding: '20px 24px', borderRadius: 12, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 },
-  tarjetaStat: { background: 'white', padding: 20, borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' },
-  tarjetaPlaceholder: { background: 'white', padding: 40, borderRadius: 12, textAlign: 'center', color: '#64748b', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
-  seccionTitulo: { fontSize: 15, fontWeight: 600, color: '#1e293b', marginBottom: 10, paddingBottom: 8, borderBottom: '2px solid #e2e8f0' },
-  competenciaCard: { background: '#f8fafc', padding: 18, borderRadius: 10, marginBottom: 14, border: '1px solid #e2e8f0' },
-  competenciaHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  tipoBadge: { fontSize: 11, padding: '3px 10px', borderRadius: 12, background: '#f1f5f9', color: '#64748b', display: 'inline-block', fontWeight: 500 },
-  btnInfo: { fontSize: 12, padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', color: '#475569', fontWeight: 500 },
-  ratingRow: { display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' },
-  ratingBtn: { width: 42, height: 42, borderRadius: 10, fontSize: 18, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  ratingInfoBox: { background: 'white', padding: 14, borderRadius: 8, marginBottom: 12, border: '1px solid #e2e8f0' },
-  ratingInfoItem: { padding: '6px 10px', marginBottom: 3, borderRadius: 4, fontSize: 13, color: '#475569', lineHeight: 1.5 },
-  textareaSmall: { width: '100%', minHeight: 44, padding: 10, borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: 'white' },
-  textarea: { width: '100%', minHeight: 100, padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: 'white' },
-  btnPrimario: { padding: '12px 24px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14, boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)' },
-  btnSecundario: { padding: '12px 24px', background: '#475569', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 },
-  mensajeToast: { padding: '12px 20px', background: '#f0fdf4', borderRadius: 8, marginBottom: 16, color: '#166534', fontWeight: 500, fontSize: 14, textAlign: 'center', border: '1px solid #bbf7d0' },
-  bannerEnviado: { padding: 20, background: '#f0fdf4', borderRadius: 10, color: '#166534', fontWeight: 600, textAlign: 'center', border: '2px solid #bbf7d0', marginBottom: 40 }
-};
+    
+    function actualizarGraficosFiltrados() {
+      const porTipo = {};
+      const porDepto = {};
+      const progresoPorTipo = {};
+      const porEmpleado = {};
+      
+      datosFiltrados.forEach(d => {
+        porTipo[d.tipo] = (porTipo[d.tipo] || 0) + 1;
+        porEmpleado[d.empleado] = (porEmpleado[d.empleado] || 0) + 1;
+        if (!porDepto[d.departamento]) porDepto[d.departamento] = { 'En curso': 0, 'Completada': 0, 'Pendiente': 0 };
+        porDepto[d.departamento][d.estado] = (porDepto[d.departamento][d.estado] || 0) + 1;
+        if (!progresoPorTipo[d.tipo]) progresoPorTipo[d.tipo] = { total: 0, count: 0 };
+        progresoPorTipo[d.tipo].total += d.progreso;
+        progresoPorTipo[d.tipo].count++;
+      });
+      
+      if (graficos.tipos) {
+        const labels = Object.keys(porTipo);
+        graficos.tipos.data.labels = labels.length > 0 ? labels : ['Sin datos'];
+        graficos.tipos.data.datasets[0].data = labels.length > 0 ? Object.values(porTipo) : [1];
+        graficos.tipos.update();
+      }
+      
+      if (graficos.progreso) {
+        const labels = Object.keys(progresoPorTipo);
+        const data = labels.map(t => {
+          const { total, count } = progresoPorTipo[t];
+          return count > 0 ? Math.round(total / count) : 0;
+        });
+        graficos.progreso.data.labels = labels.length > 0 ? labels : ['Sin datos'];
+        graficos.progreso.data.datasets[0].data = data.length > 0 ? data : [0];
+        graficos.progreso.data.datasets[0].backgroundColor = data.map(v => v >= 80 ? '#43e97b' : v >= 40 ? '#667eea' : '#fa709a');
+        graficos.progreso.update();
+      }
+      
+      if (graficos.deptos) {
+        const deptos = Object.keys(porDepto).sort();
+        graficos.deptos.data.labels = deptos.length > 0 ? deptos : ['Sin datos'];
+        graficos.deptos.data.datasets[0].data = deptos.length > 0 ? deptos.map(d => porDepto[d]['En curso'] || 0) : [0];
+        graficos.deptos.data.datasets[1].data = deptos.length > 0 ? deptos.map(d => porDepto[d]['Completada'] || 0) : [0];
+        graficos.deptos.data.datasets[2].data = deptos.length > 0 ? deptos.map(d => porDepto[d]['Pendiente'] || 0) : [0];
+        graficos.deptos.update();
+      }
+      
+      if (graficos.empleados) {
+        const empOrdenados = Object.entries(porEmpleado).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        graficos.empleados.data.labels = empOrdenados.length > 0 ? empOrdenados.map(e => e[0]) : ['Sin datos'];
+        graficos.empleados.data.datasets[0].data = empOrdenados.length > 0 ? empOrdenados.map(e => e[1]) : [0];
+        graficos.empleados.update();
+      }
+    }
+    
+    function crearGraficos(response) {
+      const { charts } = response;
+      
+      const ctx1 = document.getElementById('chartTipos')?.getContext('2d');
+      if (ctx1 && charts.porTipo) {
+        graficos.tipos = new Chart(ctx1, {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(charts.porTipo),
+            datasets: [{ data: Object.values(charts.porTipo), backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'], borderWidth: 3, borderColor: 'white' }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 20, font: { size: 12 } } } } }
+        });
+      }
+      
+      const ctx2 = document.getElementById('chartProgreso')?.getContext('2d');
+      if (ctx2 && charts.progresoPorTipo) {
+        const labels = Object.keys(charts.progresoPorTipo);
+        const data = labels.map(t => Math.round(charts.progresoPorTipo[t].total / charts.progresoPorTipo[t].count));
+        graficos.progreso = new Chart(ctx2, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{ label: 'Progreso Promedio %', data: data, backgroundColor: data.map(v => v >= 80 ? '#43e97b' : v >= 40 ? '#667eea' : '#fa709a'), borderRadius: 8 }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }, plugins: { legend: { display: false } } }
+        });
+      }
+      
+      const ctx3 = document.getElementById('chartDeptos')?.getContext('2d');
+      if (ctx3 && charts.porDepartamento) {
+        const deptos = Object.keys(charts.porDepartamento).sort();
+        graficos.deptos = new Chart(ctx3, {
+          type: 'bar',
+          data: {
+            labels: deptos,
+            datasets: [
+              { label: 'En Curso', data: deptos.map(d => charts.porDepartamento[d]['En curso'] || 0), backgroundColor: '#667eea', borderRadius: 5 },
+              { label: 'Completadas', data: deptos.map(d => charts.porDepartamento[d]['Completada'] || 0), backgroundColor: '#43e97b', borderRadius: 5 },
+              { label: 'Pendientes', data: deptos.map(d => charts.porDepartamento[d]['Pendiente'] || 0), backgroundColor: '#fa709a', borderRadius: 5 }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, ticks: { stepSize: 1 } } }, plugins: { legend: { position: 'bottom', labels: { padding: 20 } } } }
+        });
+      }
+      
+      const ctx4 = document.getElementById('chartEmpleados')?.getContext('2d');
+      if (ctx4 && charts.porEmpleado) {
+        const empOrdenados = Object.entries(charts.porEmpleado).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        graficos.empleados = new Chart(ctx4, {
+          type: 'bar',
+          data: {
+            labels: empOrdenados.map(e => e[0]),
+            datasets: [{ label: 'Capacitaciones', data: empOrdenados.map(e => e[1]), backgroundColor: '#764ba2', borderRadius: 5 }]
+          },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
+        });
+      }
+    }
+    
+    function destruirGraficos() {
+      Object.values(graficos).forEach(g => { if (g) g.destroy(); });
+      graficos = {};
+    }
+    
+    function exportarDatos() {
+      if (datosFiltrados.length === 0) { alert('No hay datos para exportar'); return; }
+      let csv = 'ID,Capacitación,Tipo,Empleado,Puesto,Departamento,Estado,Progreso,Fecha Inicio,Fecha Fin\n';
+      datosFiltrados.forEach(d => {
+        csv += `"${d.id}","${d.capacitacion}","${d.tipo}","${d.empleado}","${d.puesto}","${d.departamento}","${d.estado}","${d.progreso}%","${d.fechaInicio}","${d.fechaFin}"\n`;
+      });
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `capacitaciones_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    
+    setInterval(cargarDatos, 300000);
+  </script>
+</body>
+</html>
