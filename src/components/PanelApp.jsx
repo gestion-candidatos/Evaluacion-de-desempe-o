@@ -210,9 +210,12 @@ function HistorialAdmin({ colaborador, onVolver }) {
   const [historicas, setHistoricas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [modo, setModo] = useState('manual'); // 'manual' o 'pdf'
   const [nuevaFecha, setNuevaFecha] = useState('');
   const [nuevoRating, setNuevoRating] = useState('');
   const [nuevoComentario, setNuevoComentario] = useState('');
+  const [archivo, setArchivo] = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
 
   useEffect(() => { cargarHistoricas(); }, []);
 
@@ -226,7 +229,7 @@ function HistorialAdmin({ colaborador, onVolver }) {
     setCargando(false);
   }
 
-  async function agregarHistorica() {
+  async function agregarManual() {
     if (!nuevaFecha || !nuevoRating) return alert('Fecha y rating son obligatorios');
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from('evaluaciones_historicas').insert({
@@ -240,6 +243,153 @@ function HistorialAdmin({ colaborador, onVolver }) {
     setMostrarForm(false);
     cargarHistoricas();
   }
+
+  async function subirPDF() {
+    if (!archivo || !nuevaFecha) return alert('Fecha y archivo son obligatorios');
+    setSubiendo(true);
+    
+    const fileName = `${colaborador.id}_${Date.now()}_${archivo.name}`;
+    
+    // Subir archivo a Storage
+    const { error: uploadError } = await supabase.storage
+      .from('historicos')
+      .upload(fileName, archivo);
+    
+    if (uploadError) {
+      alert('Error al subir archivo: ' + uploadError.message);
+      setSubiendo(false);
+      return;
+    }
+
+    // Obtener URL pública
+    const { data: urlData } = supabase.storage
+      .from('historicos')
+      .getPublicUrl(fileName);
+
+    // Guardar registro
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from('evaluaciones_historicas').insert({
+      colaborador_id: colaborador.id,
+      fecha_evaluacion: nuevaFecha,
+      rating_final: nuevoRating ? parseFloat(nuevoRating) : null,
+      comentarios: nuevoComentario || 'Evaluación histórica (PDF)',
+      archivo_url: urlData.publicUrl,
+      creado_por: session.user.id
+    });
+
+    setNuevaFecha(''); setNuevoRating(''); setNuevoComentario(''); setArchivo(null);
+    setMostrarForm(false); setSubiendo(false);
+    cargarHistoricas();
+  }
+
+  const clasificar = (p) => {
+    if (!p) return { texto: 'PDF', color: '#94a3b8' };
+    if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
+    if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
+    if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
+    if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' };
+    return { texto: 'Distinguido', color: '#8b5cf6' };
+  };
+
+  if (cargando) return <p style={{ padding: 20 }}>Cargando historial...</p>;
+
+  return (
+    <div>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h3 style={{ color: '#231F20', margin: 0 }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
+        <button onClick={() => setMostrarForm(!mostrarForm)} style={s.btnPrimario}>
+          {mostrarForm ? 'Cancelar' : '+ Agregar al Historial'}
+        </button>
+      </div>
+      <p style={{ color: '#64748b', margin: '4px 0 20px 0' }}>{colaborador.area} · {colaborador.seniority}</p>
+
+      {mostrarForm && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <button onClick={() => setModo('manual')} style={modo === 'manual' ? s.btnPrimario : s.btnInfo}>✏️ Carga Manual</button>
+            <button onClick={() => setModo('pdf')} style={modo === 'pdf' ? s.btnPrimario : s.btnInfo}>📄 Subir PDF</button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha de Evaluación *</label>
+              <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+            </div>
+
+            {modo === 'manual' && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating *</label>
+                  <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
+                    <option value="">-</option>
+                    <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option>
+                    <option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comentarios</label>
+                  <input type="text" value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} placeholder="Comentarios..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+                </div>
+                <button onClick={agregarManual} style={{ ...s.btnPrimario, background: '#22c55e' }}>Guardar</button>
+              </>
+            )}
+
+            {modo === 'pdf' && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating (opcional)</label>
+                  <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
+                    <option value="">-</option>
+                    <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option>
+                    <option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Archivo PDF *</label>
+                  <input type="file" accept=".pdf" onChange={e => setArchivo(e.target.files[0])} style={{ padding: 6 }} />
+                </div>
+                <button onClick={subirPDF} disabled={subiendo} style={{ ...s.btnPrimario, background: '#f59e0b' }}>
+                  {subiendo ? '⏳ Subiendo...' : '📄 Subir PDF'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {historicas.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay evaluaciones históricas.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
+            <tbody>
+              {historicas.map(h => {
+                const c = clasificar(h.rating_final);
+                return (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
+                    <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td>
+                    <td style={{ ...td, color: c.color, fontSize: 12 }}>{c.texto}</td>
+                    <td style={td}>{h.comentarios || '-'}</td>
+                    <td style={td}>
+                      {h.archivo_url ? (
+                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12, display: 'inline-block' }}>
+                          📄 Ver PDF
+                        </a>
+                      ) : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
   const clasificar = (p) => {
     if (!p) return { texto: '-', color: '#94a3b8' };
@@ -546,7 +696,7 @@ function HistorialLider({ colaborador, onVolver }) {
   }
 
   const clasificar = (p) => {
-    if (!p) return { texto: '-', color: '#94a3b8' };
+    if (!p) return { texto: 'PDF', color: '#94a3b8' };
     if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
     if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
     if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
@@ -565,27 +715,35 @@ function HistorialLider({ colaborador, onVolver }) {
       {historicas.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay evaluaciones históricas registradas.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th></tr></thead>
-          <tbody>
-            {historicas.map(h => {
-              const c = clasificar(h.rating_final);
-              return (
-                <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
-                  <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final}</td>
-                  <td style={{ ...td, color: c.color }}>{c.texto}</td>
-                  <td style={td}>{h.comentarios || '-'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
+            <tbody>
+              {historicas.map(h => {
+                const c = clasificar(h.rating_final);
+                return (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
+                    <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td>
+                    <td style={{ ...td, color: c.color, fontSize: 12 }}>{c.texto}</td>
+                    <td style={td}>{h.comentarios || '-'}</td>
+                    <td style={td}>
+                      {h.archivo_url ? (
+                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>
+                          📄 Ver PDF
+                        </a>
+                      ) : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
-
 // =============================================
 // Componentes existentes (sin cambios)
 // =============================================
