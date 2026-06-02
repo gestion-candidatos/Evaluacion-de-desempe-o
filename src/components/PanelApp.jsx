@@ -21,15 +21,6 @@ export default function PanelApp() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
     const { data: perfil } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    
-    // Bloquear acceso a usuarios inactivos
-    if (perfil && perfil.activo === false) {
-      await supabase.auth.signOut();
-      alert('Tu cuenta ha sido desactivada. Contacta a RRHH.');
-      window.location.href = '/';
-      return;
-    }
-    
     setProfile(perfil);
     setLoading(false);
   }
@@ -116,6 +107,31 @@ function PanelAdmin({ profile }) {
     XLSX.writeFile(wb, 'Dashboard_RRHH.xlsx');
   }
 
+  async function subirEvaluacionAnterior(colaboradorId) {
+    const ano = prompt('Año de la evaluación (ej: 2024):');
+    if (!ano) return;
+    const periodo = prompt('Período (ej: Anual, Semestral, Trimestral):');
+    if (!periodo) return;
+    const calificacion = prompt('Calificación general (1-5, ej: 4.0):');
+    if (!calificacion) return;
+    const fortalezas = prompt('Fortalezas destacadas:');
+    const oportunidades = prompt('Oportunidades de mejora:');
+    const comentarios = prompt('Comentarios generales:');
+
+    const { error } = await supabase.from('evaluaciones_anteriores').insert({
+      colaborador_id: colaboradorId,
+      ano: parseInt(ano),
+      periodo,
+      calificacion_general: parseFloat(calificacion),
+      comentarios,
+      fortalezas,
+      oportunidades
+    });
+
+    if (error) { alert('Error al guardar: ' + error.message); }
+    else { alert('✅ Evaluación anterior guardada correctamente'); cargarColabs(); }
+  }
+
   const colaboradoresFiltrados = senioritySeleccionado ? colaboradores.filter(c => (c.seniority || 'Sin definir') === senioritySeleccionado) : [];
 
   return (
@@ -126,6 +142,7 @@ function PanelAdmin({ profile }) {
         <button onClick={() => setVistaActiva('evaluaciones')} style={vistaActiva === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>📋 Evaluaciones</button>
         <button onClick={() => setVistaActiva('calibracion')} style={vistaActiva === 'calibracion' ? s.btnPrimario : s.btnInfo}>🎯 Calibración</button>
         <button onClick={() => setVistaActiva('equipo')} style={vistaActiva === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        <button onClick={() => setVistaActiva('historial')} style={vistaActiva === 'historial' ? s.btnPrimario : s.btnInfo}>📂 Historial</button>
         <button onClick={() => setVistaActiva('colaboradores')} style={vistaActiva === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Gestionar</button>
         <button onClick={descargarExcelCompleto} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white' }}>📥 Exportar Todo</button>
       </div>
@@ -174,12 +191,13 @@ function PanelAdmin({ profile }) {
       {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
       {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
       {vistaActiva === 'equipo' && <EquipoLider />}
+      {vistaActiva === 'historial' && <PanelHistorial colaboradores={colaboradores} />}
       
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
           <h4 style={{ margin: '0 0 16px 0' }}>👥 Gestionar ({colaboradores.length})</h4>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Estado</th><th style={th}>Excel</th></tr></thead>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Estado</th><th style={th}>Excel</th><th style={th}>Hist.</th></tr></thead>
             <tbody>{colaboradores.map(c => (
               <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: c.activo ? 1 : 0.5 }}>
                 <td style={td}>{c.full_name || '-'}</td><td style={td}>{c.email}</td><td style={td}>{c.area || '-'}</td>
@@ -191,6 +209,57 @@ function PanelAdmin({ profile }) {
                   const rows = []; (evals || []).forEach(ev => { if (ev.puntuaciones?.length > 0) ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') })); else rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }); });
                   const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ 'Sin datos': 'No hay evaluaciones' }]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones'); XLSX.writeFile(wb, `Historial_${(c.full_name || c.email).replace(/\s/g, '_')}.xlsx`);
                 }} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📥</button></td>
+                <td style={td}><button onClick={() => subirEvaluacionAnterior(c.id)} style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📂</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelHistorial({ colaboradores }) {
+  const [datos, setDatos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [filtroColaborador, setFiltroColaborador] = useState('Todos');
+
+  useEffect(() => { cargarHistorial(); }, []);
+
+  async function cargarHistorial() {
+    let query = supabase.from('evaluaciones_anteriores').select('*, colaborador:colaborador_id(*)').order('ano', { ascending: false });
+    if (filtroColaborador !== 'Todos') {
+      query = query.eq('colaborador_id', filtroColaborador);
+    }
+    const { data } = await query;
+    setDatos(data || []);
+    setCargando(false);
+  }
+
+  if (cargando) return <p style={{ padding: 20 }}>⏳ Cargando historial...</p>;
+
+  return (
+    <div style={{ ...s.tarjetaStat }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <h3 style={{ margin: 0, color: '#231F20' }}>📂 Historial de Evaluaciones Anteriores</h3>
+        <select value={filtroColaborador} onChange={(e) => { setFiltroColaborador(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>
+          <option value="Todos">Todos</option>
+          {colaboradores.filter(c => c.seniority !== 'Gerente').map(c => (
+            <option key={c.id} value={c.id}>{c.full_name || c.email}</option>
+          ))}
+        </select>
+      </div>
+      {datos.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay evaluaciones anteriores registradas.</p> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Año</th><th style={th}>Período</th><th style={th}>Calificación</th><th style={th}>Fortalezas</th><th style={th}>Oportunidades</th></tr></thead>
+            <tbody>{datos.map(d => (
+              <tr key={d.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={td}><strong>{d.colaborador?.full_name || d.colaborador?.email || '-'}</strong></td>
+                <td style={td}>{d.ano}</td><td style={td}>{d.periodo}</td>
+                <td style={{ ...td, textAlign: 'center' }}><span style={{ fontSize: 18, fontWeight: 700, color: '#231F20' }}>{d.calificacion_general || '-'}</span></td>
+                <td style={{ ...td, fontSize: 12, color: '#475569' }}>{d.fortalezas || '-'}</td>
+                <td style={{ ...td, fontSize: 12, color: '#475569' }}>{d.oportunidades || '-'}</td>
               </tr>
             ))}</tbody>
           </table>
