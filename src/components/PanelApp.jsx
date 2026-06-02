@@ -40,7 +40,7 @@ export default function PanelApp() {
     window.location.href = '/';
   }
 
-  if (loading) return <div style={s.centrado}><p>Cargando panel...</p></div>;
+  if (loading) return <div style={s.centrado}><p>Cargando...</p></div>;
   if (!profile) return <div style={s.centrado}><h2>Error al cargar perfil</h2><button onClick={cerrarSesion} style={s.btnSalir}>Volver</button></div>;
 
   const nombreRol = profile.role === 'admin_rrhh' ? 'Admin RRHH' : profile.role === 'lider' ? 'Líder' : 'Colaborador';
@@ -400,7 +400,7 @@ function PanelCalibracion({ colaboradores, onVerHistorial }) {
 
   async function cargarDatos() {
     setCargando(true);
-    const { data: todasEvals } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_calibrado, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority)').in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+    const { data: todasEvals } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_calibrado, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority)').in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
     const mapa = {};
     (todasEvals || []).forEach(ev => {
       if (!ev.colaborador) return;
@@ -558,6 +558,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
   const [ratings, setRatings] = useState({});
   const [comentarios, setComentarios] = useState({});
   const [comentariosFinales, setComentariosFinales] = useState('');
+  const [estado, setEstado] = useState('borrador');
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(true);
   const [showInfo, setShowInfo] = useState({});
@@ -573,6 +574,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
       const { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, puntuaciones(rating, competencia_id, comentario)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); 
       if (liderEval) { 
         setEvaluacionId(liderEval.id);
+        setEstado(liderEval.estado);
         setComentariosFinales(liderEval.comentarios_finales || ''); 
         const rm = {}; const cm = {}; 
         (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); 
@@ -598,16 +600,20 @@ function EvaluacionLider({ colaborador, onVolver }) {
     if (!evaluacionId) return;
     await guardar(); 
     await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evaluacionId); 
+    setEstado('enviado');
     setMensaje('🎉 Evaluación enviada'); 
   }
 
   if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+  const enviada = estado === 'enviado';
 
   return (
     <div style={{ maxWidth: 900 }}>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16, fontSize: 14 }}>← Volver al equipo</button>
       <h3 style={{ color: '#231F20' }}>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>{colaborador.area} · {colaborador.seniority}</p>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada (no editable)' : '📝 En progreso'}</strong></p>
+      
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -618,17 +624,25 @@ function EvaluacionLider({ colaborador, onVolver }) {
             </div>
             <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}</button>
           </div>
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569'}}>{r}</button>)}</div>
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569', cursor: enviada ? 'not-allowed' : 'pointer', opacity: enviada ? 0.7 : 1}} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (
             <div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>
           )}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} />
+          <textarea value={comentarios[comp.id] || ''} onChange={e => enviada ? null : setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario sobre esta competencia..." style={{...s.textareaSmall, opacity: enviada ? 0.7 : 1}} disabled={enviada} />
         </div>
       ))}
+      
       <CalcularPromedio ratings={ratings} competencias={competencias} />
-      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={setComentariosFinales} />
+      
+      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={enviada ? () => {} : setComentariosFinales} disabled={enviada} />
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>
+      {!enviada && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
+          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
+          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button>
+        </div>
+      )}
+      {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación como líder ha sido enviada y no puede ser modificada.</div>}
     </div>
   );
 }
@@ -638,6 +652,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   const [ratings, setRatings] = useState({});
   const [comentarios, setComentarios] = useState({});
   const [comentariosFinales, setComentariosFinales] = useState('');
+  const [estado, setEstado] = useState('borrador');
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(true);
   const [showInfo, setShowInfo] = useState({});
@@ -652,6 +667,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
       setCompetencias(comps || []); 
       if (ev) { 
         setEvaluacionId(ev.id);
+        setEstado(ev.estado);
         setComentariosFinales(ev.comentarios_finales || ''); 
         const rm = {}; const cm = {}; 
         (ev.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); 
@@ -677,17 +693,21 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
     if (!evaluacionId) return;
     await guardar(); 
     await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evaluacionId); 
+    setEstado('enviado');
     setMensaje('🎉 Evaluación enviada'); 
   }
 
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias para {seniority || 'tu rol'}...</p>;
+  const enviada = estado === 'enviado';
 
   return (
     <div style={{ maxWidth: 900 }}>
       <h3 style={{ color: '#231F20' }}>📝 Mi Autoevaluación</h3>
       <p style={{ color: '#64748b', marginBottom: 4 }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
-      <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: '#231F20' }}>📝 En progreso</strong></p>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada (no editable)' : '📝 En progreso'}</strong></p>
+      
       {competencias.length === 0 && <p style={{ color: '#f59e0b' }}>No hay competencias configuradas para tu seniority.</p>}
+      
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -698,22 +718,32 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
             </div>
             <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}</button>
           </div>
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569'}}>{r}</button>)}</div>
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569', cursor: enviada ? 'not-allowed' : 'pointer', opacity: enviada ? 0.7 : 1}} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (
             <div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>
           )}
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario sobre esta competencia..." style={s.textareaSmall} />
+          <textarea value={comentarios[comp.id] || ''} onChange={e => enviada ? null : setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario sobre esta competencia..." style={{...s.textareaSmall, opacity: enviada ? 0.7 : 1}} disabled={enviada} />
         </div>
       ))}
+      
       <CalcularPromedio ratings={ratings} competencias={competencias} />
-      <SeccionText titulo="💪 Fortalezas" valor={comentariosFinales} onChange={setComentariosFinales} />
+      
+      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={enviada ? () => {} : setComentariosFinales} disabled={enviada} />
       {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button></div>
+      {!enviada && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
+          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
+          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluación</button>
+        </div>
+      )}
+      {enviada && <div style={s.bannerEnviado}>✅ Tu evaluación ha sido enviada y no puede ser modificada.</div>}
     </div>
   );
 }
 
-function SeccionText({ titulo, valor, onChange, disabled }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={e => onChange(e.target.value)} style={s.textarea} disabled={disabled} /></div>; }
+function SeccionText({ titulo, valor, onChange, disabled }) { 
+  return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={e => onChange(e.target.value)} style={{...s.textarea, opacity: disabled ? 0.7 : 1}} disabled={disabled} /></div>; 
+}
 
 function RatingDesc({ competenciaId, rating }) { 
   const [desc, setDesc] = useState('Cargando...'); 
@@ -795,4 +825,5 @@ const s = {
   btnPrimario: { padding: '12px 24px', background: '#231F20', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 },
   btnSecundario: { padding: '12px 24px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 },
   mensajeToast: { padding: '12px 20px', background: '#D4D2C6', borderRadius: 8, marginBottom: 16, color: '#231F20', fontWeight: 500, fontSize: 14, textAlign: 'center' },
+  bannerEnviado: { padding: 20, background: '#D4D2C6', borderRadius: 10, color: '#231F20', fontWeight: 600, textAlign: 'center', border: '2px solid #231F20', marginBottom: 40 }
 };
