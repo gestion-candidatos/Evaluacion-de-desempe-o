@@ -21,12 +21,7 @@ export default function PanelApp() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
     const { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').eq('id', session.user.id).single();
-    if (perfil && perfil.activo === false) {
-      await supabase.auth.signOut();
-      alert('Tu cuenta ha sido desactivada.');
-      window.location.href = '/';
-      return;
-    }
+    if (perfil && perfil.activo === false) { await supabase.auth.signOut(); alert('Cuenta desactivada.'); window.location.href = '/'; return; }
     setProfile(perfil);
     setLoading(false);
   }
@@ -132,19 +127,15 @@ function PanelAdminConEquipo({ profile, cicloId }) {
 }
 
 function PanelLiderConEquipo({ cicloId, profile }) {
-  return <EquipoLiderConAutoevaluacion cicloId={cicloId} profile={profile} />;
-}
-
-function EquipoLiderConAutoevaluacion({ cicloId, profile }) {
-  const [vista, setVista] = useState('autoevaluacion');
+  const [vista, setVista] = useState('equipo');
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setVista('autoevaluacion')} style={vista === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
         <button onClick={() => setVista('equipo')} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        <button onClick={() => setVista('mievaluacion')} style={vista === 'mievaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluación</button>
       </div>
-      {vista === 'autoevaluacion' && <PanelColaborador userId={profile.id} seniority={profile.seniority} cicloId={cicloId} />}
       {vista === 'equipo' && <EquipoLider cicloId={cicloId} profile={profile} />}
+      {vista === 'mievaluacion' && <PanelColaborador userId={profile.id} seniority={profile.seniority} cicloId={cicloId} />}
     </div>
   );
 }
@@ -173,92 +164,34 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile }) {
 }
 
 function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
-  const [ciclos, setCiclos] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [mostrarCrear, setMostrarCrear] = useState(false);
-  const [nombreCiclo, setNombreCiclo] = useState('');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const [ciclos, setCiclos] = useState([]); const [cargando, setCargando] = useState(true);
+  const [mostrarCrear, setMostrarCrear] = useState(false); const [nombreCiclo, setNombreCiclo] = useState('');
+  const [fechaInicio, setFechaInicio] = useState(''); const [fechaFin, setFechaFin] = useState('');
   const [cicloSeleccionado, setCicloSeleccionado] = useState(null);
-  const [todosColaboradores, setTodosColaboradores] = useState([]);
-  const [participantes, setParticipantes] = useState([]);
+  const [todosColaboradores, setTodosColaboradores] = useState([]); const [participantes, setParticipantes] = useState([]);
 
   useEffect(() => { cargarCiclos(); if (esAdmin) cargarColaboradores(); }, []);
 
   async function cargarCiclos() { const { data } = await supabase.from('ciclos').select('*').order('fecha_inicio', { ascending: false }); setCiclos(data || []); setCargando(false); }
   async function cargarColaboradores() { const { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true); setTodosColaboradores(data || []); }
 
-  async function crearCiclo() {
-    if (!nombreCiclo || !fechaInicio) return alert('Nombre y fecha de inicio son obligatorios');
-    await supabase.from('ciclos').insert({ nombre: nombreCiclo, fecha_inicio: fechaInicio, fecha_fin: fechaFin || null, estado: 'activo' });
-    setNombreCiclo(''); setFechaInicio(''); setFechaFin(''); setMostrarCrear(false); cargarCiclos();
-  }
+  async function crearCiclo() { if (!nombreCiclo || !fechaInicio) return alert('Nombre y fecha obligatorios'); await supabase.from('ciclos').insert({ nombre: nombreCiclo, fecha_inicio: fechaInicio, fecha_fin: fechaFin || null, estado: 'activo' }); setNombreCiclo(''); setFechaInicio(''); setFechaFin(''); setMostrarCrear(false); cargarCiclos(); }
 
-  async function abrirGestionParticipantes(ciclo) {
-    setCicloSeleccionado(ciclo.id);
-    const { data } = await supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', ciclo.id);
-    setParticipantes((data || []).map(p => p.colaborador_id));
-  }
+  async function abrirGestionParticipantes(ciclo) { setCicloSeleccionado(ciclo.id); const { data } = await supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', ciclo.id); setParticipantes((data || []).map(p => p.colaborador_id)); }
 
   async function toggleParticipante(colaboradorId) {
-    if (participantes.includes(colaboradorId)) {
-      await supabase.from('ciclo_colaboradores').delete().eq('ciclo_id', cicloSeleccionado).eq('colaborador_id', colaboradorId);
-      setParticipantes(prev => prev.filter(id => id !== colaboradorId));
-    } else {
-      await supabase.from('ciclo_colaboradores').insert({ ciclo_id: cicloSeleccionado, colaborador_id: colaboradorId });
-      setParticipantes(prev => [...prev, colaboradorId]);
-    }
+    if (participantes.includes(colaboradorId)) { await supabase.from('ciclo_colaboradores').delete().eq('ciclo_id', cicloSeleccionado).eq('colaborador_id', colaboradorId); setParticipantes(prev => prev.filter(id => id !== colaboradorId)); }
+    else { await supabase.from('ciclo_colaboradores').insert({ ciclo_id: cicloSeleccionado, colaborador_id: colaboradorId }); setParticipantes(prev => [...prev, colaboradorId]); }
   }
 
   if (cargando) return <p>Cargando ciclos...</p>;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ color: '#231F20', margin: 0 }}>📊 Ciclos de Evaluación</h2>
-        {esAdmin && <button onClick={() => setMostrarCrear(!mostrarCrear)} style={s.btnPrimario}>+ Nuevo Ciclo</button>}
-      </div>
-      {mostrarCrear && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
-          <h4>Crear Nuevo Ciclo</h4>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
-            <div><label>Nombre</label><input type="text" value={nombreCiclo} onChange={e => setNombreCiclo(e.target.value)} placeholder="Ej: 1er Semestre 2025" style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', width: 200 }} /></div>
-            <div><label>Fecha Inicio</label><input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label>Fecha Fin</label><input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <button onClick={crearCiclo} style={{ ...s.btnPrimario, background: '#22c55e', alignSelf: 'flex-end' }}>Crear</button>
-          </div>
-        </div>
-      )}
-      {cicloSeleccionado && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}><h4>👥 Seleccionar Participantes</h4><button onClick={() => setCicloSeleccionado(null)} style={s.btnInfo}>✕</button></div>
-          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>{participantes.length} colaboradores seleccionados</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
-            {todosColaboradores.map(col => (
-              <div key={col.id} onClick={() => toggleParticipante(col.id)} style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: participantes.includes(col.id) ? '#231F20' : 'white', color: participantes.includes(col.id) ? '#D4D2C6' : '#231F20', border: '1px solid #D4D2C6' }}>
-                <div><strong style={{ fontSize: 13 }}>{col.full_name || col.email}</strong><p style={{ fontSize: 11, margin: 0, opacity: 0.7 }}>{col.area} · {col.seniority}</p></div>
-                <span>{participantes.includes(col.id) ? '✅' : '○'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {ciclos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>No hay ciclos creados.</p></div> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-          {ciclos.map(ciclo => (
-            <div key={ciclo.id} style={{ ...s.tarjetaStat, border: '2px solid #D4D2C6' }}>
-              <h3 style={{ color: '#231F20', margin: '0 0 8px 0' }}>{ciclo.nombre}</h3>
-              <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>📅 Inicio: {new Date(ciclo.fecha_inicio).toLocaleDateString('es-AR')}</p>
-              {ciclo.fecha_fin && <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>📅 Fin: {new Date(ciclo.fecha_fin).toLocaleDateString('es-AR')}</p>}
-              <span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ciclo.estado === 'activo' ? '#dcfce7' : '#f1f5f9', color: ciclo.estado === 'activo' ? '#166534' : '#64748b', display: 'inline-block', marginTop: 8 }}>{ciclo.estado === 'activo' ? '✅ Activo' : '📁 ' + ciclo.estado}</span>
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button onClick={() => onSelectCiclo(ciclo)} style={{ ...s.btnPrimario, flex: 1 }}>Entrar</button>
-                {esAdmin && <button onClick={() => abrirGestionParticipantes(ciclo)} style={{ ...s.btnSecundario }}>👥</button>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>📊 Ciclos de Evaluación</h2>{esAdmin && <button onClick={() => setMostrarCrear(!mostrarCrear)} style={s.btnPrimario}>+ Nuevo Ciclo</button>}</div>
+      {mostrarCrear && (<div style={{ ...s.tarjetaStat, marginBottom: 20 }}><h4>Crear Nuevo Ciclo</h4><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}><div><label>Nombre</label><input type="text" value={nombreCiclo} onChange={e => setNombreCiclo(e.target.value)} placeholder="Ej: 1er Semestre 2025" style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', width: 200 }} /></div><div><label>Fecha Inicio</label><input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div><div><label>Fecha Fin</label><input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div><button onClick={crearCiclo} style={{ ...s.btnPrimario, background: '#22c55e', alignSelf: 'flex-end' }}>Crear</button></div></div>)}
+      {cicloSeleccionado && (<div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}><h4>👥 Seleccionar Participantes</h4><button onClick={() => setCicloSeleccionado(null)} style={s.btnInfo}>✕</button></div><p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>{participantes.length} colaboradores seleccionados</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto' }}>{todosColaboradores.map(col => (<div key={col.id} onClick={() => toggleParticipante(col.id)} style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: participantes.includes(col.id) ? '#231F20' : 'white', color: participantes.includes(col.id) ? '#D4D2C6' : '#231F20', border: '1px solid #D4D2C6' }}><div><strong style={{ fontSize: 13 }}>{col.full_name || col.email}</strong><p style={{ fontSize: 11, margin: 0, opacity: 0.7 }}>{col.area} · {col.seniority}</p></div><span>{participantes.includes(col.id) ? '✅' : '○'}</span></div>))}</div></div>)}
+      {ciclos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>No hay ciclos creados.</p></div> : (<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>{ciclos.map(ciclo => (<div key={ciclo.id} style={{ ...s.tarjetaStat, border: '2px solid #D4D2C6' }}><h3 style={{ color: '#231F20', margin: '0 0 8px 0' }}>{ciclo.nombre}</h3><p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>📅 Inicio: {new Date(ciclo.fecha_inicio).toLocaleDateString('es-AR')}</p>{ciclo.fecha_fin && <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>📅 Fin: {new Date(ciclo.fecha_fin).toLocaleDateString('es-AR')}</p>}<span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ciclo.estado === 'activo' ? '#dcfce7' : '#f1f5f9', color: ciclo.estado === 'activo' ? '#166534' : '#64748b', display: 'inline-block', marginTop: 8 }}>{ciclo.estado === 'activo' ? '✅ Activo' : '📁 ' + ciclo.estado}</span><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button onClick={() => onSelectCiclo(ciclo)} style={{ ...s.btnPrimario, flex: 1 }}>Entrar</button>{esAdmin && <button onClick={() => abrirGestionParticipantes(ciclo)} style={{ ...s.btnSecundario }}>👥</button>}</div></div>))}</div>)}
     </div>
   );
 }
@@ -266,65 +199,34 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
 function DashboardView({ stats, colaboradores, seniorityCounts, pct, senioritySeleccionado, setSenioritySeleccionado, colaboradoresFiltrados }) {
   return (
     <div>
-      <div style={s.grid}>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{colaboradores.length}</p></div>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.total}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.enviadas}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.pendientes}</p></div>
-      </div>
+      <div style={s.grid}><div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{colaboradores.length}</p></div><div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.total}</p></div><div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.enviadas}</p></div><div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{stats.pendientes}</p></div></div>
       <div style={{ ...s.tarjetaStat, marginTop: 20 }}><p>📈 Progreso: {pct}%</p><div style={{ background: '#D4D2C6', borderRadius: 10, height: 24 }}><div style={{ width: `${pct}%`, height: '100%', background: '#231F20', borderRadius: 10 }} /></div></div>
-      <div style={{ ...s.tarjetaStat, marginTop: 20 }}><h4>📊 Por Seniority</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-          {Object.entries(seniorityCounts).map(([seniority, count]) => (
-            <div key={seniority} onClick={() => setSenioritySeleccionado(seniority === senioritySeleccionado ? null : seniority)} style={{ padding: 16, background: seniority === senioritySeleccionado ? '#231F20' : '#D4D2C6', borderRadius: 10, textAlign: 'center', cursor: 'pointer' }}>
-              <p style={{ fontSize: 11, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', fontWeight: 600 }}>{seniority}</p>
-              <p style={{ fontSize: 28, fontWeight: 700, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20' }}>{count}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      {senioritySeleccionado && (
-        <div style={{ ...s.tarjetaStat, marginTop: 20 }}><h4>👥 {senioritySeleccionado} ({colaboradoresFiltrados.length})</h4>
-          {colaboradoresFiltrados.map(c => (<div key={c.id} style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div><strong>{c.full_name || c.email}</strong><p style={{ fontSize: 12, color: '#64748b' }}>{c.area}</p></div></div>))}
-        </div>
-      )}
+      <div style={{ ...s.tarjetaStat, marginTop: 20 }}><h4>📊 Por Seniority</h4><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>{Object.entries(seniorityCounts).map(([seniority, count]) => (<div key={seniority} onClick={() => setSenioritySeleccionado(seniority === senioritySeleccionado ? null : seniority)} style={{ padding: 16, background: seniority === senioritySeleccionado ? '#231F20' : '#D4D2C6', borderRadius: 10, textAlign: 'center', cursor: 'pointer' }}><p style={{ fontSize: 11, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', fontWeight: 600 }}>{seniority}</p><p style={{ fontSize: 28, fontWeight: 700, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20' }}>{count}</p></div>))}</div></div>
+      {senioritySeleccionado && (<div style={{ ...s.tarjetaStat, marginTop: 20 }}><h4>👥 {senioritySeleccionado} ({colaboradoresFiltrados.length})</h4>{colaboradoresFiltrados.map(c => (<div key={c.id} style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div><strong>{c.full_name || c.email}</strong><p style={{ fontSize: 12, color: '#64748b' }}>{c.area}</p></div></div>))}</div>)}
     </div>
   );
 }
 
-function ParticipantesView({ colaboradores }) {
-  return <div style={s.tarjetaStat}><h4>👥 Participantes ({colaboradores.length})</h4><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th></tr></thead><tbody>{colaboradores.map(c => (<tr key={c.id}><td style={td}>{c.full_name || '-'}</td><td style={td}>{c.email}</td><td style={td}>{c.area || '-'}</td><td style={td}>{c.seniority || '-'}</td></tr>))}</tbody></table></div>;
-}
+function ParticipantesView({ colaboradores }) { return <div style={s.tarjetaStat}><h4>👥 Participantes ({colaboradores.length})</h4><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th></tr></thead><tbody>{colaboradores.map(c => (<tr key={c.id}><td style={td}>{c.full_name || '-'}</td><td style={td}>{c.email}</td><td style={td}>{c.area || '-'}</td><td style={td}>{c.seniority || '-'}</td></tr>))}</tbody></table></div>; }
 
 function EvaluacionesAdmin({ cicloId, onVerHistorial }) {
   const [evaluaciones, setEvaluaciones] = useState([]); const [cargando, setCargando] = useState(true);
-  useEffect(() => { (async () => { const { data } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_calibrado, comentario_calibracion, created_at, colaborador:colaborador_id(email, full_name), evaluador:evaluador_id(email, full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setEvaluaciones(data || []); setCargando(false); })(); }, [cicloId]);
+  useEffect(() => { (async () => { const { data } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, created_at, colaborador:colaborador_id(email, full_name), evaluador:evaluador_id(email, full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setEvaluaciones(data || []); setCargando(false); })(); }, [cicloId]);
   if (cargando) return <p>Cargando...</p>;
-  return <div style={s.tarjetaStat}><h4>📋 Evaluaciones ({evaluaciones.length})</h4><div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Tipo</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Justificación</th><th style={th}>Fecha</th><th style={th}>Hist</th></tr></thead><tbody>{evaluaciones.map(ev => (<tr key={ev.id}><td style={td}>{ev.colaborador?.full_name || '-'}</td><td style={td}>{ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder'}</td><td style={td}>{ev.estado}</td><td style={td}>{ev.rating_calibrado || '-'}</td><td style={td}>{ev.comentario_calibracion || '-'}</td><td style={td}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td><td style={td}><button onClick={() => onVerHistorial(ev.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>📋</button></td></tr>))}</tbody></table></div></div>;
+  return <div style={s.tarjetaStat}><h4>📋 Evaluaciones ({evaluaciones.length})</h4><div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Tipo</th><th style={th}>Estado</th><th style={th}>Rating</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Hist</th></tr></thead><tbody>{evaluaciones.map(ev => (<tr key={ev.id}><td style={td}>{ev.colaborador?.full_name || '-'}</td><td style={td}>{ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder'}</td><td style={td}>{ev.estado}</td><td style={{ ...td, fontWeight: 700 }}>{ev.rating_promedio || '-'}</td><td style={td}>{ev.rating_calibrado || '-'}</td><td style={td}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td><td style={td}><button onClick={() => onVerHistorial(ev.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>📋</button></td></tr>))}</tbody></table></div></div>;
 }
 
 function PanelCalibracion({ cicloId, colaboradores, onVerHistorial }) {
-  const [datos, setDatos] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [filtroArea, setFiltroArea] = useState('Todas');
-
+  const [datos, setDatos] = useState([]); const [cargando, setCargando] = useState(true); const [guardando, setGuardando] = useState(false); const [filtroArea, setFiltroArea] = useState('Todas');
   useEffect(() => { cargarDatos(); }, [cicloId]);
 
   async function cargarDatos() {
     setCargando(true);
-    const { data: evals } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+    const { data: evals } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
     const mapa = {};
-    (evals || []).forEach(ev => {
-      if (!ev.colaborador) return;
-      if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null };
-      if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev;
-      if (ev.tipo_evaluacion === 'evaluacion_lider') { mapa[ev.colaborador_id].evaluacionLider = ev; mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado; mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null; }
-    });
-    colaboradores.forEach(col => { if (!mapa[col.id]) mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null }; });
-    const calc = (p) => { if (!p || p.length === 0) return null; const v = p.map(x => x.rating).filter(r => r > 0); return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1); };
-    setDatos(Object.values(mapa).map(d => ({ ...d, promAuto: calc(d.autoevaluacion?.puntuaciones), promLider: calc(d.evaluacionLider?.puntuaciones) })));
-    setCargando(false);
+    (evals || []).forEach(ev => { if (!ev.colaborador) return; if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null }; if (ev.tipo_evaluacion === 'autoevaluacion') { mapa[ev.colaborador_id].autoevaluacion = ev; mapa[ev.colaborador_id].promAuto = ev.rating_promedio; } if (ev.tipo_evaluacion === 'evaluacion_lider') { mapa[ev.colaborador_id].evaluacionLider = ev; mapa[ev.colaborador_id].promLider = ev.rating_promedio; mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado; mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null; } });
+    colaboradores.forEach(col => { if (!mapa[col.id]) mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null }; });
+    setDatos(Object.values(mapa)); setCargando(false);
   }
 
   async function guardarCalibracion(evaluacionId, rating, comentario) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d)); setGuardando(false); }
@@ -336,23 +238,10 @@ function PanelCalibracion({ cicloId, colaboradores, onVerHistorial }) {
     try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {}
     pdf.setDrawColor(BEIGE); pdf.line(marginX, 26, 195, 26);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 7;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
-    pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5;
-    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5;
-    pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}`, marginX, y); y += 8;
-    const autoPunts = {}; (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; });
-    const liderPunts = {}; (d.evaluacionLider?.puntuaciones || []).forEach(p => { liderPunts[p.competencia_id] = p.rating; });
-    const todasComps = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
-    const compsInfo = {}; (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
-    if (todasComps.length > 0) {
-      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, 180, 7, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(6);
-      pdf.text('Competencia', marginX + 2, y + 5); pdf.text('Auto', 100, y + 5); pdf.text('Líder', 130, y + 5);
-      y += 9; pdf.setTextColor(NEGRO);
-      todasComps.forEach((compId, index) => { const nombre = (compsInfo[compId] || '').substring(0, 25); if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, 180, 6, 'F'); } pdf.setFontSize(7); pdf.text(nombre, marginX + 2, y); pdf.text(String(autoPunts[compId] || '-'), 100, y); pdf.text(String(liderPunts[compId] || '-'), 130, y); y += 6; });
-    }
-    y += 8; pdf.setFillColor(NEGRO); pdf.rect(marginX, y, 180, 18, 'F'); pdf.setTextColor('#FFFFFF');
-    pdf.setFontSize(10); pdf.text('RESULTADO FINAL', marginX + 4, y + 8); pdf.setFontSize(14); pdf.text(`${d.ratingFinal || '-'}`, marginX + 4, y + 16);
-    if (d.comentarioCalibracion) { pdf.setTextColor(NEGRO); pdf.setFontSize(8); pdf.text(`Justificación: ${d.comentarioCalibracion}`, marginX, y + 24); }
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5;
+    pdf.text(`Área: ${d.colaborador.area || '-'}   Seniority: ${d.colaborador.seniority || '-'}`, marginX, y); y += 10;
+    pdf.setFontSize(12); pdf.text(`Auto: ${d.promAuto || '-'}   Líder: ${d.promLider || '-'}   Calibrado: ${d.ratingFinal || '-'}`, marginX, y + 10);
+    if (d.comentarioCalibracion) { pdf.setFontSize(8); pdf.text(`Justificación: ${d.comentarioCalibracion}`, marginX, y + 18); }
     pdf.setTextColor('#94a3b8'); pdf.setFontSize(6); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
     return pdf;
   }
@@ -363,37 +252,23 @@ function PanelCalibracion({ cicloId, colaboradores, onVerHistorial }) {
   const areas = useMemo(() => ['Todas', ...new Set(datos.map(d => d.colaborador.area).filter(Boolean))], [datos]);
   const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
 
-  if (cargando) return <p style={{ padding: 20 }}>⏳ Cargando datos de calibración...</p>;
+  if (cargando) return <p>⏳ Cargando...</p>;
 
   return (
     <div style={{ ...s.tarjetaStat }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-        <h3 style={{ margin: 0, color: '#231F20' }}>🎯 Calibración - Auto vs Líder</h3>
-        <select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>{areas.map(a => <option key={a} value={a}>{a}</option>)}</select>
-      </div>
-      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación de autoevaluación y evaluación del líder. Define el rating final y justifica la calibración.</p>
-      {datosFiltrados.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1200px' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
-            <tbody>{datosFiltrados.map(d => { const clasAuto = clasificar(d.promAuto); const clasLider = clasificar(d.promLider); const clasFinal = clasificar(d.ratingFinal); const gap = d.promAuto && d.promLider ? (parseFloat(d.promLider) - parseFloat(d.promAuto)).toFixed(1) : null; return (
-              <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
-                <td style={td}>{d.colaborador.area || '-'}</td>
-                <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
-                <td style={{ ...td, textAlign: 'center' }}>{d.promAuto ? <div><span style={{ fontSize: 18, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span><div style={{ fontSize: 10, color: clasAuto.color }}>{clasAuto.texto}</div></div> : '-'}</td>
-                <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><span style={{ fontSize: 18, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span><div style={{ fontSize: 10, color: clasLider.color }}>{clasLider.texto}</div></div> : '-'}</td>
-                <td style={{ ...td, textAlign: 'center' }}>{gap ? <span style={{ fontSize: 16, fontWeight: 700, color: Math.abs(gap) <= 0.5 ? '#22c55e' : Math.abs(gap) <= 1 ? '#f59e0b' : '#dc2626' }}>{gap > 0 ? '+' : ''}{gap}</span> : '-'}</td>
-                <td style={{ ...td, textAlign: 'center' }}>{d.evaluacionLider ? <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value), d.comentarioCalibracion || '')} style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Seleccionar</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</td>
-                <td style={{ ...td, minWidth: 150 }}>{d.evaluacionLider ? <input type="text" value={d.comentarioCalibracion || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, d.ratingFinal || null, e.target.value)} placeholder="Justificar calibración..." style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #D4D2C6', fontSize: 12 }} /> : '-'}</td>
-                <td style={td}><button onClick={() => onVerHistorial && onVerHistorial(d.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>📋</button></td>
-                <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>👁️ PDF</button></td>
-                <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#231F20', color: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
-              </tr>
-            )})}</tbody>
-          </table>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}><h3>🎯 Calibración</h3><select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{areas.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
+      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Justificación</th><th style={th}>Hist</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
+        <tbody>{datosFiltrados.map(d => { const gap = d.promAuto && d.promLider ? (parseFloat(d.promLider) - parseFloat(d.promAuto)).toFixed(1) : null; const clasFinal = clasificar(d.ratingFinal); return (
+          <tr key={d.colaborador.id}><td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td><td style={td}>{d.colaborador.area || '-'}</td>
+            <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
+            <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
+            <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: gap ? (Math.abs(gap) <= 0.5 ? '#22c55e' : Math.abs(gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{gap ? (gap > 0 ? '+' : '') + gap : '-'}</td>
+            <td style={td}>{d.evaluacionLider ? <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value), d.comentarioCalibracion || '')} style={{ padding: 4, borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontWeight: 600, color: clasFinal.color }}><option value="">-</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select> : '-'}</td>
+            <td style={td}>{d.evaluacionLider ? <input type="text" value={d.comentarioCalibracion || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, d.ratingFinal || null, e.target.value)} placeholder="Justificar..." style={{ width: '100%', padding: 4, borderRadius: 6, border: '1px solid #D4D2C6', fontSize: 11 }} /> : '-'}</td>
+            <td style={td}><button onClick={() => onVerHistorial(d.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>📋</button></td>
+            <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>PDF</button></td>
+            <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#231F20', color: '#D4D2C6', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600 }}>Enviar</button> : '-'}</td></tr>
+        )})}</tbody></table></div>
     </div>
   );
 }
@@ -402,7 +277,7 @@ function FeedbackAdmin({ cicloId }) {
   const [feedbacks, setFeedbacks] = useState([]); const [cargando, setCargando] = useState(true);
   useEffect(() => { (async () => { const { data } = await supabase.from('feedback').select('*, lider:lider_id(email, full_name), colaborador:colaborador_id(email, full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setFeedbacks(data || []); setCargando(false); })(); }, [cicloId]);
   if (cargando) return <p>Cargando...</p>;
-  return <div style={s.tarjetaStat}><h4>💬 Feedback del Ciclo ({feedbacks.length})</h4>{feedbacks.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>Sin registros.</p> : <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Líder</th><th style={th}>Colaborador</th><th style={th}>Comentario</th><th style={th}>Fecha</th><th style={th}>Confirmado</th></tr></thead><tbody>{feedbacks.map(f => (<tr key={f.id}><td style={td}>{f.lider?.full_name || '-'}</td><td style={td}>{f.colaborador?.full_name || '-'}</td><td style={td}>{f.comentario_lider || '-'}</td><td style={td}>{f.fecha_feedback_lider ? new Date(f.fecha_feedback_lider).toLocaleDateString('es-AR') : '-'}</td><td style={td}>{f.confirmacion_colaborador ? '✅ Sí' : '⏳ No'}</td></tr>))}</tbody></table>}</div>;
+  return <div style={s.tarjetaStat}><h4>💬 Feedback ({feedbacks.length})</h4>{feedbacks.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>Sin registros.</p> : <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Líder</th><th style={th}>Colaborador</th><th style={th}>Comentario</th><th style={th}>Fecha</th><th style={th}>OK</th></tr></thead><tbody>{feedbacks.map(f => (<tr key={f.id}><td style={td}>{f.lider?.full_name || '-'}</td><td style={td}>{f.colaborador?.full_name || '-'}</td><td style={td}>{f.comentario_lider || '-'}</td><td style={td}>{f.fecha_feedback_lider ? new Date(f.fecha_feedback_lider).toLocaleDateString('es-AR') : '-'}</td><td style={td}>{f.confirmacion_colaborador ? '✅' : '⏳'}</td></tr>))}</tbody></table>}</div>;
 }
 
 function HistorialAdmin({ colaborador, onVolver }) {
@@ -425,8 +300,8 @@ function EquipoLider({ cicloId, profile }) {
     const { data: equipoData } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id);
     if (equipoData) {
       const equipoConEvaluaciones = await Promise.all(equipoData.map(async (col) => {
-        const { data: autoEval } = await supabase.from('evaluaciones').select('id, estado, rating_calibrado').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle();
-        const { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, rating_calibrado').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+        const { data: autoEval } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales, puntuaciones(rating, competencia_id, comentario, competencias(nombre))').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle();
+        const { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
         const { data: fb } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
         return { ...col, autoevaluacion: autoEval, evaluacionLider: liderEval, feedback: fb };
       }));
@@ -440,21 +315,24 @@ function EquipoLider({ cicloId, profile }) {
   return (
     <div>
       <h3 style={{ color: '#231F20', marginBottom: 20 }}>👥 Mi Equipo ({equipo.length})</h3>
-      {equipo.length === 0 ? <p style={{ color: '#94a3b8' }}>No tienes colaboradores asignados.</p> : (
+      {equipo.length === 0 ? <p>No tienes colaboradores.</p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {equipo.map(col => (
             <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ flex: 1 }}>
                 <h4 style={{ margin: 0, color: '#231F20' }}>{col.full_name || col.email}</h4>
-                <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p>
+                <p style={{ color: '#64748b', fontSize: 13 }}>{col.area} · {col.seniority}</p>
                 <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
-                  <span>📝 Auto: <strong style={{ color: col.autoevaluacion?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{col.autoevaluacion?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span>
+                  <span>📝 Auto: <strong style={{ color: col.autoevaluacion?.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{col.autoevaluacion?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong>{col.autoevaluacion?.rating_promedio && <span style={{ marginLeft: 4 }}>({col.autoevaluacion.rating_promedio})</span>}</span>
                   <span>👥 Mi eval: <strong style={{ color: col.evaluacionLider?.estado === 'enviado' ? '#22c55e' : col.evaluacionLider ? '#f59e0b' : '#94a3b8' }}>{col.evaluacionLider?.estado === 'enviado' ? 'Completada' : col.evaluacionLider ? 'Borrador' : 'Sin evaluar'}</strong></span>
-                  <span>💬 FB: <strong style={{ color: col.feedback?.confirmacion_colaborador ? '#22c55e' : col.feedback ? '#f59e0b' : '#94a3b8' }}>{col.feedback?.confirmacion_colaborador ? '✅ OK' : col.feedback ? '⏳ Pend' : '-'}</strong></span>
+                  <span>💬 FB: <strong style={{ color: col.feedback?.confirmacion_colaborador ? '#22c55e' : col.feedback ? '#f59e0b' : '#94a3b8' }}>{col.feedback?.confirmacion_colaborador ? '✅' : col.feedback ? '⏳' : '-'}</strong></span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={() => setFeedbackVisible(col)} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>💬 FB</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {col.autoevaluacion?.estado === 'enviado' && (
+                  <button onClick={() => setColaboradorSeleccionado(col)} style={{ ...s.btnInfo, background: '#dbeafe', color: '#1e40af', fontWeight: 600 }}>👁️ Ver Auto</button>
+                )}
+                <button onClick={() => setFeedbackVisible(col)} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e' }}>💬 FB</button>
                 <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{col.evaluacionLider ? '✏️ Editar' : '📝 Evaluar'}</button>
               </div>
             </div>
@@ -466,50 +344,83 @@ function EquipoLider({ cicloId, profile }) {
 }
 
 function FeedbackForm({ feedback: colaborador, cicloId, onVolver }) {
-  const [comentario, setComentario] = useState('');
-  const [feedback, setFeedback] = useState(null);
-  const [cargando, setCargando] = useState(true);
-
+  const [comentario, setComentario] = useState(''); const [feedback, setFeedback] = useState(null); const [cargando, setCargando] = useState(true);
   useEffect(() => { (async () => { const { data: { session } } = await supabase.auth.getSession(); const { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', colaborador.id).maybeSingle(); if (data) { setFeedback(data); setComentario(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: colaborador.id }); } setCargando(false); })(); }, []);
-
-  async function guardarFeedback() {
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: colaborador.id, comentario_lider: comentario, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' });
-    alert('✅ Feedback guardado'); onVolver();
-  }
-
+  async function guardarFeedback() { const { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: colaborador.id, comentario_lider: comentario, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert('✅ Guardado'); onVolver(); }
   if (cargando) return <p>Cargando...</p>;
-  return (
-    <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>💬 Feedback: {colaborador.full_name || colaborador.email}</h3>
-      <textarea value={comentario} onChange={e => setComentario(e.target.value)} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />
-      {feedback?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16, color: '#166534' }}>✅ Confirmado por el colaborador</div>}
-      <button onClick={guardarFeedback} style={s.btnPrimario}>💾 Guardar</button>
-    </div>
-  );
+  return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>💬 Feedback: {colaborador.full_name || colaborador.email}</h3><textarea value={comentario} onChange={e => setComentario(e.target.value)} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{feedback?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>✅ Confirmado</div>}<button onClick={guardarFeedback} style={s.btnPrimario}>💾 Guardar</button></div>;
 }
 
 function EvaluacionLider({ colaborador, cicloId, onVolver }) {
   const [competencias, setCompetencias] = useState([]); const [ratings, setRatings] = useState({}); const [comentarios, setComentarios] = useState({});
   const [comentariosFinales, setComentariosFinales] = useState(''); const [mensaje, setMensaje] = useState(''); const [cargando, setCargando] = useState(true);
-  const [autoevaluacion, setAutoevaluacion] = useState(null);
+  const [autoevaluacion, setAutoevaluacion] = useState(null); const [evaluacionLiderData, setEvaluacionLiderData] = useState(null);
 
-  useEffect(() => { (async () => { const [{ data: comps }, { data: auto }, { data: { session } }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.from('evaluaciones').select('id, puntuaciones(rating, competencia_id)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(), supabase.auth.getSession()]); setCompetencias(comps || []); setAutoevaluacion(auto); const { data: liderEval } = await supabase.from('evaluaciones').select('id, comentarios_finales, puntuaciones(rating, competencia_id, comentario)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (liderEval) { setComentariosFinales(liderEval.comentarios_finales || ''); const rm = {}; const cm = {}; (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCargando(false); })(); }, []);
+  useEffect(() => { (async () => { const [{ data: comps }, { data: auto }, { data: { session } }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales, puntuaciones(rating, competencia_id, comentario, competencias(nombre))').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(), supabase.auth.getSession()]); setCompetencias(comps || []); setAutoevaluacion(auto); const { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio, puntuaciones(rating, competencia_id, comentario)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (liderEval) { setEvaluacionLiderData(liderEval); setComentariosFinales(liderEval.comentarios_finales || ''); const rm = {}; const cm = {}; (liderEval.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCargando(false); })(); }, []);
 
-  async function guardar() { const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (!ev) return; await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales }).eq('id', ev.id); for (const [compId, rating] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: compId, rating, comentario: comentarios[compId] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMensaje('✅ Guardado'); setTimeout(() => setMensaje(''), 2500); }
+  async function guardar() {
+    const faltantes = competencias.filter(c => !comentarios[c.id]?.trim());
+    if (faltantes.length > 0) { setMensaje(`❌ Completa el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; }
+    if (!comentariosFinales?.trim()) { setMensaje('❌ Los comentarios finales son obligatorios'); setTimeout(() => setMensaje(''), 4000); return; }
+    const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single();
+    if (!ev) return;
+    const valores = Object.values(ratings).filter(r => r > 0);
+    const prom = valores.length > 0 ? parseFloat((valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1)) : null;
+    await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, rating_promedio: prom, updated_at: new Date() }).eq('id', ev.id);
+    for (const [compId, rating] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: compId, rating, comentario: comentarios[compId] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); }
+    setMensaje('✅ Guardado'); setTimeout(() => setMensaje(''), 2500);
+  }
+
   async function enviar() { await guardar(); const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMensaje('🎉 Enviada'); }
 
+  const calcPromedio = () => { const valores = Object.values(ratings).filter(r => r > 0); return valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : null; };
+
   if (cargando) return <p>Cargando...</p>;
+  const enviada = evaluacionLiderData?.estado === 'enviado';
+  const prom = calcPromedio();
+
   return (
-    <div style={{ maxWidth: 900 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3><p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
+    <div style={{ maxWidth: 900 }}>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
+      <h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>{colaborador.area} · {colaborador.seniority}</p>
+
+      {/* Ver autoevaluación del colaborador */}
+      {autoevaluacion?.estado === 'enviado' && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc', border: '2px solid #D4D2C6' }}>
+          <h4 style={{ color: '#231F20', marginBottom: 12 }}>📝 Autoevaluación del Colaborador</h4>
+          <p><strong>Rating final:</strong> <span style={{ fontSize: 20, fontWeight: 700, color: '#231F20' }}>{autoevaluacion.rating_promedio || '-'}</span></p>
+          {autoevaluacion.comentarios_finales && <p><strong>Comentarios finales:</strong> {autoevaluacion.comentarios_finales}</p>}
+          {autoevaluacion.puntuaciones && autoevaluacion.puntuaciones.length > 0 && (
+            <table style={{ width: '100%', marginTop: 8, borderCollapse: 'collapse' }}>
+              <thead><tr style={{ borderBottom: '1px solid #D4D2C6' }}><th style={{ ...th, fontSize: 11 }}>Competencia</th><th style={{ ...th, fontSize: 11 }}>Rating</th><th style={{ ...th, fontSize: 11 }}>Comentario</th></tr></thead>
+              <tbody>{autoevaluacion.puntuaciones.map(p => (<tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}><td style={{ ...td, fontSize: 12 }}>{p.competencias?.nombre || '-'}</td><td style={{ ...td, fontSize: 12, fontWeight: 600 }}>{p.rating}</td><td style={{ ...td, fontSize: 12 }}>{p.comentario || '-'}</td></tr>))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {competencias.map(comp => (
-        <div key={comp.id} style={s.competenciaCard}><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
-          {autoevaluacion?.puntuaciones?.find(p => p.competenza_id === comp.id) && <div style={{ padding: '8px 12px', background: '#fef3c7', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>📝 Auto: <strong>{autoevaluacion.puntuaciones.find(p => p.competenza_id === comp.id).rating}</strong></div>}
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569'}}>{r}</button>)}</div>
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario" style={s.textareaSmall} />
+        <div key={comp.id} style={s.competenciaCard}>
+          <h5 style={{ margin: 0 }}>{comp.nombre}</h5>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 12px 0' }}>{comp.descripcion}</p>
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569', cursor: enviada ? 'not-allowed' : 'pointer'}} disabled={enviada}>{r}</button>)}</div>
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario obligatorio" style={{ ...s.textareaSmall, borderColor: enviada ? '#D4D2C6' : (comentarios[comp.id]?.trim() ? '#D4D2C6' : '#dc2626') }} disabled={enviada} />
         </div>
       ))}
-      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={setComentariosFinales} />{mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      <div style={{ display: 'flex', gap: 12 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>
+
+      <SeccionText titulo="📝 Comentarios Finales (obligatorio)" valor={comentariosFinales} onChange={setComentariosFinales} disabled={enviada} required />
+
+      {prom && (
+        <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid #231F20', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p>
+          <p style={{ fontSize: 48, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{prom}</p>
+        </div>
+      )}
+
+      {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
+      {!enviada && <div style={{ display: 'flex', gap: 12, marginTop: 20 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
+      {enviada && <div style={s.bannerEnviado}>✅ Evaluación enviada.</div>}
     </div>
   );
 }
@@ -517,54 +428,82 @@ function EvaluacionLider({ colaborador, cicloId, onVolver }) {
 function PanelColaborador({ userId, seniority, cicloId }) {
   const [competencias, setCompetencias] = useState([]); const [ratings, setRatings] = useState({}); const [comentarios, setComentarios] = useState({});
   const [comentariosFinales, setComentariosFinales] = useState(''); const [mensaje, setMensaje] = useState(''); const [cargando, setCargando] = useState(true);
-  const [evaluacionLider, setEvaluacionLider] = useState(null); const [feedback, setFeedback] = useState(null);
+  const [evaluacionLider, setEvaluacionLider] = useState(null); const [feedback, setFeedback] = useState(null); const [evalData, setEvalData] = useState(null);
 
-  useEffect(() => { (async () => { const [{ data: comps }, { data: ev }, { data: liderEval }, { data: fb }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'), supabase.from('evaluaciones').select('id, estado, comentarios_finales, puntuaciones(rating, competencia_id, comentario)').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(), supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(), supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()]); setCompetencias(comps || []); setEvaluacionLider(liderEval); setFeedback(fb); if (ev) { setComentariosFinales(ev.comentarios_finales || ''); const rm = {}; const cm = {}; (ev.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }); } setCargando(false); })(); }, []);
+  useEffect(() => { (async () => { const [{ data: comps }, { data: ev }, { data: liderEval }, { data: fb }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'), supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales, puntuaciones(rating, competencia_id, comentario)').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(), supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(), supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()]); setCompetencias(comps || []); setEvaluacionLider(liderEval); setFeedback(fb); if (ev) { setEvalData(ev); setComentariosFinales(ev.comentarios_finales || ''); const rm = {}; const cm = {}; (ev.puntuaciones || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }); } setCargando(false); })(); }, []);
 
-  async function guardar() { const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(); if (!ev) return; await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales }).eq('id', ev.id); for (const [compId, rating] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: compId, rating, comentario: comentarios[compId] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMensaje('✅ Guardado'); setTimeout(() => setMensaje(''), 2500); }
-  async function enviar() { await guardar(); const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMensaje('🎉 Enviada'); }
+  async function guardar() {
+    const faltantes = competencias.filter(c => !comentarios[c.id]?.trim());
+    if (faltantes.length > 0) { setMensaje(`❌ Completa el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; }
+    if (!comentariosFinales?.trim()) { setMensaje('❌ Los comentarios finales son obligatorios'); setTimeout(() => setMensaje(''), 4000); return; }
+    const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single();
+    if (!ev) return;
+    const valores = Object.values(ratings).filter(r => r > 0);
+    const prom = valores.length > 0 ? parseFloat((valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1)) : null;
+    await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, rating_promedio: prom, updated_at: new Date() }).eq('id', ev.id);
+    for (const [compId, rating] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: compId, rating, comentario: comentarios[compId] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); }
+    setMensaje('✅ Guardado'); setEvalData({ ...ev, rating_promedio: prom }); setTimeout(() => setMensaje(''), 2500);
+  }
+
+  async function enviar() { await guardar(); const { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMensaje('🎉 Enviada'); setEvalData(prev => ({ ...prev, estado: 'enviado' })); }
+
   async function confirmarFeedback() { await supabase.from('feedback').update({ confirmacion_colaborador: true, fecha_confirmacion: new Date() }).eq('id', feedback.id); setFeedback({ ...feedback, confirmacion_colaborador: true }); alert('✅ Confirmado'); }
+
+  const calcPromedio = () => { const valores = Object.values(ratings).filter(r => r > 0); return valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : null; };
+  const enviada = evalData?.estado === 'enviado';
+  const prom = calcPromedio();
 
   if (cargando) return <p>Cargando...</p>;
   return (
     <div style={{ maxWidth: 900 }}>
-      <h3>📝 Mi Autoevaluación</h3><p style={{ color: '#64748b' }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
+      <h3>📝 Mi Autoevaluación</h3>
+      <p style={{ color: '#64748b' }}>Seniority: <strong>{seniority || 'No definido'}</strong></p>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>Estado: <strong style={{ color: enviada ? '#231F20' : '#f59e0b' }}>{enviada ? '✅ Enviada' : '📝 En progreso'}</strong></p>
+
       {feedback && (
         <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
           <h4>💬 Feedback de tu Líder</h4><p style={{ color: '#475569', fontStyle: 'italic' }}>{feedback.comentario_lider || 'Sin comentarios aún.'}</p>
           {!feedback.confirmacion_colaborador ? <button onClick={confirmarFeedback} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 8, fontSize: 13 }}>✅ Confirmar Feedback</button> : <p style={{ color: '#166534', fontSize: 13, marginTop: 8 }}>✅ Confirmado</p>}
         </div>
       )}
+
       {evaluacionLider?.rating_calibrado && (
         <div style={{ padding: 16, background: '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
           <p>🎯 Resultado Final Calibrado</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20' }}>{evaluacionLider.rating_calibrado}</p>
           {evaluacionLider.comentario_calibracion && <p style={{ color: '#475569', fontSize: 13, marginTop: 8 }}>"{evaluacionLider.comentario_calibracion}"</p>}
         </div>
       )}
+
       {competencias.map(comp => (
-        <div key={comp.id} style={s.competenciaCard}><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
-          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569'}}>{r}</button>)}</div>
-          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario" style={s.textareaSmall} />
+        <div key={comp.id} style={s.competenciaCard}>
+          <h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
+          <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({...ratings, [comp.id]: r})} style={{...s.ratingBtn, backgroundColor: ratings[comp.id]===r?'#231F20':'#f1f5f9', color: ratings[comp.id]===r?'white':'#475569', cursor: enviada ? 'not-allowed' : 'pointer'}} disabled={enviada}>{r}</button>)}</div>
+          <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Comentario obligatorio" style={{ ...s.textareaSmall, borderColor: enviada ? '#D4D2C6' : (comentarios[comp.id]?.trim() ? '#D4D2C6' : '#dc2626') }} disabled={enviada} />
         </div>
       ))}
-      <SeccionText titulo="📝 Comentarios Finales" valor={comentariosFinales} onChange={setComentariosFinales} />{mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
-      <div style={{ display: 'flex', gap: 12 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>
+
+      <SeccionText titulo="📝 Comentarios Finales (obligatorio)" valor={comentariosFinales} onChange={setComentariosFinales} disabled={enviada} required />
+
+      {prom && (
+        <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid #231F20', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Resultado Final</p>
+          <p style={{ fontSize: 48, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{prom}</p>
+        </div>
+      )}
+
+      {mensaje && <div style={s.mensajeToast}>{mensaje}</div>}
+      {!enviada && <div style={{ display: 'flex', gap: 12, marginTop: 20 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
+      {enviada && <div style={s.bannerEnviado}>✅ Evaluación enviada.</div>}
     </div>
   );
 }
 
-function SeccionText({ titulo, valor, onChange }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={e => onChange(e.target.value)} style={s.textarea} /></div>; }
+function SeccionText({ titulo, valor, onChange, disabled, required }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={e => onChange(e.target.value)} style={{ ...s.textarea, borderColor: disabled ? '#D4D2C6' : (valor?.trim() ? '#D4D2C6' : '#dc2626') }} disabled={disabled} placeholder={required ? 'Obligatorio' : ''} /></div>; }
 
 const th = { textAlign: 'left', padding: '6px 8px', color: '#231F20', fontSize: '11px' };
 const td = { padding: '6px 8px', fontSize: '13px' };
 
-const sidebar = {
-  aside: { width: '260px', background: '#231F20', minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '20px 0' },
-  logoContainer: { padding: '0 20px 20px', borderBottom: '1px solid #D4D2C6', marginBottom: 16, textAlign: 'center' },
-  nav: { display: 'flex', flexDirection: 'column', gap: 4, padding: '0 12px', flex: 1 },
-  menuItem: { padding: '14px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 500, transition: 'all 0.15s', width: '100%' },
-  footer: { padding: '16px 20px', borderTop: '1px solid #D4D2C6' }
-};
+const sidebar = { aside: { width: '260px', background: '#231F20', minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '20px 0' }, logoContainer: { padding: '0 20px 20px', borderBottom: '1px solid #D4D2C6', marginBottom: 16, textAlign: 'center' }, nav: { display: 'flex', flexDirection: 'column', gap: 4, padding: '0 12px', flex: 1 }, menuItem: { padding: '14px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 500, transition: 'all 0.15s', width: '100%' }, footer: { padding: '16px 20px', borderTop: '1px solid #D4D2C6' } };
 
 const s = {
   centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20 },
@@ -583,4 +522,5 @@ const s = {
   btnPrimario: { padding: '12px 24px', background: '#231F20', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 },
   btnSecundario: { padding: '12px 24px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 },
   mensajeToast: { padding: '12px 20px', background: '#D4D2C6', borderRadius: 8, marginBottom: 16, color: '#231F20', fontWeight: 500, fontSize: 14, textAlign: 'center' },
+  bannerEnviado: { padding: 20, background: '#D4D2C6', borderRadius: 10, color: '#231F20', fontWeight: 600, textAlign: 'center', marginTop: 20 }
 };
