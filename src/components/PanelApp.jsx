@@ -33,7 +33,6 @@ export default function PanelApp() {
   const nombreRol = profile.role === 'admin_rrhh' ? 'Admin RRHH' : profile.role === 'lider' ? 'Líder' : 'Colaborador';
   const emojiRol = profile.role === 'admin_rrhh' ? '🔧' : profile.role === 'lider' ? '👥' : '👤';
   const esGerente = profile.seniority === 'Gerente';
-  const tieneAutoevaluacion = !esGerente;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -66,15 +65,13 @@ function DesempenoView({ profile, cicloActivo, setCicloActivo }) {
   if (!cicloActivo) return <CiclosLista esAdmin={esAdmin} onSelectCiclo={setCicloActivo} profile={profile} />;
   return (
     <div><button onClick={() => setCicloActivo(null)} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver a Ciclos</button><h2>📊 {cicloActivo.nombre}</h2><p style={{ color: '#64748b', marginBottom: 20 }}>{new Date(cicloActivo.fecha_inicio).toLocaleDateString('es-AR')} · {cicloActivo.estado}</p>
-      {esAdmin && <PanelAdminConEquipo profile={profile} cicloId={cicloActivo.id} tieneAutoevaluacion={!esGerente || profile.seniority !== 'Gerente'} />}
-      {!esAdmin && esGerente && <EquipoLiderDirecto cicloId={cicloActivo.id} profile={profile} />}
+      {esAdmin && <PanelAdminConEquipo profile={profile} cicloId={cicloActivo.id} tieneAutoevaluacion={!esGerente} />}
+      {!esAdmin && esGerente && <EquipoLider cicloId={cicloActivo.id} profile={profile} />}
       {!esAdmin && !esGerente && profile.role === 'lider' && <PanelLiderConAutoevaluacion cicloId={cicloActivo.id} profile={profile} />}
       {!esAdmin && !esGerente && profile.role !== 'lider' && <PanelColaboradorConEquipo userId={profile.id} seniority={profile.seniority} cicloId={cicloActivo.id} profile={profile} />}
     </div>
   );
 }
-
-function EquipoLiderDirecto({ cicloId, profile }) { return <EquipoLider cicloId={cicloId} profile={profile} />; }
 
 function PanelLiderConAutoevaluacion({ cicloId, profile }) {
   const [v, setV] = useState('equipo');
@@ -169,60 +166,75 @@ function FeedbackAdmin({ cicloId }) { const [fbs, setFbs] = useState([]); const 
 
 function HistorialAdmin({ colaborador, onVolver }) { const [hist, setHist] = useState([]); const [carg, setCarg] = useState(true); useEffect(() => { (async () => { const { data } = await supabase.from('evaluaciones_historicas').select('*').eq('colaborador_id', colaborador.id).order('fecha_evaluacion', { ascending: false }); setHist(data || []); setCarg(false); })(); }, []); if (carg) return <p>Cargando...</p>; return <div><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>📋 Historial: {colaborador.full_name || colaborador.email}</h3>{hist.length === 0 ? <p style={{ padding: 40, color: '#94a3b8' }}>Sin historial.</p> : <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Rating</th></tr></thead><tbody>{hist.map(h => (<tr key={h.id}><td style={td}>{new Date(h.fecha_evaluacion + 'T12:00:00').toLocaleDateString('es-AR')}</td><td style={td}>{h.rating_final || '-'}</td></tr>))}</tbody></table>}</div>; }
 
-function DetalleAutoEvaluacion({ autoevaluacion, competencias }) {
-  if (!autoevaluacion) return <p style={{ padding: 12, color: '#94a3b8' }}>Sin autoevaluación disponible.</p>;
+// COMPONENTE CLAVE: Detalle completo de autoevaluación
+function DetalleAutoEvaluacion({ autoevaluacion }) {
+  if (!autoevaluacion) return <p style={{ padding: 16, color: '#94a3b8', textAlign: 'center' }}>Sin autoevaluación disponible.</p>;
+  
+  const puntuaciones = autoevaluacion.puntuaciones || [];
   
   return (
-    <div style={{ marginTop: 12, padding: 16, background: '#f8fafc', borderRadius: 10, border: '2px solid #D4D2C6' }}>
-      <h4 style={{ color: '#231F20', marginBottom: 12 }}>📝 Detalle de Autoevaluación</h4>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-        <div style={{ padding: 12, background: 'white', borderRadius: 8, textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Rating Final</p>
-          <p style={{ fontSize: 32, fontWeight: 700, color: '#231F20', margin: '4px 0' }}>{autoevaluacion.rating_promedio || '-'}</p>
-        </div>
-        <div style={{ padding: 12, background: 'white', borderRadius: 8, textAlign: 'center' }}>
-          <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Estado</p>
-          <p style={{ fontSize: 18, fontWeight: 600, color: autoevaluacion.estado === 'enviado' ? '#22c55e' : '#f59e0b', margin: '8px 0' }}>{autoevaluacion.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
+    <div style={{ marginTop: 16, background: 'white', borderRadius: 12, border: '2px solid #D4D2C6', overflow: 'hidden' }}>
+      {/* Encabezado */}
+      <div style={{ background: '#231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h4 style={{ margin: 0, color: '#D4D2C6', fontSize: 16 }}>📝 Autoevaluación Completa</h4>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <span style={{ color: '#D4D2C6', fontSize: 13 }}>Estado: <strong style={{ color: autoevaluacion.estado === 'enviado' ? '#22c55e' : '#f59e0b' }}>{autoevaluacion.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</strong></span>
+          <span style={{ background: '#D4D2C6', color: '#231F20', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 20 }}>
+            {autoevaluacion.rating_promedio || '-'}
+          </span>
         </div>
       </div>
+      
+      <div style={{ padding: 20 }}>
+        {/* Comentarios finales */}
+        {autoevaluacion.comentarios_finales && (
+          <div style={{ marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <strong style={{ color: '#231F20', display: 'block', marginBottom: 6 }}>💬 Comentarios Finales:</strong>
+            <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{autoevaluacion.comentarios_finales}</p>
+          </div>
+        )}
 
-      {autoevaluacion.comentarios_finales && (
-        <div style={{ padding: 12, background: 'white', borderRadius: 8, marginBottom: 16 }}>
-          <strong style={{ color: '#231F20' }}>Comentarios Finales:</strong>
-          <p style={{ color: '#475569', fontSize: 14, marginTop: 4 }}>{autoevaluacion.comentarios_finales}</p>
-        </div>
-      )}
-
-      {autoevaluacion.puntuaciones && autoevaluacion.puntuaciones.length > 0 && (
-        <div>
-          <h5 style={{ color: '#231F20', marginBottom: 8 }}>Competencias Evaluadas</h5>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: 8, overflow: 'hidden' }}>
-            <thead>
-              <tr style={{ background: '#231F20' }}>
-                <th style={{ ...th, color: '#D4D2C6', padding: '10px 12px', fontSize: 12 }}>Competencia</th>
-                <th style={{ ...th, color: '#D4D2C6', padding: '10px 12px', fontSize: 12, textAlign: 'center' }}>Rating</th>
-                <th style={{ ...th, color: '#D4D2C6', padding: '10px 12px', fontSize: 12 }}>Comentario</th>
-              </tr>
-            </thead>
-            <tbody>
-              {autoevaluacion.puntuaciones.map((p, index) => (
-                <tr key={p.id} style={{ borderBottom: '1px solid #e2e8f0', background: index % 2 === 0 ? 'white' : '#f8fafc' }}>
-                  <td style={{ ...td, padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>
-                    {p.competencias?.nombre || `Competencia ${p.competencia_id}`}
-                  </td>
-                  <td style={{ ...td, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center', color: '#231F20' }}>
-                    {p.rating}
-                  </td>
-                  <td style={{ ...td, padding: '10px 12px', fontSize: 13, color: '#475569', fontStyle: p.comentario ? 'normal' : 'italic' }}>
-                    {p.comentario || 'Sin comentario'}
-                  </td>
+        {/* Tabla de competencias */}
+        <h5 style={{ color: '#231F20', marginBottom: 12, fontSize: 15 }}>📊 Calificación por Competencia</h5>
+        
+        {puntuaciones.length === 0 ? (
+          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay competencias calificadas.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+              <thead>
+                <tr style={{ background: '#231F20' }}>
+                  <th style={{ padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left', fontWeight: 600 }}>Competencia</th>
+                  <th style={{ padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'center', fontWeight: 600, width: 80 }}>Rating</th>
+                  <th style={{ padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left', fontWeight: 600 }}>Comentario</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {puntuaciones.map((p, index) => (
+                  <tr key={p.id || index} style={{ background: index % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#231F20', fontWeight: 500 }}>
+                      {p.competencias?.nombre || `Competencia ${p.competencia_id}`}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      <span style={{ 
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 40, height: 40, borderRadius: 10,
+                        background: '#231F20', color: '#D4D2C6',
+                        fontSize: 18, fontWeight: 700
+                      }}>
+                        {p.rating}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#475569', fontStyle: p.comentario ? 'normal' : 'italic' }}>
+                      {p.comentario || 'Sin comentario'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -260,7 +272,7 @@ function EquipoLider({ cicloId, profile }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {equipo.map(c => (
             <div key={c.id} style={{ ...s.tarjetaStat }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: detalleVisible === c.id ? 12 : 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <h4 style={{ margin: 0, color: '#231F20' }}>{c.full_name || c.email}</h4>
                   <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{c.area} · {c.seniority}</p>
@@ -273,11 +285,11 @@ function EquipoLider({ cicloId, profile }) {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {c.autoevaluacion?.estado === 'enviado' && (
                     <button onClick={() => setDetalleVisible(detalleVisible === c.id ? null : c.id)} style={{ ...s.btnInfo, background: '#dbeafe', color: '#1e40af', fontWeight: 600 }}>
-                      {detalleVisible === c.id ? '🔼 Ocultar Detalle' : '👁️ Ver Autoevaluación'}
+                      {detalleVisible === c.id ? '🔼 Ocultar' : '👁️ Ver Autoevaluación'}
                     </button>
                   )}
                   <button onClick={() => setFbVis(c)} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>💬 Feedback</button>
-                  <button onClick={() => setColSel(c)} style={s.btnPrimario}>{c.evaluacionLider ? '✏️ Editar Evaluación' : '📝 Evaluar'}</button>
+                  <button onClick={() => setColSel(c)} style={s.btnPrimario}>{c.evaluacionLider ? '✏️ Editar' : '📝 Evaluar'}</button>
                 </div>
               </div>
               {detalleVisible === c.id && <DetalleAutoEvaluacion autoevaluacion={c.autoevaluacion} />}
