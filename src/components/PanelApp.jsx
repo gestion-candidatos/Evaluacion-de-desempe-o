@@ -127,11 +127,6 @@ function EvaluacionesAdmin() {
     setCargando(false);
   }
 
-  async function actualizarFecha(evaluacionId, fecha) {
-    await supabase.from('evaluaciones').update({ fecha_evaluacion: fecha }).eq('id', evaluacionId);
-    cargarEvaluaciones();
-  }
-
   if (cargando) return <p style={{ padding: 20, color: '#64748b' }}>Cargando evaluaciones...</p>;
 
   return (
@@ -141,10 +136,10 @@ function EvaluacionesAdmin() {
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones aún.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '850px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '750px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha Eval</th><th style={th}>Creado</th><th style={th}>Ver</th>
+                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Fecha</th><th style={th}>Ver</th>
               </tr>
             </thead>
             <tbody>
@@ -155,23 +150,7 @@ function EvaluacionesAdmin() {
                   <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#dbeafe' : '#fef3c7', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#1e40af' : '#92400e' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : ev.tipo_evaluacion === 'evaluacion_lider' ? '👥 Líder' : ev.tipo_evaluacion}</span></td>
                   <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
                   <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#dcfce7' : ev.estado === 'borrador' ? '#fef3c7' : '#f1f5f9', color: ev.estado === 'enviado' ? '#166534' : ev.estado === 'borrador' ? '#92400e' : '#64748b' }}>{ev.estado === 'enviado' ? '✅ Enviada' : ev.estado === 'borrador' ? '📝 Borrador' : ev.estado}</span></td>
-                  <td style={{ ...td, padding: '6px 10px' }}>
-                    <input 
-                      type="date" 
-                      value={ev.fecha_evaluacion || ''} 
-                      onChange={(e) => actualizarFecha(ev.id, e.target.value)}
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 12,
-                        width: '130px'
-                      }}
-                    />
-                  </td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
-                    {new Date(ev.created_at).toLocaleDateString('es-AR')}
-                  </td>
+                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
                   <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === ev.id ? null : ev.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️ Ver</button></td>
                 </tr>
               ))}
@@ -192,8 +171,7 @@ function EvaluacionesAdmin() {
                         <p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p>
                         <p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p>
                         <p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>
-                        <p><strong>📅 Fecha de Evaluación:</strong> {ev.fecha_evaluacion || 'Sin asignar'}</p>
-                        <p><strong>📅 Creado:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
+                        <p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
                         <hr style={{ border: '1px solid #e2e8f0' }} />
                         <div><strong>💪 Fortalezas:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.fortalezas || 'No completado'}</p></div>
                         <div><strong>📈 Oportunidades:</strong><p style={{ margin: '4px 0', color: '#475569' }}>{ev.oportunidades || 'No completado'}</p></div>
@@ -276,11 +254,6 @@ function PanelCalibracion({ colaboradores }) {
     setGuardando(false);
   }
 
-  async function actualizarFecha(evaluacionId, fecha) {
-    await supabase.from('evaluaciones').update({ fecha_evaluacion: fecha }).eq('id', evaluacionId);
-    cargarDatos();
-  }
-
   const clasificar = (prom) => {
     if (!prom) return { texto: '-', color: '#94a3b8' };
     const p = parseFloat(prom);
@@ -297,25 +270,17 @@ function PanelCalibracion({ colaboradores }) {
     <div style={{ ...s.tarjetaStat }}>
       <h3 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>🎯 Calibración - Auto vs Líder</h3>
       <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>
-        Comparación de autoevaluación y evaluación del líder. Define el rating final calibrado y asigna fechas.
+        Comparación de autoevaluación y evaluación del líder. Define el rating final calibrado.
       </p>
 
       {datos.length === 0 ? (
         <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay datos para mostrar.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={th}>Colaborador</th>
-                <th style={th}>Área</th>
-                <th style={th}>Seniority</th>
-                <th style={th}>Auto</th>
-                <th style={th}>Líder</th>
-                <th style={th}>GAP</th>
-                <th style={th}>Calibrado</th>
-                <th style={th}>Fecha Eval</th>
-                <th style={th}>Acción</th>
+                <th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -328,28 +293,15 @@ function PanelCalibracion({ colaboradores }) {
                     <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
                     <td style={td}>{d.colaborador.area || '-'}</td>
                     <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#e0e7ff', color: '#4338ca' }}>{d.colaborador.seniority || '-'}</span></td>
+                    <td style={{ ...td, textAlign: 'center' }}>{d.promAuto ? <span style={{ fontSize: 18, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <span style={{ fontSize: 18, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
-                      {d.promAuto ? <span style={{ fontSize: 18, fontWeight: 700, color: clasAuto.color }}>{d.promAuto}</span> : <span style={{ color: '#94a3b8' }}>-</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.promLider ? <span style={{ fontSize: 18, fontWeight: 700, color: clasLider.color }}>{d.promLider}</span> : <span style={{ color: '#94a3b8' }}>-</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {d.gap ? (
-                        <span style={{ fontSize: 16, fontWeight: 700, color: Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626' }}>
-                          {d.gap > 0 ? '+' : ''}{d.gap}
-                        </span>
-                      ) : <span style={{ color: '#94a3b8' }}>-</span>}
+                      {d.gap ? <span style={{ fontSize: 16, fontWeight: 700, color: Math.abs(d.gap) <= 0.5 ? '#22c55e' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626' }}>{d.gap > 0 ? '+' : ''}{d.gap}</span> : <span style={{ color: '#94a3b8' }}>-</span>}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       {d.promLider ? (
                         <div>
-                          <select 
-                            value={d.ratingFinal || ''} 
-                            onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))}
-                            style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }}
-                            disabled={guardando}
-                          >
+                          <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '6px 10px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 14, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}>
                             <option value="">Seleccionar</option>
                             <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
                           </select>
@@ -357,20 +309,7 @@ function PanelCalibracion({ colaboradores }) {
                         </div>
                       ) : <span style={{ color: '#94a3b8' }}>Sin eval</span>}
                     </td>
-                    <td style={{ ...td, padding: '6px 10px' }}>
-                      <input 
-                        type="date" 
-                        value={d.evaluacionLider?.fecha_evaluacion || d.autoevaluacion?.fecha_evaluacion || ''} 
-                        onChange={(e) => {
-                          const evalId = d.evaluacionLider?.id || d.autoevaluacion?.id;
-                          if (evalId) actualizarFecha(evalId, e.target.value);
-                        }}
-                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, width: '130px' }}
-                      />
-                    </td>
-                    <td style={td}>
-                      <button onClick={() => setDetalleVisible(detalleVisible === d.colaborador.id ? null : d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button>
-                    </td>
+                    <td style={td}><button onClick={() => setDetalleVisible(detalleVisible === d.colaborador.id ? null : d.colaborador.id)} style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}>👁️</button></td>
                   </tr>
                 );
               })}
@@ -385,42 +324,16 @@ function PanelCalibracion({ colaboradores }) {
                   if (!d) return null;
                   return (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <h3 style={{ margin: 0 }}>🎯 Calibración: {d.colaborador.full_name}</h3>
-                        <button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button>
-                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0 }}>🎯 Calibración: {d.colaborador.full_name}</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
                       <p style={{ color: '#64748b', marginBottom: 20 }}>{d.colaborador.area} · {d.colaborador.seniority}</p>
-                      
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-                        <div style={{ padding: 14, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 12, color: '#1e40af' }}>📝 Auto</p>
-                          <p style={{ fontSize: 28, fontWeight: 700, color: '#1e40af', margin: '4px 0' }}>{d.promAuto || '-'}</p>
-                        </div>
-                        <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 12, color: '#92400e' }}>👥 Líder</p>
-                          <p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p>
-                        </div>
-                        <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}>
-                          <p style={{ margin: 0, fontSize: 12, color: '#166534' }}>✅ Calibrado</p>
-                          <p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p>
-                        </div>
+                        <div style={{ padding: 14, background: '#dbeafe', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#1e40af' }}>📝 Auto</p><p style={{ fontSize: 28, fontWeight: 700, color: '#1e40af', margin: '4px 0' }}>{d.promAuto || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#92400e' }}>👥 Líder</p><p style={{ fontSize: 28, fontWeight: 700, color: '#92400e', margin: '4px 0' }}>{d.promLider || '-'}</p></div>
+                        <div style={{ padding: 14, background: '#dcfce7', borderRadius: 10, textAlign: 'center' }}><p style={{ margin: 0, fontSize: 12, color: '#166534' }}>✅ Calibrado</p><p style={{ fontSize: 28, fontWeight: 700, color: '#166534', margin: '4px 0' }}>{d.ratingFinal || '-'}</p></div>
                       </div>
-
-                      <p><strong>📅 Fecha de Evaluación:</strong> {d.evaluacionLider?.fecha_evaluacion || d.autoevaluacion?.fecha_evaluacion || 'Sin asignar'}</p>
-
-                      <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-                        <div style={{ flex: 1 }}>
-                          <h4>💪 Fortalezas (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || '-'}</p>
-                          <h4>📈 Oportunidades (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || '-'}</p>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <h4>🎯 Plan de Acción (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || '-'}</p>
-                          <h4>📚 Desarrollo (Auto)</h4>
-                          <p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || '-'}</p>
-                        </div>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <div style={{ flex: 1 }}><h4>💪 Fortalezas (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.fortalezas || '-'}</p><h4>📈 Oportunidades (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.oportunidades || '-'}</p></div>
+                        <div style={{ flex: 1 }}><h4>🎯 Plan de Acción (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.plan_accion || '-'}</p><h4>📚 Desarrollo (Auto)</h4><p style={{ color: '#475569', fontSize: 13 }}>{d.autoevaluacion?.desarrollo_individual || '-'}</p></div>
                       </div>
                     </div>
                   );
@@ -445,30 +358,14 @@ function PanelLider() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('leader_id', session.user.id);
-    
+    const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id);
     setEquipo(data || []);
 
     if (data) {
       const evalsPorColaborador = {};
       for (const col of data) {
-        const { data: autoeval } = await supabase
-          .from('evaluaciones')
-          .select('*')
-          .eq('colaborador_id', col.id)
-          .eq('tipo_evaluacion', 'autoevaluacion')
-          .maybeSingle();
-        
-        const { data: evalLider } = await supabase
-          .from('evaluaciones')
-          .select('*')
-          .eq('colaborador_id', col.id)
-          .eq('tipo_evaluacion', 'evaluacion_lider')
-          .maybeSingle();
-
+        const { data: autoeval } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
+        const { data: evalLider } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
         evalsPorColaborador[col.id] = { autoevaluacion: autoeval, evaluacionLider: evalLider };
       }
       setEvaluaciones(evalsPorColaborador);
@@ -476,12 +373,7 @@ function PanelLider() {
   }
 
   if (colaboradorSeleccionado) {
-    return (
-      <EvaluacionLider 
-        colaborador={colaboradorSeleccionado}
-        onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }}
-      />
-    );
+    return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
   }
 
   return (
@@ -532,12 +424,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
     setCompetencias(comps || []);
 
     const { data: auto } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle();
-    if (auto) {
-      setAutoevaluacion(auto);
-      const pa = {};
-      (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; });
-      setPuntuacionesAuto(pa);
-    }
+    if (auto) { setAutoevaluacion(auto); const pa = {}; (auto.puntuaciones || []).forEach(p => { pa[p.competencia_id] = p.rating; }); setPuntuacionesAuto(pa); }
 
     const { data: { session } } = await supabase.auth.getSession();
     const { data: liderEval } = await supabase.from('evaluaciones').select('*, puntuaciones(*)').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle();
