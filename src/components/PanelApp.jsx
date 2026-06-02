@@ -204,22 +204,28 @@ function PanelAdmin({ profile }) {
 }
 
 // =============================================
-// NUEVO: Historial del colaborador (Admin puede agregar evaluaciones históricas)
+// HISTORIAL ADMIN (Carga manual completa + PDF)
 // =============================================
 function HistorialAdmin({ colaborador, onVolver }) {
   const [historicas, setHistoricas] = useState([]);
+  const [competencias, setCompetencias] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [modo, setModo] = useState('manual'); // 'manual' o 'pdf'
+  const [modo, setModo] = useState('completa'); // 'completa' o 'pdf'
   const [nuevaFecha, setNuevaFecha] = useState('');
-  const [nuevoRating, setNuevoRating] = useState('');
-  const [nuevoComentario, setNuevoComentario] = useState('');
+  const [ratingsHist, setRatingsHist] = useState({});
+  const [comentariosHist, setComentariosHist] = useState({});
+  const [comentariosFinalesHist, setComentariosFinalesHist] = useState('');
   const [archivo, setArchivo] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
+  const [showInfo, setShowInfo] = useState({});
 
-  useEffect(() => { cargarHistoricas(); }, []);
+  useEffect(() => { cargarTodo(); }, []);
 
-  async function cargarHistoricas() {
+  async function cargarTodo() {
+    const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', colaborador.seniority || 'Analista');
+    setCompetencias(comps || []);
+
     const { data } = await supabase
       .from('evaluaciones_historicas')
       .select('*')
@@ -229,57 +235,60 @@ function HistorialAdmin({ colaborador, onVolver }) {
     setCargando(false);
   }
 
-  async function agregarManual() {
-    if (!nuevaFecha || !nuevoRating) return alert('Fecha y rating son obligatorios');
+  async function guardarEvaluacionCompleta() {
+    if (!nuevaFecha) return alert('La fecha es obligatoria');
+    const valores = Object.values(ratingsHist).filter(r => r > 0);
+    if (valores.length === 0) return alert('Debe calificar al menos una competencia');
+
+    const promedio = (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
     const { data: { session } } = await supabase.auth.getSession();
+
+    // Guardar como evaluación histórica
     await supabase.from('evaluaciones_historicas').insert({
       colaborador_id: colaborador.id,
       fecha_evaluacion: nuevaFecha,
-      rating_final: parseFloat(nuevoRating),
-      comentarios: nuevoComentario,
+      rating_final: parseFloat(promedio),
+      comentarios: comentariosFinalesHist || 'Evaluación histórica',
       creado_por: session.user.id
     });
-    setNuevaFecha(''); setNuevoRating(''); setNuevoComentario('');
+
+    setNuevaFecha(''); setRatingsHist({}); setComentariosHist({}); setComentariosFinalesHist('');
     setMostrarForm(false);
-    cargarHistoricas();
+    cargarTodo();
   }
 
   async function subirPDF() {
     if (!archivo || !nuevaFecha) return alert('Fecha y archivo son obligatorios');
     setSubiendo(true);
-    
+
     const fileName = `${colaborador.id}_${Date.now()}_${archivo.name}`;
-    
-    // Subir archivo a Storage
+
     const { error: uploadError } = await supabase.storage
       .from('historicos')
       .upload(fileName, archivo);
-    
+
     if (uploadError) {
       alert('Error al subir archivo: ' + uploadError.message);
       setSubiendo(false);
       return;
     }
 
-    // Obtener URL pública
     const { data: urlData } = supabase.storage
       .from('historicos')
       .getPublicUrl(fileName);
 
-    // Guardar registro
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from('evaluaciones_historicas').insert({
       colaborador_id: colaborador.id,
       fecha_evaluacion: nuevaFecha,
-      rating_final: nuevoRating ? parseFloat(nuevoRating) : null,
-      comentarios: nuevoComentario || 'Evaluación histórica (PDF)',
+      comentarios: 'Evaluación histórica (PDF)',
       archivo_url: urlData.publicUrl,
       creado_por: session.user.id
     });
 
-    setNuevaFecha(''); setNuevoRating(''); setNuevoComentario(''); setArchivo(null);
+    setNuevaFecha(''); setArchivo(null);
     setMostrarForm(false); setSubiendo(false);
-    cargarHistoricas();
+    cargarTodo();
   }
 
   const clasificar = (p) => {
@@ -307,54 +316,56 @@ function HistorialAdmin({ colaborador, onVolver }) {
       {mostrarForm && (
         <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-            <button onClick={() => setModo('manual')} style={modo === 'manual' ? s.btnPrimario : s.btnInfo}>✏️ Carga Manual</button>
+            <button onClick={() => setModo('completa')} style={modo === 'completa' ? s.btnPrimario : s.btnInfo}>✏️ Evaluación Completa</button>
             <button onClick={() => setModo('pdf')} style={modo === 'pdf' ? s.btnPrimario : s.btnInfo}>📄 Subir PDF</button>
           </div>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div>
-              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha de Evaluación *</label>
-              <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
-            </div>
-
-            {modo === 'manual' && (
-              <>
-                <div>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating *</label>
-                  <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
-                    <option value="">-</option>
-                    <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option>
-                    <option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comentarios</label>
-                  <input type="text" value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} placeholder="Comentarios..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
-                </div>
-                <button onClick={agregarManual} style={{ ...s.btnPrimario, background: '#22c55e' }}>Guardar</button>
-              </>
-            )}
-
-            {modo === 'pdf' && (
-              <>
-                <div>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating (opcional)</label>
-                  <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
-                    <option value="">-</option>
-                    <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option>
-                    <option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Archivo PDF *</label>
-                  <input type="file" accept=".pdf" onChange={e => setArchivo(e.target.files[0])} style={{ padding: 6 }} />
-                </div>
-                <button onClick={subirPDF} disabled={subiendo} style={{ ...s.btnPrimario, background: '#f59e0b' }}>
-                  {subiendo ? '⏳ Subiendo...' : '📄 Subir PDF'}
-                </button>
-              </>
-            )}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha de Evaluación *</label>
+            <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
           </div>
+
+          {modo === 'completa' && (
+            <div>
+              <h4 style={{ color: '#231F20', marginBottom: 12 }}>Competencias</h4>
+              {competencias.map(comp => (
+                <div key={comp.id} style={{ ...s.competenciaCard, background: 'white' }}>
+                  <div style={s.competenciaHeader}>
+                    <div><h5 style={{ margin: 0, color: '#231F20', fontSize: 14 }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#64748b' }}>{comp.descripcion}</p></div>
+                    <button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={{ ...s.btnInfo, fontSize: 11 }}>{showInfo[comp.id] ? '🔼' : '🔽'}</button>
+                  </div>
+                  <div style={s.ratingRow}>
+                    {[1,2,3,4,5].map(r => (
+                      <button key={r} onClick={() => setRatingsHist({ ...ratingsHist, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratingsHist[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratingsHist[comp.id] === r ? 'white' : '#475569' }}>{r}</button>
+                    ))}
+                  </div>
+                  {showInfo[comp.id] && (
+                    <div style={s.ratingInfoBox}>
+                      {[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}
+                    </div>
+                  )}
+                  <textarea value={comentariosHist[comp.id] || ''} onChange={e => setComentariosHist({ ...comentariosHist, [comp.id]: e.target.value })} placeholder="Comentario (opcional)" style={s.textareaSmall} />
+                </div>
+              ))}
+              <div style={{ marginTop: 12 }}>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comentarios Finales</label>
+                <textarea value={comentariosFinalesHist} onChange={e => setComentariosFinalesHist(e.target.value)} placeholder="Comentarios finales..." style={{ ...s.textarea, minHeight: 60 }} />
+              </div>
+              <button onClick={guardarEvaluacionCompleta} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 Guardar Evaluación</button>
+            </div>
+          )}
+
+          {modo === 'pdf' && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Archivo PDF *</label>
+                <input type="file" accept=".pdf" onChange={e => setArchivo(e.target.files[0])} style={{ padding: 6 }} />
+              </div>
+              <button onClick={subirPDF} disabled={subiendo} style={{ ...s.btnPrimario, background: '#f59e0b' }}>
+                {subiendo ? '⏳ Subiendo...' : '📄 Subir PDF'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -375,7 +386,7 @@ function HistorialAdmin({ colaborador, onVolver }) {
                     <td style={td}>{h.comentarios || '-'}</td>
                     <td style={td}>
                       {h.archivo_url ? (
-                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12, display: 'inline-block' }}>
+                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>
                           📄 Ver PDF
                         </a>
                       ) : '-'}
@@ -391,8 +402,27 @@ function HistorialAdmin({ colaborador, onVolver }) {
   );
 }
 
+// =============================================
+// HISTORIAL LIDER (Solo lectura)
+// =============================================
+function HistorialLider({ colaborador, onVolver }) {
+  const [historicas, setHistoricas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => { cargarHistoricas(); }, []);
+
+  async function cargarHistoricas() {
+    const { data } = await supabase
+      .from('evaluaciones_historicas')
+      .select('*')
+      .eq('colaborador_id', colaborador.id)
+      .order('fecha_evaluacion', { ascending: false });
+    setHistoricas(data || []);
+    setCargando(false);
+  }
+
   const clasificar = (p) => {
-    if (!p) return { texto: '-', color: '#94a3b8' };
+    if (!p) return { texto: 'PDF', color: '#94a3b8' };
     if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
     if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
     if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
@@ -400,69 +430,49 @@ function HistorialAdmin({ colaborador, onVolver }) {
     return { texto: 'Distinguido', color: '#8b5cf6' };
   };
 
-  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+  if (cargando) return <p style={{ padding: 20 }}>Cargando historial...</p>;
 
   return (
     <div>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <h3 style={{ color: '#231F20', margin: 0 }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
-        <button onClick={() => setMostrarForm(!mostrarForm)} style={s.btnPrimario}>
-          {mostrarForm ? 'Cancelar' : '+ Agregar Histórica'}
-        </button>
-      </div>
-      <p style={{ color: '#64748b', margin: '4px 0 20px 0' }}>{colaborador.area} · {colaborador.seniority}</p>
-
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>Nueva Evaluación Histórica</h4>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div>
-              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha</label>
-              <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating</label>
-              <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
-                <option value="">-</option>
-                <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
-              </select>
-            </div>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comentarios</label>
-              <input type="text" value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} placeholder="Comentarios..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
-            </div>
-            <button onClick={agregarHistorica} style={{ ...s.btnPrimario, background: '#22c55e' }}>Guardar</button>
-          </div>
-        </div>
-      )}
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
+      <h3 style={{ color: '#231F20' }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} · {colaborador.seniority}</p>
 
       {historicas.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones históricas.</p>
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay evaluaciones históricas registradas.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th></tr></thead>
-          <tbody>
-            {historicas.map(h => {
-              const c = clasificar(h.rating_final);
-              return (
-                <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
-                  <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final}</td>
-                  <td style={{ ...td, color: c.color }}>{c.texto}</td>
-                  <td style={td}>{h.comentarios || '-'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
+            <tbody>
+              {historicas.map(h => {
+                const c = clasificar(h.rating_final);
+                return (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
+                    <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td>
+                    <td style={{ ...td, color: c.color, fontSize: 12 }}>{c.texto}</td>
+                    <td style={td}>{h.comentarios || '-'}</td>
+                    <td style={td}>
+                      {h.archivo_url ? (
+                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>
+                          📄 Ver PDF
+                        </a>
+                      ) : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
 // =============================================
-// ACTUALIZADO: EvaluacionesAdmin con botón historial
+// RESTO DE COMPONENTES (EvaluacionesAdmin, Calibracion, EquipoLider, etc.)
 // =============================================
 function EvaluacionesAdmin({ onVerHistorial }) {
   const [evaluaciones, setEvaluaciones] = useState([]);
@@ -509,9 +519,6 @@ function EvaluacionesAdmin({ onVerHistorial }) {
   );
 }
 
-// =============================================
-// ACTUALIZADO: Calibracion con botón historial
-// =============================================
 function PanelCalibracion({ colaboradores, onVerHistorial }) {
   const [datos, setDatos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -640,9 +647,6 @@ function PanelCalibracion({ colaboradores, onVerHistorial }) {
   );
 }
 
-// =============================================
-// ACTUALIZADO: EquipoLider con historial visual
-// =============================================
 function EquipoLider() {
   const [equipo, setEquipo] = useState([]);
   const [evaluaciones, setEvaluaciones] = useState({});
@@ -651,10 +655,7 @@ function EquipoLider() {
   useEffect(() => { cargarEquipo(); }, []);
   async function cargarEquipo() { const { data: { session } } = await supabase.auth.getSession(); if (!session) return; const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id); setEquipo(data || []); if (data) { const evals = {}; for (const col of data) { const { data: a } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); const { data: l } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); evals[col.id] = { autoevaluacion: a, evaluacionLider: l }; } setEvaluaciones(evals); } }
   if (colaboradorSeleccionado) return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
-
-  if (historialVisible) {
-    return <HistorialLider colaborador={historialVisible} onVolver={() => setHistorialVisible(null)} />;
-  }
+  if (historialVisible) return <HistorialLider colaborador={historialVisible} onVolver={() => setHistorialVisible(null)} />;
 
   return (
     <div>
@@ -676,79 +677,7 @@ function EquipoLider() {
   );
 }
 
-// =============================================
-// NUEVO: Historial solo lectura para líderes
-// =============================================
-function HistorialLider({ colaborador, onVolver }) {
-  const [historicas, setHistoricas] = useState([]);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => { cargarHistoricas(); }, []);
-
-  async function cargarHistoricas() {
-    const { data } = await supabase
-      .from('evaluaciones_historicas')
-      .select('*')
-      .eq('colaborador_id', colaborador.id)
-      .order('fecha_evaluacion', { ascending: false });
-    setHistoricas(data || []);
-    setCargando(false);
-  }
-
-  const clasificar = (p) => {
-    if (!p) return { texto: 'PDF', color: '#94a3b8' };
-    if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
-    if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
-    if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
-    if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' };
-    return { texto: 'Distinguido', color: '#8b5cf6' };
-  };
-
-  if (cargando) return <p style={{ padding: 20 }}>Cargando historial...</p>;
-
-  return (
-    <div>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
-      <h3 style={{ color: '#231F20' }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} · {colaborador.seniority}</p>
-
-      {historicas.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay evaluaciones históricas registradas.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
-            <tbody>
-              {historicas.map(h => {
-                const c = clasificar(h.rating_final);
-                return (
-                  <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
-                    <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td>
-                    <td style={{ ...td, color: c.color, fontSize: 12 }}>{c.texto}</td>
-                    <td style={td}>{h.comentarios || '-'}</td>
-                    <td style={td}>
-                      {h.archivo_url ? (
-                        <a href={h.archivo_url} target="_blank" rel="noopener noreferrer" style={{ background: '#f59e0b', color: 'white', padding: '4px 10px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>
-                          📄 Ver PDF
-                        </a>
-                      ) : '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-// =============================================
-// Componentes existentes (sin cambios)
-// =============================================
 function PanelLider() { return <EquipoLider />; }
-
 function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
   const [vista, setVista] = useState('autoevaluacion');
   const [tieneEquipo, setTieneEquipo] = useState(false);
@@ -818,7 +747,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   useEffect(() => { cargarDatos(); }, []);
   async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', seniority || 'Analista'); setCompetencias(comps || []); const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single(); if (ev) { setEvalData(ev); setComentariosFinales(ev.comentarios_finales || ''); const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id); const rm = {}; const cm = {}; (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador' }).select().single(); setEvalData(nueva); } setCargando(false); }
   async function guardar() { await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evalData.id); for (const [compId, rating] of Object.entries(ratings)) { const com = comentarios[compId] || ''; const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evalData.id).eq('competencia_id', compId).single(); if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); } else { await supabase.from('puntuaciones').insert({ evaluacion_id: evalData.id, competencia_id: compId, rating, comentario: com }); } } setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500); }
-  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id); const valores = Object.values(ratings).filter(r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0'; let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido'; const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null; if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; } let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`; emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
+  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id); const valores = Object.values(ratings).filter(r => r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0'; let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido'; const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null; if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; } let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`; emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
   const enviada = evalData?.estado === 'enviado';
   return (
