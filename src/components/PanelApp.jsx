@@ -21,15 +21,12 @@ export default function PanelApp() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
     const { data: perfil } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    
-    // Bloquear acceso a usuarios inactivos
     if (perfil && perfil.activo === false) {
       await supabase.auth.signOut();
       alert('Tu cuenta ha sido desactivada. Contacta a RRHH.');
       window.location.href = '/';
       return;
     }
-    
     setProfile(perfil);
     setLoading(false);
   }
@@ -70,6 +67,7 @@ function PanelAdmin({ profile }) {
   const [vistaActiva, setVistaActiva] = useState('dashboard');
   const [seniorityCounts, setSeniorityCounts] = useState({});
   const [senioritySeleccionado, setSenioritySeleccionado] = useState(null);
+  const [colaboradorHistorial, setColaboradorHistorial] = useState(null);
   const esFlorencia = profile.email === 'florencia.salvaneschi@grupo-fabric.com';
 
   useEffect(() => { cargarStats(); cargarColabs(); }, []);
@@ -114,6 +112,10 @@ function PanelAdmin({ profile }) {
       'Estado': c.activo ? 'Activo' : 'Inactivo'
     }))), 'Colaboradores');
     XLSX.writeFile(wb, 'Dashboard_RRHH.xlsx');
+  }
+
+  if (colaboradorHistorial) {
+    return <HistorialAdmin colaborador={colaboradorHistorial} onVolver={() => setColaboradorHistorial(null)} />;
   }
 
   const colaboradoresFiltrados = senioritySeleccionado ? colaboradores.filter(c => (c.seniority || 'Sin definir') === senioritySeleccionado) : [];
@@ -171,21 +173,22 @@ function PanelAdmin({ profile }) {
       )}
 
       {vistaActiva === 'mievaluacion' && esFlorencia && <PanelColaborador userId={profile.id} seniority={profile.seniority} email={profile.email} nombre={profile.full_name} />}
-      {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin />}
-      {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} />}
+      {vistaActiva === 'evaluaciones' && <EvaluacionesAdmin onVerHistorial={setColaboradorHistorial} />}
+      {vistaActiva === 'calibracion' && <PanelCalibracion colaboradores={colaboradores} onVerHistorial={setColaboradorHistorial} />}
       {vistaActiva === 'equipo' && <EquipoLider />}
-      
+
       {vistaActiva === 'colaboradores' && (
         <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
           <h4 style={{ margin: '0 0 16px 0' }}>👥 Gestionar ({colaboradores.length})</h4>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Estado</th><th style={th}>Excel</th></tr></thead>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Rol</th><th style={th}>Estado</th><th style={th}>Historial</th><th style={th}>Excel</th></tr></thead>
             <tbody>{colaboradores.map(c => (
               <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: c.activo ? 1 : 0.5 }}>
                 <td style={td}>{c.full_name || '-'}</td><td style={td}>{c.email}</td><td style={td}>{c.area || '-'}</td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{c.seniority || '-'}</span></td>
                 <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: c.role === 'lider' ? '#231F20' : c.role === 'admin_rrhh' ? '#D4D2C6' : '#f1f5f9', color: c.role === 'lider' ? 'white' : c.role === 'admin_rrhh' ? '#231F20' : '#231F20' }}>{c.role === 'admin_rrhh' ? '🔧 Admin' : c.role === 'lider' ? '👥 Líder' : '👤 Colaborador'}</span></td>
                 <td style={td}><button onClick={() => toggleActivo(c)} style={{ padding: '4px 12px', borderRadius: 12, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: c.activo ? '#dcfce7' : '#fee2e2', color: c.activo ? '#166534' : '#dc2626' }}>{c.activo ? '✅ Activo' : '❌ Inactivo'}</button></td>
+                <td style={td}><button onClick={() => setColaboradorHistorial(c)} style={{ background: '#231F20', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>📋</button></td>
                 <td style={td}><button onClick={async () => {
                   const { data: evals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre))').eq('colaborador_id', c.id).order('created_at', { ascending: false });
                   const rows = []; (evals || []).forEach(ev => { if (ev.puntuaciones?.length > 0) ev.puntuaciones.forEach(p => rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': p.competencias?.nombre || '', 'Rating': p.rating, 'Comentario': p.comentario || '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') })); else rows.push({ 'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Líder', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Estado': ev.estado, 'Calibrado': ev.rating_calibrado || '', 'Finales': ev.comentarios_finales || '', 'Fecha': new Date(ev.created_at).toLocaleDateString('es-AR') }); });
@@ -200,7 +203,166 @@ function PanelAdmin({ profile }) {
   );
 }
 
-function PanelCalibracion({ colaboradores }) {
+// =============================================
+// NUEVO: Historial del colaborador (Admin puede agregar evaluaciones históricas)
+// =============================================
+function HistorialAdmin({ colaborador, onVolver }) {
+  const [historicas, setHistoricas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [nuevaFecha, setNuevaFecha] = useState('');
+  const [nuevoRating, setNuevoRating] = useState('');
+  const [nuevoComentario, setNuevoComentario] = useState('');
+
+  useEffect(() => { cargarHistoricas(); }, []);
+
+  async function cargarHistoricas() {
+    const { data } = await supabase
+      .from('evaluaciones_historicas')
+      .select('*')
+      .eq('colaborador_id', colaborador.id)
+      .order('fecha_evaluacion', { ascending: false });
+    setHistoricas(data || []);
+    setCargando(false);
+  }
+
+  async function agregarHistorica() {
+    if (!nuevaFecha || !nuevoRating) return alert('Fecha y rating son obligatorios');
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from('evaluaciones_historicas').insert({
+      colaborador_id: colaborador.id,
+      fecha_evaluacion: nuevaFecha,
+      rating_final: parseFloat(nuevoRating),
+      comentarios: nuevoComentario,
+      creado_por: session.user.id
+    });
+    setNuevaFecha(''); setNuevoRating(''); setNuevoComentario('');
+    setMostrarForm(false);
+    cargarHistoricas();
+  }
+
+  const clasificar = (p) => {
+    if (!p) return { texto: '-', color: '#94a3b8' };
+    if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
+    if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
+    if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
+    if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' };
+    return { texto: 'Distinguido', color: '#8b5cf6' };
+  };
+
+  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+
+  return (
+    <div>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h3 style={{ color: '#231F20', margin: 0 }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
+        <button onClick={() => setMostrarForm(!mostrarForm)} style={s.btnPrimario}>
+          {mostrarForm ? 'Cancelar' : '+ Agregar Histórica'}
+        </button>
+      </div>
+      <p style={{ color: '#64748b', margin: '4px 0 20px 0' }}>{colaborador.area} · {colaborador.seniority}</p>
+
+      {mostrarForm && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
+          <h4>Nueva Evaluación Histórica</h4>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha</label>
+              <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Rating</label>
+              <select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
+                <option value="">-</option>
+                <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Comentarios</label>
+              <input type="text" value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} placeholder="Comentarios..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+            </div>
+            <button onClick={agregarHistorica} style={{ ...s.btnPrimario, background: '#22c55e' }}>Guardar</button>
+          </div>
+        </div>
+      )}
+
+      {historicas.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay evaluaciones históricas.</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th></tr></thead>
+          <tbody>
+            {historicas.map(h => {
+              const c = clasificar(h.rating_final);
+              return (
+                <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
+                  <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final}</td>
+                  <td style={{ ...td, color: c.color }}>{c.texto}</td>
+                  <td style={td}>{h.comentarios || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// ACTUALIZADO: EvaluacionesAdmin con botón historial
+// =============================================
+function EvaluacionesAdmin({ onVerHistorial }) {
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [detalleVisible, setDetalleVisible] = useState(null);
+  useEffect(() => { cargarEvaluaciones(); }, []);
+  async function cargarEvaluaciones() { const { data } = await supabase.from('evaluaciones').select('*, colaborador:colaborador_id(email, full_name, area, id), evaluador:evaluador_id(email, full_name), puntuaciones(*, competencias(nombre))').order('created_at', { ascending: false }); setEvaluaciones(data || []); setCargando(false); }
+  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+  return (
+    <div style={{ ...s.tarjetaStat }}>
+      <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Ver</th><th style={th}>Hist</th></tr></thead>
+          <tbody>{evaluaciones.map(ev => (
+            <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td><td style={td}>{ev.colaborador?.area || '-'}</td>
+              <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#D4D2C6' : '#231F20', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#231F20' : '#D4D2C6' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : '👥 Líder'}</span></td>
+              <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
+              <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#231F20' : '#D4D2C6', color: 'white' }}>{ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</span></td>
+              <td style={td}>{ev.rating_calibrado ? <span style={{ fontWeight: 700, color: '#231F20' }}>🎯 {ev.rating_calibrado}</span> : '-'}</td>
+              <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
+              <td style={td}><button onClick={() => setDetalleVisible(ev.id)} style={{ background: '#231F20', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️</button></td>
+              <td style={td}><button onClick={() => onVerHistorial && ev.colaborador && onVerHistorial(ev.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>📋</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {detalleVisible && evaluaciones.find(e => e.id === detalleVisible) && (() => { const ev = evaluaciones.find(e => e.id === detalleVisible); return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 900, width: '95%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0, color: '#231F20' }}>📋 Detalle</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
+              <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'}</p><p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p><p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p><p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p><p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>{ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}<p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
+              <hr style={{ border: '1px solid #D4D2C6' }} />
+              <h4 style={{ color: '#231F20' }}>📝 Comentarios por Competencia</h4>
+              {ev.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: '4px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
+              {(!ev.puntuaciones || ev.puntuaciones.filter(p => p.comentario).length === 0) && <p style={{ color: '#94a3b8' }}>Sin comentarios por competencia</p>}
+              <h4 style={{ marginTop: 16, color: '#231F20' }}>📝 Comentarios Finales</h4>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{ev.comentarios_finales || 'Sin comentarios'}</p>
+            </div>
+          </div>
+        )})()}
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// ACTUALIZADO: Calibracion con botón historial
+// =============================================
+function PanelCalibracion({ colaboradores, onVerHistorial }) {
   const [datos, setDatos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -306,8 +468,8 @@ function PanelCalibracion({ colaboradores }) {
       </div>
       {datosFiltrados.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos.</p> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1050px' }}>
-            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1150px' }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
             <tbody>{datosFiltrados.map(d => { const clasFinal = clasificar(d.ratingFinal); return (
               <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td><td style={td}>{d.colaborador.area || '-'}</td>
@@ -316,8 +478,9 @@ function PanelCalibracion({ colaboradores }) {
                 <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
                 <td style={{ ...td, textAlign: 'center', fontSize: 14, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
                 <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '4px 8px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 13, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Sel.</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select>{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</div> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}</td>
+                <td style={td}><button onClick={() => onVerHistorial && onVerHistorial(d.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>📋</button></td>
                 <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>👁️ PDF</button></td>
-                <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
+                <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#231F20', color: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
               </tr>
             )})}</tbody>
           </table>
@@ -327,50 +490,105 @@ function PanelCalibracion({ colaboradores }) {
   );
 }
 
-function EvaluacionesAdmin() {
-  const [evaluaciones, setEvaluaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [detalleVisible, setDetalleVisible] = useState(null);
-  useEffect(() => { cargarEvaluaciones(); }, []);
-  async function cargarEvaluaciones() { const { data } = await supabase.from('evaluaciones').select('*, colaborador:colaborador_id(email, full_name, area), evaluador:evaluador_id(email, full_name), puntuaciones(*, competencias(nombre))').order('created_at', { ascending: false }); setEvaluaciones(data || []); setCargando(false); }
-  if (cargando) return <p style={{ padding: 20 }}>Cargando...</p>;
+// =============================================
+// ACTUALIZADO: EquipoLider con historial visual
+// =============================================
+function EquipoLider() {
+  const [equipo, setEquipo] = useState([]);
+  const [evaluaciones, setEvaluaciones] = useState({});
+  const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
+  const [historialVisible, setHistorialVisible] = useState(null);
+  useEffect(() => { cargarEquipo(); }, []);
+  async function cargarEquipo() { const { data: { session } } = await supabase.auth.getSession(); if (!session) return; const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id); setEquipo(data || []); if (data) { const evals = {}; for (const col of data) { const { data: a } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); const { data: l } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); evals[col.id] = { autoevaluacion: a, evaluacionLider: l }; } setEvaluaciones(evals); } }
+  if (colaboradorSeleccionado) return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
+
+  if (historialVisible) {
+    return <HistorialLider colaborador={historialVisible} onVolver={() => setHistorialVisible(null)} />;
+  }
+
   return (
-    <div style={{ ...s.tarjetaStat }}>
-      <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>📋 Evaluaciones ({evaluaciones.length})</h4>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 750 }}>
-          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Ver</th></tr></thead>
-          <tbody>{evaluaciones.map(ev => (
-            <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-              <td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td><td style={td}>{ev.colaborador?.area || '-'}</td>
-              <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#D4D2C6' : '#231F20', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#231F20' : '#D4D2C6' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : '👥 Líder'}</span></td>
-              <td style={td}>{ev.evaluador?.full_name || ev.evaluador?.email || '-'}</td>
-              <td style={td}><span style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.estado === 'enviado' ? '#231F20' : '#D4D2C6', color: 'white' }}>{ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</span></td>
-              <td style={td}>{ev.rating_calibrado ? <span style={{ fontWeight: 700, color: '#231F20' }}>🎯 {ev.rating_calibrado}</span> : '-'}</td>
-              <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
-              <td style={td}><button onClick={() => setDetalleVisible(ev.id)} style={{ background: '#231F20', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 14 }}>👁️</button></td>
-            </tr>
-          ))}</tbody>
-        </table>
-        {detalleVisible && evaluaciones.find(e => e.id === detalleVisible) && (() => { const ev = evaluaciones.find(e => e.id === detalleVisible); return (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setDetalleVisible(null)}>
-            <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 900, width: '95%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h3 style={{ margin: 0, color: '#231F20' }}>📋 Detalle</h3><button onClick={() => setDetalleVisible(null)} style={{ background: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>✕</button></div>
-              <p><strong>👤 Colaborador:</strong> {ev.colaborador?.full_name || '-'}</p><p><strong>📍 Área:</strong> {ev.colaborador?.area || '-'}</p><p><strong>📝 Tipo:</strong> {ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluación' : 'Evaluación de Líder'}</p><p><strong>👤 Evaluador:</strong> {ev.evaluador?.full_name || ev.evaluador?.email || '-'}</p><p><strong>📊 Estado:</strong> {ev.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'}</p>{ev.rating_calibrado && <p><strong>🎯 Rating Calibrado:</strong> {ev.rating_calibrado}</p>}<p><strong>📅 Fecha:</strong> {new Date(ev.created_at).toLocaleDateString('es-AR')}</p>
-              <hr style={{ border: '1px solid #D4D2C6' }} />
-              <h4 style={{ color: '#231F20' }}>📝 Comentarios por Competencia</h4>
-              {ev.puntuaciones?.filter(p => p.comentario).map(p => <p key={p.id} style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap', margin: '4px 0' }}>• <strong>{p.competencias?.nombre}:</strong> {p.comentario}</p>)}
-              {(!ev.puntuaciones || ev.puntuaciones.filter(p => p.comentario).length === 0) && <p style={{ color: '#94a3b8' }}>Sin comentarios por competencia</p>}
-              <h4 style={{ marginTop: 16, color: '#231F20' }}>📝 Comentarios Finales</h4>
-              <p style={{ color: '#475569', fontSize: 14, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{ev.comentarios_finales || 'Sin comentarios'}</p>
+    <div>
+      <h3 style={{ marginBottom: 20, color: '#231F20' }}>👥 Mi Equipo ({equipo.length})</h3>
+      {equipo.length === 0 ? <div style={s.tarjetaPlaceholder}><p>No tienes colaboradores asignados.</p></div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {equipo.map(col => { const auto = evaluaciones[col.id]?.autoevaluacion; const lider = evaluaciones[col.id]?.evaluacionLider; return (
+            <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ flex: 1 }}><h4 style={{ margin: 0, color: '#231F20' }}>{col.full_name || col.email}</h4><p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p><div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}><span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#231F20' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span><span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#231F20' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>{lider?.rating_calibrado && <span>🎯 Calibrado: <strong style={{ color: '#231F20' }}>{lider.rating_calibrado}</strong></span>}</div></div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => setHistorialVisible(col)} style={{ ...s.btnInfo, background: '#D4D2C6', color: '#231F20', fontWeight: 600 }}>📋 Historial</button>
+                <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
+              </div>
             </div>
-          </div>
-        )})()}
-      </div>
+          )})}
+        </div>
+      )}
     </div>
   );
 }
 
+// =============================================
+// NUEVO: Historial solo lectura para líderes
+// =============================================
+function HistorialLider({ colaborador, onVolver }) {
+  const [historicas, setHistoricas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => { cargarHistoricas(); }, []);
+
+  async function cargarHistoricas() {
+    const { data } = await supabase
+      .from('evaluaciones_historicas')
+      .select('*')
+      .eq('colaborador_id', colaborador.id)
+      .order('fecha_evaluacion', { ascending: false });
+    setHistoricas(data || []);
+    setCargando(false);
+  }
+
+  const clasificar = (p) => {
+    if (!p) return { texto: '-', color: '#94a3b8' };
+    if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' };
+    if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' };
+    if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' };
+    if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' };
+    return { texto: 'Distinguido', color: '#8b5cf6' };
+  };
+
+  if (cargando) return <p style={{ padding: 20 }}>Cargando historial...</p>;
+
+  return (
+    <div>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
+      <h3 style={{ color: '#231F20' }}>📋 Historial: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} · {colaborador.seniority}</p>
+
+      {historicas.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay evaluaciones históricas registradas.</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th></tr></thead>
+          <tbody>
+            {historicas.map(h => {
+              const c = clasificar(h.rating_final);
+              return (
+                <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={td}>{new Date(h.fecha_evaluacion).toLocaleDateString('es-AR')}</td>
+                  <td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final}</td>
+                  <td style={{ ...td, color: c.color }}>{c.texto}</td>
+                  <td style={td}>{h.comentarios || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// Componentes existentes (sin cambios)
+// =============================================
 function PanelLider() { return <EquipoLider />; }
 
 function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
@@ -385,30 +603,6 @@ function PanelColaboradorConEquipo({ userId, seniority, email, nombre }) {
       </div>
       {vista === 'autoevaluacion' && <PanelColaborador userId={userId} seniority={seniority} email={email} nombre={nombre} />}
       {vista === 'equipo' && tieneEquipo && <EquipoLider />}
-    </div>
-  );
-}
-
-function EquipoLider() {
-  const [equipo, setEquipo] = useState([]);
-  const [evaluaciones, setEvaluaciones] = useState({});
-  const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
-  useEffect(() => { cargarEquipo(); }, []);
-  async function cargarEquipo() { const { data: { session } } = await supabase.auth.getSession(); if (!session) return; const { data } = await supabase.from('profiles').select('*').eq('leader_id', session.user.id); setEquipo(data || []); if (data) { const evals = {}; for (const col of data) { const { data: a } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'autoevaluacion').maybeSingle(); const { data: l } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').maybeSingle(); evals[col.id] = { autoevaluacion: a, evaluacionLider: l }; } setEvaluaciones(evals); } }
-  if (colaboradorSeleccionado) return <EvaluacionLider colaborador={colaboradorSeleccionado} onVolver={() => { setColaboradorSeleccionado(null); cargarEquipo(); }} />;
-  return (
-    <div>
-      <h3 style={{ marginBottom: 20, color: '#231F20' }}>👥 Mi Equipo ({equipo.length})</h3>
-      {equipo.length === 0 ? <div style={s.tarjetaPlaceholder}><p>No tienes colaboradores asignados.</p></div> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {equipo.map(col => { const auto = evaluaciones[col.id]?.autoevaluacion; const lider = evaluaciones[col.id]?.evaluacionLider; return (
-            <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ flex: 1 }}><h4 style={{ margin: 0, color: '#231F20' }}>{col.full_name || col.email}</h4><p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p><div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}><span>📝 Auto: <strong style={{ color: auto?.estado === 'enviado' ? '#231F20' : '#f59e0b' }}>{auto?.estado === 'enviado' ? 'Enviada' : 'Pendiente'}</strong></span><span>👥 Mi eval: <strong style={{ color: lider?.estado === 'enviado' ? '#231F20' : lider ? '#f59e0b' : '#94a3b8' }}>{lider?.estado === 'enviado' ? 'Completada' : lider ? 'Borrador' : 'Sin evaluar'}</strong></span>{lider?.rating_calibrado && <span>🎯 Calibrado: <strong style={{ color: '#231F20' }}>{lider.rating_calibrado}</strong></span>}</div></div>
-              <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
-            </div>
-          )})}
-        </div>
-      )}
     </div>
   );
 }
@@ -439,21 +633,7 @@ function EvaluacionLider({ colaborador, onVolver }) {
       {competencias.map(comp => (
         <div key={comp.id} style={s.competenciaCard}>
           <div style={s.competenciaHeader}><div><h5 style={{ margin: 0, color: '#231F20' }}>{comp.nombre}</h5><p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={() => setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] })} style={s.btnInfo}>{showInfo[comp.id] ? '🔼 Ocultar' : '🔽 Ver info'}</button></div>
-          {puntuacionesAuto[comp.id] && (
-            <div style={{ padding: '10px 12px', background: '#D4D2C6', borderRadius: 6, marginBottom: 8, fontSize: 13, color: '#231F20' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                <span>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong></span>
-                {ratings[comp.id] && (
-                  <span style={{ color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>
-                    Tu eval: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})
-                  </span>
-                )}
-              </div>
-              <div style={{ marginTop: 6, padding: '6px 8px', background: 'white', borderRadius: 4, fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
-                "{autoevaluacion?.puntuaciones?.find(p => p.competencia_id == comp.id)?.comentario || 'Sin comentario'}"
-              </div>
-            </div>
-          )}
+          {puntuacionesAuto[comp.id] && (<div style={{ padding: '10px 12px', background: '#D4D2C6', borderRadius: 6, marginBottom: 8, fontSize: 13, color: '#231F20' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><span>📝 Auto: <strong>{puntuacionesAuto[comp.id]}</strong></span>{ratings[comp.id] && (<span style={{ color: ratings[comp.id] > puntuacionesAuto[comp.id] ? '#22c55e' : ratings[comp.id] < puntuacionesAuto[comp.id] ? '#dc2626' : '#64748b' }}>Tu eval: <strong>{ratings[comp.id]}</strong> ({ratings[comp.id] - puntuacionesAuto[comp.id] > 0 ? '+' : ''}{ratings[comp.id] - puntuacionesAuto[comp.id]})</span>)}</div><div style={{ marginTop: 6, padding: '6px 8px', background: 'white', borderRadius: 4, fontSize: 12, color: '#475569', fontStyle: 'italic' }}>"{autoevaluacion?.puntuaciones?.find(p => p.competencia_id == comp.id)?.comentario || 'Sin comentario'}"</div></div>)}
           <div style={s.ratingRow}>{[1,2,3,4,5].map(r => <button key={r} onClick={() => enviada ? null : setRatings({ ...ratings, [comp.id]: r })} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', border: ratings[comp.id] === r ? '2px solid #231F20' : '2px solid #e2e8f0', cursor: enviada ? 'not-allowed' : 'pointer' }} disabled={enviada}>{r}</button>)}</div>
           {showInfo[comp.id] && (<div style={s.ratingInfoBox}>{[1,2,3,4,5].map(r => <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>)}</div>)}
           <textarea value={comentarios[comp.id] || ''} onChange={e => setComentarios({ ...comentarios, [comp.id]: e.target.value })} placeholder="Comentario sobre esta competencia (obligatorio)" style={{ ...s.textareaSmall, borderColor: enviada ? '#D4D2C6' : (comentarios[comp.id]?.trim() ? '#D4D2C6' : '#dc2626') }} disabled={enviada} />
@@ -480,7 +660,7 @@ function PanelColaborador({ userId, seniority, email, nombre }) {
   useEffect(() => { cargarDatos(); }, []);
   async function cargarDatos() { const { data: comps } = await supabase.from('competencias').select('*').eq('aplica_a', seniority || 'Analista'); setCompetencias(comps || []); const { data: ev } = await supabase.from('evaluaciones').select('*').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').single(); if (ev) { setEvalData(ev); setComentariosFinales(ev.comentarios_finales || ''); const { data: punts } = await supabase.from('puntuaciones').select('*').eq('evaluacion_id', ev.id); const rm = {}; const cm = {}; (punts || []).forEach(p => { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComentarios(cm); } else { const { data: nueva } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador' }).select().single(); setEvalData(nueva); } setCargando(false); }
   async function guardar() { await supabase.from('evaluaciones').update({ comentarios_finales: comentariosFinales, updated_at: new Date() }).eq('id', evalData.id); for (const [compId, rating] of Object.entries(ratings)) { const com = comentarios[compId] || ''; const { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evalData.id).eq('competencia_id', compId).single(); if (ex) { await supabase.from('puntuaciones').update({ rating, comentario: com }).eq('id', ex.id); } else { await supabase.from('puntuaciones').insert({ evaluacion_id: evalData.id, competencia_id: compId, rating, comentario: com }); } } setMensaje('✅ Borrador guardado'); setTimeout(() => setMensaje(''), 2500); }
-  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id); const valores = Object.values(ratings).filter(r => r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0'; let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido'; const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null; if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; } let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`; emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
+  async function enviar() { const faltantes = competencias.filter(c => !comentarios[c.id] || !comentarios[c.id].trim()); if (faltantes.length > 0) { setMensaje(`❌ Debes completar el comentario de: ${faltantes.map(c => c.nombre).join(', ')}`); setTimeout(() => setMensaje(''), 4000); return; } if (!comentariosFinales || !comentariosFinales.trim()) { setMensaje('❌ Debes completar los Comentarios Finales'); setTimeout(() => setMensaje(''), 4000); return; } await guardar(); await supabase.from('evaluaciones').update({ estado: 'enviado', updated_at: new Date() }).eq('id', evalData.id); const valores = Object.values(ratings).filter(r > 0); const prom = valores.length > 0 ? (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1) : '0'; let clasif = ''; const p = parseFloat(prom); if (p <= 1.4) clasif = 'No adecuado'; else if (p <= 2.4) clasif = 'Por debajo de lo esperado'; else if (p <= 3.4) clasif = 'Cumple con las expectativas'; else if (p <= 4.4) clasif = 'Excede las expectativas'; else clasif = 'Desempeño distinguido'; const { data: perfil } = await supabase.from('profiles').select('leader_id').eq('id', userId).single(); let leaderEmail = null; if (perfil?.leader_id) { const { data: lider } = await supabase.from('profiles').select('email').eq('id', perfil.leader_id).single(); leaderEmail = lider?.email; } let comentariosTxt = ''; for (const [compId, com] of Object.entries(comentarios)) { if (com) { const comp = competencias.find(c => c.id == compId); comentariosTxt += `• ${comp?.nombre || 'Competencia'}: ${com}\n`; } } if (comentariosFinales) comentariosTxt += `\n📝 Final: ${comentariosFinales}`; emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: email, to_name: nombre || 'Colaborador', promedio: prom, clasificacion: clasif, message: `Has completado tu autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); if (leaderEmail) { emailjs.send('service_httvcn8', 'template_ytka22b', { to_email: leaderEmail, to_name: 'Líder', promedio: prom, clasificacion: clasif, message: `${nombre || 'Tu colaborador'} ha completado su autoevaluación.\n\n📊 Promedio: ${prom} - ${clasif}\n📝 Comentarios:\n${comentariosTxt || 'Sin comentarios'}` }, 'Mc-YPiWB1XNBKfhOJ').catch(err => console.log(err)); } setMensaje('🎉 Evaluación enviada'); setEvalData({ ...evalData, estado: 'enviado' }); setTimeout(() => setMensaje(''), 3000); }
   if (cargando) return <p style={{ padding: 20 }}>Cargando competencias...</p>;
   const enviada = evalData?.estado === 'enviado';
   return (
