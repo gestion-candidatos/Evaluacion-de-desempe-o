@@ -128,16 +128,12 @@ function PanelAdmin({ profile }) {
       {vistaActiva === 'dashboard' && (
         <div>
           <h3 style={{ marginBottom: 20, color: '#231F20' }}>📊 Dashboard de Recursos Humanos</h3>
-          
-          {/* Tarjetas principales */}
           <div style={s.grid}>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Total Colaboradores</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colaboradores.length}</p></div>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Total Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div>
           </div>
-
-          {/* Barra de progreso */}
           <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
             <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 8px 0' }}>📈 Progreso General: {pct}%</p>
             <div style={{ background: '#D4D2C6', borderRadius: 10, height: 24, overflow: 'hidden' }}>
@@ -146,75 +142,33 @@ function PanelAdmin({ profile }) {
               </div>
             </div>
           </div>
-
-          {/* Tarjetas por Seniority */}
           <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
             <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>📊 Distribución por Seniority</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
               {Object.entries(seniorityCounts).map(([seniority, count]) => (
-                <div 
-                  key={seniority} 
-                  onClick={() => setSenioritySeleccionado(seniority === senioritySeleccionado ? null : seniority)} 
-                  style={{ 
-                    padding: 16, 
-                    background: seniority === senioritySeleccionado ? '#231F20' : '#D4D2C6', 
-                    borderRadius: 10, 
-                    textAlign: 'center', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    transform: seniority === senioritySeleccionado ? 'scale(1.03)' : 'scale(1)',
-                    boxShadow: seniority === senioritySeleccionado ? '0 4px 12px rgba(0,0,0,0.2)' : 'none'
-                  }}
-                >
-                  <p style={{ fontSize: 11, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', margin: 0, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{seniority}</p>
+                <div key={seniority} onClick={() => setSenioritySeleccionado(seniority === senioritySeleccionado ? null : seniority)} 
+                  style={{ padding: 16, background: seniority === senioritySeleccionado ? '#231F20' : '#D4D2C6', borderRadius: 10, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', transform: seniority === senioritySeleccionado ? 'scale(1.03)' : 'scale(1)', boxShadow: seniority === senioritySeleccionado ? '0 4px 12px rgba(0,0,0,0.2)' : 'none' }}>
+                  <p style={{ fontSize: 11, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>{seniority}</p>
                   <p style={{ fontSize: 28, fontWeight: 700, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#231F20', margin: '6px 0' }}>{count}</p>
                   <p style={{ fontSize: 10, color: seniority === senioritySeleccionado ? '#D4D2C6' : '#64748b', margin: 0 }}>colaboradores</p>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Detalle de colaboradores del seniority seleccionado */}
           {senioritySeleccionado && (
             <div style={{ ...s.tarjetaStat, marginTop: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h4 style={{ margin: 0, color: '#231F20' }}>
-                  👥 {senioritySeleccionado} ({colaboradoresFiltrados.length} colaboradores)
-                </h4>
+                <h4 style={{ margin: 0, color: '#231F20' }}>👥 {senioritySeleccionado} ({colaboradoresFiltrados.length} colaboradores)</h4>
                 <button onClick={() => setSenioritySeleccionado(null)} style={{ ...s.btnInfo, fontSize: 12 }}>✕ Cerrar</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {colaboradoresFiltrados.map(c => (
-                  <div key={c.id} style={{ 
-                    padding: '12px 16px', 
-                    background: '#f8fafc', 
-                    borderRadius: 8, 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <div>
-                      <strong style={{ color: '#231F20' }}>{c.full_name || c.email}</strong>
-                      <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
-                        {c.area || 'Sin área'} · {c.role === 'admin_rrhh' ? 'Admin' : c.role === 'lider' ? 'Líder' : 'Colaborador'}
-                      </p>
-                    </div>
-                    <span style={{ 
-                      fontSize: 11, 
-                      fontWeight: 600,
-                      padding: '4px 10px',
-                      borderRadius: 12,
-                      background: c.activo ? '#dcfce7' : '#fee2e2',
-                      color: c.activo ? '#166534' : '#dc2626'
-                    }}>
-                      {c.activo ? '✅ Activo' : '❌ Inactivo'}
-                    </span>
+                  <div key={c.id} style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                    <div><strong style={{ color: '#231F20' }}>{c.full_name || c.email}</strong><p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.area || 'Sin área'} · {c.role === 'admin_rrhh' ? 'Admin' : c.role === 'lider' ? 'Líder' : 'Colaborador'}</p></div>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 12, background: c.activo ? '#dcfce7' : '#fee2e2', color: c.activo ? '#166534' : '#dc2626' }}>{c.activo ? '✅ Activo' : '❌ Inactivo'}</span>
                   </div>
                 ))}
-                {colaboradoresFiltrados.length === 0 && (
-                  <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay colaboradores en esta categoría.</p>
-                )}
+                {colaboradoresFiltrados.length === 0 && <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No hay colaboradores en esta categoría.</p>}
               </div>
             </div>
           )}
@@ -333,17 +287,13 @@ function HistorialAdmin({ colaborador, onVolver }) {
         <button onClick={() => setMostrarForm(!mostrarForm)} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Agregar al Historial'}</button>
       </div>
       <p style={{ color: '#64748b', margin: '4px 0 20px 0' }}>{colaborador.area} · {colaborador.seniority} · {colaborador.email}</p>
-
       {mostrarForm && (
         <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
             <button onClick={() => setModo('completa')} style={modo === 'completa' ? s.btnPrimario : s.btnInfo}>✏️ Evaluación Completa</button>
             <button onClick={() => setModo('pdf')} style={modo === 'pdf' ? s.btnPrimario : s.btnInfo}>📄 Subir PDF</button>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Fecha de Evaluación *</label>
-            <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
-          </div>
+          <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12 }}>Fecha *</label><input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
           {modo === 'completa' && (
             <div>
               <h4>Competencias - {colaborador.seniority || 'Analista'}</h4>
@@ -365,37 +315,21 @@ function HistorialAdmin({ colaborador, onVolver }) {
                 <div><label>Rating</label><select value={nuevoRating} onChange={e => setNuevoRating(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">-</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select></div>
                 <div style={{ flex: 1 }}><label>Comentario</label><input type="text" value={nuevoComentario} onChange={e => setNuevoComentario(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
               </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{ flex: 1 }}><label>Archivo PDF *</label><input type="file" accept=".pdf" onChange={e => setArchivo(e.target.files[0])} /></div>
-                <button onClick={subirPDF} disabled={subiendo} style={{ ...s.btnPrimario, background: '#f59e0b' }}>{subiendo ? '⏳' : '📄 Subir PDF'}</button>
-              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><div style={{ flex: 1 }}><label>Archivo PDF *</label><input type="file" accept=".pdf" onChange={e => setArchivo(e.target.files[0])} /></div><button onClick={subirPDF} disabled={subiendo} style={{ ...s.btnPrimario, background: '#f59e0b' }}>{subiendo ? '⏳' : '📄 Subir PDF'}</button></div>
             </div>
           )}
         </div>
       )}
-
-      {historicas.length === 0 ? (
-        <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>No hay evaluaciones históricas.</p></div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
-            <tbody>{historicas.map(h => { const c = clasificar(h.rating_final); return (
-              <tr key={h.id}><td style={td}>{new Date(h.fecha_evaluacion + 'T12:00:00').toLocaleDateString('es-AR')}</td><td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td><td style={{ ...td, color: c.color }}>{c.texto}</td><td style={td}>{h.comentarios || '-'}</td><td style={td}>{h.archivo_url ? <a href={h.archivo_url} target="_blank" style={{ background: '#f59e0b', color: 'white', padding: '6px 12px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>📄 Ver PDF</a> : '-'}</td></tr>
-            )})}</tbody>
-          </table>
-        </div>
+      {historicas.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>No hay evaluaciones históricas.</p></div> : (
+        <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Fecha</th><th style={th}>Rating</th><th style={th}>Clasificación</th><th style={th}>Comentarios</th><th style={th}>Archivo</th></tr></thead>
+          <tbody>{historicas.map(h => { const c = clasificar(h.rating_final); return (<tr key={h.id}><td style={td}>{new Date(h.fecha_evaluacion + 'T12:00:00').toLocaleDateString('es-AR')}</td><td style={{ ...td, fontWeight: 700, color: c.color, fontSize: 16 }}>{h.rating_final || '-'}</td><td style={{ ...td, color: c.color }}>{c.texto}</td><td style={td}>{h.comentarios || '-'}</td><td style={td}>{h.archivo_url ? <a href={h.archivo_url} target="_blank" style={{ background: '#f59e0b', color: 'white', padding: '6px 12px', borderRadius: 6, textDecoration: 'none', fontSize: 12 }}>📄 Ver PDF</a> : '-'}</td></tr>)})}</tbody></table></div>
       )}
     </div>
   );
 }
 
-// =============================================
-// RESTO DE COMPONENTES (HistorialLider, EvaluacionesAdmin, Calibracion, etc.)
-// =============================================
 function HistorialLider({ colaborador, onVolver }) {
-  const [historicas, setHistoricas] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [historicas, setHistoricas] = useState([]); const [cargando, setCargando] = useState(true);
   useEffect(() => { (async () => { setCargando(true); const { data } = await supabase.from('evaluaciones_historicas').select('*').eq('colaborador_id', colaborador.id).order('fecha_evaluacion', { ascending: false }); setHistoricas(data || []); setCargando(false); })(); }, [colaborador.id]);
   const clasificar = (p) => { if (p === null || p === undefined) return { texto: 'PDF', color: '#94a3b8' }; if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
   if (cargando) return <p>Cargando...</p>;
@@ -415,7 +349,7 @@ function EvaluacionesAdmin({ onVerHistorial }) {
   if (cargando) return <p>Cargando...</p>;
   return (
     <div style={s.tarjetaStat}><h4>📋 Evaluaciones ({evaluaciones.length})</h4>
-      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Ver</th><th style={th}>Hist</th></tr></thead>
+      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Tipo</th><th style={th}>Evaluador</th><th style={th}>Estado</th><th style={th}>Calibrado</th><th style={th}>Fecha</th><th style={th}>Ver</th><th style={th}>Hist</th></tr></thead>
         <tbody>{evaluaciones.map(ev => (
           <tr key={ev.id}><td style={td}>{ev.colaborador?.full_name || ev.colaborador?.email || '-'}</td><td style={td}>{ev.colaborador?.area || '-'}</td>
             <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: ev.tipo_evaluacion === 'autoevaluacion' ? '#D4D2C6' : '#231F20', color: ev.tipo_evaluacion === 'autoevaluacion' ? '#231F20' : '#D4D2C6' }}>{ev.tipo_evaluacion === 'autoevaluacion' ? '👤 Auto' : '👥 Líder'}</span></td>
@@ -426,37 +360,147 @@ function EvaluacionesAdmin({ onVerHistorial }) {
             <td style={td}><button onClick={() => setDetalleVisible(ev.id)} style={{ background: '#231F20', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>👁️</button></td>
             <td style={td}><button onClick={() => onVerHistorial && ev.colaborador && onVerHistorial(ev.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' }}>📋</button></td>
           </tr>
-        ))}</tbody></table>
-      </div>
+        ))}</tbody></table></div>
     </div>
   );
 }
 
+// =============================================
+// CALIBRACIÓN COMPLETA CON PDF Y ENVIAR
+// =============================================
 function PanelCalibracion({ colaboradores, onVerHistorial }) {
-  const [datos, setDatos] = useState([]); const [cargando, setCargando] = useState(true); const [guardando, setGuardando] = useState(false);
-  const [filtroArea, setFiltroArea] = useState('Todas'); const [areas, setAreas] = useState([]);
-  useEffect(() => { (async () => { setCargando(true); const { data: todasEvals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)').in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']); const mapa = {}; (todasEvals || []).forEach(ev => { if (!ev.colaborador || ev.colaborador.seniority === 'Gerente') return; if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null }; if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev; if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev; }); const resultado = Object.values(mapa).map(d => { const calc = (p) => { if (!p || p.length === 0) return null; const v = p.map(x => x.rating).filter(r => r > 0); return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1); }; return { ...d, promAuto: calc(d.autoevaluacion?.puntuaciones), promLider: calc(d.evaluacionLider?.puntuaciones), gap: calc(d.autoevaluacion?.puntuaciones) && calc(d.evaluacionLider?.puntuaciones) ? (parseFloat(calc(d.evaluacionLider?.puntuaciones)) - parseFloat(calc(d.autoevaluacion?.puntuaciones))).toFixed(1) : null, ratingFinal: d.evaluacionLider?.rating_calibrado || null }; }); setAreas(['Todas', ...new Set(resultado.map(d => d.colaborador.area).filter(Boolean))]); setDatos(resultado); setCargando(false); })(); }, []);
-  async function guardarCalibracion(evaluacionId, rating) { setGuardando(true); await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); setGuardando(false); }
-  function generarPDF(d) { const pdf = new jsPDF(); const pageWidth = 210; const marginX = 15; let y = 28; pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 7; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5; pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}`, marginX, y); y += 8; const rf = d.ratingFinal || '-'; pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.text(`Resultado Final: ${rf}`, marginX, y + 10); return pdf; }
+  const [datos, setDatos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [filtroArea, setFiltroArea] = useState('Todas');
+  const [areas, setAreas] = useState([]);
+
+  useEffect(() => { cargarDatos(); }, []);
+
+  async function cargarDatos() {
+    setCargando(true);
+    const { data: todasEvals } = await supabase.from('evaluaciones').select('*, puntuaciones(*, competencias(nombre)), colaborador:colaborador_id(*)').in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']).order('created_at', { ascending: false });
+    const mapa = {};
+    (todasEvals || []).forEach(ev => {
+      if (!ev.colaborador) return;
+      if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null };
+      if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].autoevaluacion = ev;
+      if (ev.tipo_evaluacion === 'evaluacion_lider') mapa[ev.colaborador_id].evaluacionLider = ev;
+    });
+    colaboradores.forEach(col => { if (!mapa[col.id]) mapa[col.id] = { colaborador: col, autoevaluacion: null, evaluacionLider: null }; });
+    const resultado = Object.values(mapa).map(d => {
+      const calc = (p) => { if (!p || p.length === 0) return null; const v = p.map(x => x.rating).filter(r => r > 0); return v.length === 0 ? null : (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1); };
+      return { ...d, promAuto: calc(d.autoevaluacion?.puntuaciones), promLider: calc(d.evaluacionLider?.puntuaciones), gap: calc(d.autoevaluacion?.puntuaciones) && calc(d.evaluacionLider?.puntuaciones) ? (parseFloat(calc(d.evaluacionLider?.puntuaciones)) - parseFloat(calc(d.autoevaluacion?.puntuaciones))).toFixed(1) : null, ratingFinal: d.evaluacionLider?.rating_calibrado || null };
+    });
+    setAreas(['Todas', ...new Set(resultado.map(d => d.colaborador.area).filter(Boolean))]);
+    setDatos(resultado); setCargando(false);
+  }
+
+  async function guardarCalibracion(evaluacionId, rating) { 
+    setGuardando(true); 
+    await supabase.from('evaluaciones').update({ rating_calibrado: rating }).eq('id', evaluacionId); 
+    setDatos(prev => prev.map(d => d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating } : d)); 
+    setGuardando(false); 
+  }
+
+  function clasificarFull(prom) {
+    if (!prom) return { texto: '-', desc: '' }; const p = parseFloat(prom);
+    if (p <= 1.4) return { texto: 'No adecuado', desc: 'Desempeño muy por debajo de lo esperado para el rol. Punto crítico.' };
+    if (p <= 2.4) return { texto: 'Por debajo de lo esperado', desc: 'Desempeño no acorde a lo esperado en el rol.' };
+    if (p <= 3.4) return { texto: 'Cumple con las expectativas', desc: 'Cumple con lo esperado para su rol.' };
+    if (p <= 4.4) return { texto: 'Excede las expectativas', desc: 'Su desempeño es superior a lo esperado, genera valor agregado.' };
+    return { texto: 'Desempeño distinguido', desc: 'Su desempeño es muy superior a lo esperado, genera valor agregado de manera significativa y constante.' };
+  }
+
+  function generarPDF(d) {
+    const pdf = new jsPDF();
+    const NEGRO = '#231F20'; const BEIGE = '#D4D2C6'; const pageWidth = 210; const marginX = 15; let y = 28;
+    function agregarCabecera() { try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {} pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26); }
+    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
+    agregarCabecera();
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACIÓN DE DESEMPEÑO', marginX, y); y += 7;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+    pdf.text(`Colaborador: ${d.colaborador.full_name || d.colaborador.email}`, marginX, y); y += 5;
+    pdf.text(`Email: ${d.colaborador.email}`, marginX, y); y += 5;
+    pdf.text(`Área: ${d.colaborador.area || '-'}   |   Seniority: ${d.colaborador.seniority || '-'}   |   Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginX, y); y += 8;
+    const autoPunts = {}, autoComs = {}; (d.autoevaluacion?.puntuaciones || []).forEach(p => { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
+    const liderPunts = {}, liderComs = {}; (d.evaluacionLider?.puntuaciones || []).forEach(p => { liderPunts[p.competencia_id] = p.rating; liderComs[p.competencia_id] = p.comentario || ''; });
+    const todasComps = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
+    const compsInfo = {}; (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(p => { if (!compsInfo[p.competencia_id]) compsInfo[p.competencia_id] = p.competencias?.nombre || 'Competencia'; });
+    if (todasComps.length > 0) {
+      const colComp = marginX, colAutoR = 57, colAutoC = 68, colLiderR = 118, colLiderC = 129;
+      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6);
+      pdf.text('Competencia', colComp + 1, y + 5); pdf.text('A', colAutoR, y + 5); pdf.text('Comentario Autoevaluación', colAutoC, y + 5); pdf.text('L', colLiderR, y + 5); pdf.text('Comentario Líder', colLiderC, y + 5);
+      y += 9; pdf.setTextColor(NEGRO);
+      todasComps.forEach((compId, index) => {
+        const nombre = (compsInfo[compId] || 'Competencia').substring(0, 18); const autoR = String(autoPunts[compId] || '-'), liderR = String(liderPunts[compId] || '-');
+        const autoC = autoComs[compId] || '-', liderC = liderComs[compId] || '-';
+        const lineasAuto = pdf.splitTextToSize(autoC, 44), lineasLider = pdf.splitTextToSize(liderC, 58); const altura = Math.max(7, Math.max(lineasAuto.length, lineasLider.length) * 3.5);
+        if (y + altura > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
+        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), altura + 1, 'F'); }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
+        pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5); pdf.text(autoR, colAutoR + 2.5, y + 0.5);
+        lineasAuto.forEach((l, i) => pdf.text(l, colAutoC, y + (i * 3.2)));
+        pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(6.5); pdf.text(liderR, colLiderR + 2.5, y + 0.5); pdf.setTextColor(NEGRO);
+        lineasLider.forEach((l, i) => pdf.text(l, colLiderC, y + (i * 3.2)));
+        y += altura + 1;
+      });
+    }
+    y += 8; if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
+    const rf = d.ratingFinal || '-'; const clasif = clasificarFull(rf);
+    pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 20, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11); pdf.text('RESULTADO FINAL', marginX + 4, y + 8); pdf.setFontSize(15); pdf.text(`${rf}`, marginX + 4, y + 17);
+    pdf.setFontSize(9); pdf.text(`${clasif.texto}`, marginX + 18, y + 15); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.text(clasif.desc, marginX + 18, y + 19);
+    agregarPie(); return pdf;
+  }
+
   function verPDF(d) { generarPDF(d).save(`Evaluacion_${(d.colaborador.full_name || d.colaborador.email).replace(/\s/g, '_')}.pdf`); }
-  function enviarPDF(d) { generarPDF(d).save(`Evaluacion_${(d.colaborador.full_name || d.colaborador.email).replace(/\s/g, '_')}.pdf`); let liderEmail = ''; if (d.evaluacionLider?.evaluador_id) { supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: l }) => { abrirGmail(d.colaborador.email, l?.email || ''); }); } else { abrirGmail(d.colaborador.email, ''); } }
+  
+  function enviarPDF(d) { 
+    generarPDF(d).save(`Evaluacion_${(d.colaborador.full_name || d.colaborador.email).replace(/\s/g, '_')}.pdf`); 
+    let liderEmail = ''; 
+    if (d.evaluacionLider?.evaluador_id) { 
+      supabase.from('profiles').select('email').eq('id', d.evaluacionLider.evaluador_id).single().then(({ data: l }) => { 
+        abrirGmail(d.colaborador.email, l?.email || ''); 
+      }); 
+    } else { 
+      abrirGmail(d.colaborador.email, ''); 
+    } 
+  }
+
   const clasificar = (prom) => { if (!prom) return { texto: '-', color: '#94a3b8' }; const p = parseFloat(prom); if (p <= 1.4) return { texto: 'No adecuado', color: '#dc2626' }; if (p <= 2.4) return { texto: 'Por debajo', color: '#f59e0b' }; if (p <= 3.4) return { texto: 'Cumple', color: '#3b82f6' }; if (p <= 4.4) return { texto: 'Excede', color: '#22c55e' }; return { texto: 'Distinguido', color: '#8b5cf6' }; };
   const datosFiltrados = filtroArea === 'Todas' ? datos : datos.filter(d => d.colaborador.area === filtroArea);
-  if (cargando) return <p>⏳ Cargando...</p>;
+
+  if (cargando) return <p style={{ padding: 20 }}>⏳ Cargando datos de calibración...</p>;
+
   return (
-    <div style={s.tarjetaStat}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}><h3>🎯 Calibración</h3><select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>{areas.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
-      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1150 }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
-        <tbody>{datosFiltrados.map(d => { const clasFinal = clasificar(d.ratingFinal); return (
-          <tr key={d.colaborador.id}><td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td><td style={td}>{d.colaborador.area || '-'}</td><td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
-            <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
-            <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
-            <td style={{ ...td, textAlign: 'center', fontSize: 14, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
-            <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: 4, borderRadius: 6 }}><option value="">Sel.</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select> : '-'}</td>
-            <td style={td}><button onClick={() => onVerHistorial && onVerHistorial(d.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' }}>📋</button></td>
-            <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>👁️ PDF</button></td>
-            <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#231F20', color: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 600 }}>📧 Enviar</button> : '-'}</td>
-          </tr>
-        )})}</tbody></table></div>
+    <div style={{ ...s.tarjetaStat }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <h3 style={{ margin: 0, color: '#231F20' }}>🎯 Calibración - Auto vs Líder</h3>
+        <select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>{areas.map(a => <option key={a} value={a}>{a}</option>)}</select>
+      </div>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparación de autoevaluación y evaluación del líder. Define el rating final calibrado.</p>
+      {datosFiltrados.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1300px' }}>
+            <thead><tr style={{ borderBottom: '2px solid #D4D2C6' }}><th style={th}>Colaborador</th><th style={th}>Área</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Líder</th><th style={th}>GAP</th><th style={th}>Calibrado</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Enviar</th></tr></thead>
+            <tbody>{datosFiltrados.map(d => { const clasFinal = clasificar(d.ratingFinal); return (
+              <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
+                <td style={td}>{d.colaborador.area || '-'}</td>
+                <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promAuto).color }}>{d.promAuto || '-'}</td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: clasificar(d.promLider).color }}>{d.promLider || '-'}</td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 14, fontWeight: 700, color: d.gap ? (Math.abs(d.gap) <= 0.5 ? '#231F20' : Math.abs(d.gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{d.gap ? (d.gap > 0 ? '+' : '') + d.gap : '-'}</td>
+                <td style={{ ...td, textAlign: 'center' }}>{d.promLider ? <div><select value={d.ratingFinal || ''} onChange={(e) => guardarCalibracion(d.evaluacionLider.id, parseFloat(e.target.value))} style={{ padding: '4px 8px', borderRadius: 6, border: `2px solid ${clasFinal.color}`, fontSize: 13, fontWeight: 600, color: clasFinal.color, background: 'white' }} disabled={guardando}><option value="">Sel.</option><option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option></select>{d.ratingFinal && <div style={{ fontSize: 10, color: clasFinal.color, marginTop: 2 }}>{clasFinal.texto}</div>}</div> : <span style={{ color: '#94a3b8' }}>Sin eval</span>}</td>
+                <td style={td}><button onClick={() => onVerHistorial && onVerHistorial(d.colaborador)} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>📋</button></td>
+                <td style={td}><button onClick={() => verPDF(d)} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>👁️ PDF</button></td>
+                <td style={td}>{d.ratingFinal ? <button onClick={() => enviarPDF(d)} style={{ background: '#231F20', color: '#D4D2C6', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Enviar</button> : <span style={{ color: '#94a3b8' }}>-</span>}</td>
+              </tr>
+            )})}</tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -471,10 +515,7 @@ function EquipoLider() {
       {equipo.map(col => { const lider = evaluaciones[col.id]?.evaluacionLider; return (
         <div key={col.id} style={{ ...s.tarjetaStat, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div><strong>{col.full_name || col.email}</strong><p style={{ fontSize: 12, color: '#64748b' }}>{col.area} · {col.seniority}</p></div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setHistorialVisible(col)} style={{ ...s.btnInfo, background: '#D4D2C6', color: '#231F20', fontWeight: 600 }}>📋 Historial</button>
-            <button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button>
-          </div>
+          <div style={{ display: 'flex', gap: 8 }}><button onClick={() => setHistorialVisible(col)} style={{ ...s.btnInfo, background: '#D4D2C6', color: '#231F20', fontWeight: 600 }}>📋 Historial</button><button onClick={() => setColaboradorSeleccionado(col)} style={s.btnPrimario}>{lider ? '✏️ Editar' : '📝 Evaluar'}</button></div>
         </div>
       )})}
     </div>
