@@ -257,16 +257,18 @@ function HistorialAdmin({ colaborador, onVolver }) {
     cargarTodo();
   }
 
-  async function subirPDF() {
+ async function subirPDF() {
     if (!archivo || !nuevaFecha) return alert('Fecha y archivo son obligatorios');
     setSubiendo(true);
-
-    const fileName = `${colaborador.id}_${Date.now()}_${archivo.name}`;
-
+    
+    // Limpiar nombre de archivo (sin espacios ni caracteres especiales)
+    const nombreLimpio = archivo.name.replace(/[^a-zA-Z0-9.]/g, '_');
+    const fileName = `${colaborador.id}_${Date.now()}_${nombreLimpio}`;
+    
     const { error: uploadError } = await supabase.storage
       .from('historicos')
       .upload(fileName, archivo);
-
+    
     if (uploadError) {
       alert('Error al subir archivo: ' + uploadError.message);
       setSubiendo(false);
