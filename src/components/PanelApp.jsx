@@ -67,7 +67,7 @@ export default function PanelApp() {
 }
 
 // =============================================
-// MÓDULO DE OBJETIVOS (COMPLETO CON FLUJO)
+// MÓDULO DE OBJETIVOS
 // =============================================
 function ObjetivosView({ profile }) {
   var vista = 'misobjetivos'; var setVista;
@@ -640,12 +640,8 @@ function EvaluacionesAdmin({ cicloId }) {
 }
 
 function PanelCalibracion({ cicloId, colabs, onHist }) {
-  var datos = []; var setDatos;
-  var carg = true; var setCarg;
-  var filtro = 'Todas'; var setFiltro;
-  var s1 = useState([]); datos = s1[0]; setDatos = s1[1];
-  var s2 = useState(true); carg = s2[0]; setCarg = s2[1];
-  var s3 = useState('Todas'); filtro = s3[0]; setFiltro = s3[1];
+  var datos = []; var setDatos; var carg = true; var setCarg; var filtro = 'Todas'; var setFiltro;
+  var s1 = useState([]); datos = s1[0]; setDatos = s1[1]; var s2 = useState(true); carg = s2[0]; setCarg = s2[1]; var s3 = useState('Todas'); filtro = s3[0]; setFiltro = s3[1];
   useEffect(function() { cargar(); }, [cicloId]);
   async function cargar() { setCarg(true); var resp = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, rating_promedio, rating_calibrado, comentario_calibracion, colaborador:colaborador_id(id, email, full_name, area, seniority)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']); var mapa = {}; (resp.data || []).forEach(function(ev) { if (!ev.colaborador) return; if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, promAuto: null, promLider: null, ratingFinal: null, comentarioCalibracion: null, evaluacionLider: null }; if (ev.tipo_evaluacion === 'autoevaluacion') mapa[ev.colaborador_id].promAuto = ev.rating_promedio; if (ev.tipo_evaluacion === 'evaluacion_lider') { mapa[ev.colaborador_id].promLider = ev.rating_promedio; mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado; mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion; mapa[ev.colaborador_id].evaluacionLider = ev; } }); colabs.forEach(function(c) { if (!mapa[c.id]) mapa[c.id] = { colaborador: c, promAuto: null, promLider: null, ratingFinal: null, comentarioCalibracion: null, evaluacionLider: null }; }); setDatos(Object.values(mapa)); setCarg(false); }
   async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider && d.evaluacionLider.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
@@ -678,8 +674,41 @@ function DetalleAutoEvaluacion({ autoevaluacion }) {
   if (!autoevaluacion) return React.createElement('p', { style: { padding: 16, color: '#94a3b8' } }, 'Sin autoevaluacion.');
   var puntuaciones = autoevaluacion.puntuaciones || [];
   return React.createElement('div', { style: { marginTop: 16, background: 'white', borderRadius: 12, border: '2px solid #D4D2C6', overflow: 'hidden' } },
-    React.createElement('div', { style: { background: '#231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 } }, React.createElement('h4', { style: { margin: 0, color: '#D4D2C6', fontSize: 16 } }, '📝 Autoevaluacion Completa'), React.createElement('div', { style: { display: 'flex', gap: 16, alignItems: 'center' } }, React.createElement('span', { style: { color: '#D4D2C6', fontSize: 13 } }, autoevaluacion.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'), React.createElement('span', { style: { background: '#D4D2C6', color: '#231F20', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 20 } }, autoevaluacion.rating_promedio || '-'))),
-    React.createElement('div', { style: { padding: 20 } }, autoevaluacion.comentarios_finales ? React.createElement('div', { style: { marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 8 } }, React.createElement('strong', null, '💬 Comentarios Finales:'), React.createElement('p', { style: { color: '#475569', fontSize: 14, marginTop: 4 } }, autoevaluacion.comentarios_finales)) : null, React.createElement('h5', null, '📊 Calificacion por Competencia'), puntuaciones.length === 0 ? React.createElement('p', { style: { color: '#94a3b8' } }, 'Sin competencias calificadas.') : React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0' } }, React.createElement('thead', null, React.createElement('tr', { style: { background: '#231F20' } }, React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left' } }, 'Competencia'), React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'center', width: 80 } }, 'Rating'), React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left' } }, 'Comentario'))), React.createElement('tbody', null, puntuaciones.map(function(p, i) { return React.createElement('tr', { key: p.id || i, style: { background: i % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' } }, React.createElement('td', { style: { padding: '12px 16px', fontSize: 14, color: '#231F20', fontWeight: 500 } }, (p.competencias ? p.competencias.nombre : null) || 'ID: ' + p.competencia_id), React.createElement('td', { style: { padding: '12px 16px', textAlign: 'center' } }, React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: '#231F20', color: '#D4D2C6', fontSize: 16, fontWeight: 700 } }, p.rating)), React.createElement('td', { style: { padding: '12px 16px', fontSize: 13, color: '#475569' } }, p.comentario || 'Sin comentario')); })))
+    React.createElement('div', { style: { background: '#231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 } },
+      React.createElement('h4', { style: { margin: 0, color: '#D4D2C6', fontSize: 16 } }, '📝 Autoevaluacion Completa'),
+      React.createElement('div', { style: { display: 'flex', gap: 16, alignItems: 'center' } },
+        React.createElement('span', { style: { color: '#D4D2C6', fontSize: 13 } }, autoevaluacion.estado === 'enviado' ? '✅ Enviada' : '📝 Borrador'),
+        React.createElement('span', { style: { background: '#D4D2C6', color: '#231F20', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 20 } }, autoevaluacion.rating_promedio || '-')
+      )
+    ),
+    React.createElement('div', { style: { padding: 20 } },
+      autoevaluacion.comentarios_finales ? React.createElement('div', { style: { marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 8 } },
+        React.createElement('strong', null, '💬 Comentarios Finales:'),
+        React.createElement('p', { style: { color: '#475569', fontSize: 14, marginTop: 4 } }, autoevaluacion.comentarios_finales)
+      ) : null,
+      React.createElement('h5', null, '📊 Calificacion por Competencia'),
+      puntuaciones.length === 0 ? React.createElement('p', { style: { color: '#94a3b8' } }, 'Sin competencias calificadas.') :
+        React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0' } },
+          React.createElement('thead', null,
+            React.createElement('tr', { style: { background: '#231F20' } },
+              React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left' } }, 'Competencia'),
+              React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'center', width: 80 } }, 'Rating'),
+              React.createElement('th', { style: { padding: '12px 16px', color: '#D4D2C6', fontSize: 12, textAlign: 'left' } }, 'Comentario')
+            )
+          ),
+          React.createElement('tbody', null,
+            puntuaciones.map(function(p, i) {
+              return React.createElement('tr', { key: p.id || i, style: { background: i % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' } },
+                React.createElement('td', { style: { padding: '12px 16px', fontSize: 14, color: '#231F20', fontWeight: 500 } }, (p.competencias ? p.competencias.nombre : null) || 'ID: ' + p.competencia_id),
+                React.createElement('td', { style: { padding: '12px 16px', textAlign: 'center' } },
+                  React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: '#231F20', color: '#D4D2C6', fontSize: 16, fontWeight: 700 } }, p.rating)
+                ),
+                React.createElement('td', { style: { padding: '12px 16px', fontSize: 13, color: '#475569' } }, p.comentario || 'Sin comentario')
+              );
+            })
+          )
+        )
+    )
   );
 }
 
