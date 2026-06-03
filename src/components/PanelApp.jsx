@@ -1,3 +1,4 @@
+import PanelCalibracion from '../components/Calibracion.jsx';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { jsPDF } from 'jspdf';
