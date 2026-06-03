@@ -711,15 +711,88 @@ function FeedbackForm({ feedback: col, cicloId, onVolver }) {
   return React.createElement('div', { style: { maxWidth: 600 } }, React.createElement('button', { onClick: onVolver, style: { ...s.btnInfo, marginBottom: 16 } }, '← Volver'), React.createElement('h3', null, '💬 Feedback: ' + (col.full_name || col.email)), React.createElement('textarea', { value: com, onChange: function(e) { setCom(e.target.value); }, placeholder: 'Deja tu feedback...', style: { ...s.textarea, minHeight: 120, marginBottom: 12 } }), fb && fb.confirmacion_colaborador ? React.createElement('div', { style: { padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 } }, '✅ Confirmado') : null, React.createElement('button', { onClick: guardar, style: s.btnPrimario }, '💾 Guardar'));
 }
 
-function EvaluacionLider({ colaborador, cicloId, onVolver }) {
-  var competencias = []; var setComp; var ratings = {}; var setRatings; var comentarios = {}; var setComent; var comFin = ''; var setComFin; var msg = ''; var setMsg; var carg = true; var setCarg; var autoEval = null; var setAutoEval; var evalData = null; var setEvalData; var showInfo = {}; var setShowInfo;
-  var s1 = useState([]); competencias = s1[0]; setComp = s1[1]; var s2 = useState({}); ratings = s2[0]; setRatings = s2[1]; var s3 = useState({}); comentarios = s3[0]; setComent = s3[1]; var s4 = useState(''); comFin = s4[0]; setComFin = s4[1]; var s5 = useState(''); msg = s5[0]; setMsg = s5[1]; var s6 = useState(true); carg = s6[0]; setCarg = s6[1]; var s7 = useState(null); autoEval = s7[0]; setAutoEval = s7[1]; var s8 = useState(null); evalData = s8[0]; setEvalData = s8[1]; var s9 = useState({}); showInfo = s9[0]; setShowInfo = s9[1];
-  useEffect(function() { (async function() { var resps = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.auth.getSession()]); setComp(resps[0].data || []); var resp3 = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(); if (resp3.data) { var resp4 = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', resp3.data.id); setAutoEval({ ...resp3.data, puntuaciones: resp4.data || [] }); } var resp5 = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (resp5.data) { setEvalData(resp5.data); setComFin(resp5.data.comentarios_finales || ''); var resp6 = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', resp5.data.id); var rm = {}; var cm = {}; (resp6.data || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComent(cm); } else { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: resps[1].data.session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCarg(false); })(); }, []);
-  async function guardar() { var falt = competencias.filter(function(c) { return !comentarios[c.id] || !comentarios[c.id].trim(); }); if (falt.length > 0) { setMsg('❌ Completa: ' + falt.map(function(c) { return c.nombre; }).join(', ')); setTimeout(function() { setMsg(''); }, 4000); return; } if (!comFin || !comFin.trim()) { setMsg('❌ Comentarios finales obligatorios'); setTimeout(function() { setMsg(''); }, 4000); return; } var resp = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (!resp.data) return; var vals = Object.values(ratings).filter(function(r) { return r > 0; }); var prom = vals.length > 0 ? parseFloat((vals.reduce(function(a, b) { return a + b; }, 0) / vals.length).toFixed(1)) : null; await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', resp.data.id); for (var cid in ratings) { await supabase.from('puntuaciones').upsert({ evaluacion_id: resp.data.id, competencia_id: cid, rating: ratings[cid], comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500); }
-  async function enviar() { await guardar(); var resp = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (resp.data) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', resp.data.id); setMsg('🎉 Enviada'); }
-  var calcProm = function() { var v = Object.values(ratings).filter(function(r) { return r > 0; }); return v.length > 0 ? (v.reduce(function(a, b) { return a + b; }, 0) / v.length).toFixed(1) : null; };
-  if (carg) return React.createElement('p', null, 'Cargando...'); var enviada = evalData && evalData.estado === 'enviado'; var prom = calcProm();
-  return React.createElement('div', { style: { maxWidth: 900 } }, React.createElement('button', { onClick: onVolver, style: { ...s.btnInfo, marginBottom: 16 } }, '← Volver'), React.createElement('h3', null, '📝 Evaluando a: ' + (colaborador.full_name || colaborador.email)), React.createElement('p', null, (colaborador.area || '') + ' · ' + (colaborador.seniority || '')), autoEval && autoEval.estado === 'enviado' ? React.createElement(DetalleAutoEvaluacion, { autoevaluacion: autoEval }) : null, competencias.map(function(comp) { return React.createElement('div', { key: comp.id, style: s.competenciaCard }, React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } }, React.createElement('div', null, React.createElement('h5', null, comp.nombre), React.createElement('p', { style: { fontSize: 13, color: '#64748b' } }, comp.descripcion)), React.createElement('button', { onClick: function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }, style: s.btnInfo }, showInfo[comp.id] ? '🔼' : '🔽')), showInfo[comp.id] ? React.createElement('div', { style: { ...s.ratingInfoBox, marginTop: 8 } }, [1, 2, 3, 4, 5].map(function(r) { return React.createElement('div', { key: r, style: s.ratingInfoItem }, React.createElement('strong', null, 'Nivel ' + r + ': '), React.createElement(RatingDesc, { competenciaId: comp.id, rating: r })); })) : null, React.createElement('div', { style: s.ratingRow }, [1, 2, 3, 4, 5].map(function(r) { return React.createElement('button', { key: r, onClick: function() { if (!enviada) setRatings({...ratings, [comp.id]: r}); }, style: { ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: enviada ? 'not-allowed' : 'pointer' }, disabled: enviada }, r); })), React.createElement('textarea', { value: comentarios[comp.id] || '', onChange: function(e) { setComent({...comentarios, [comp.id]: e.target.value}); }, placeholder: 'Comentario obligatorio', style: { ...s.textareaSmall, borderColor: enviada ? '#D4D2C6' : (comentarios[comp.id] && comentarios[comp.id].trim() ? '#D4D2C6' : '#dc2626') }, disabled: enviada })); }), React.createElement(SeccionText, { titulo: '📝 Comentarios Finales (obligatorio)', valor: comFin, onChange: setComFin, disabled: enviada }), prom ? React.createElement('div', { style: { marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid #231F20', textAlign: 'center' } }, React.createElement('p', null, 'Resultado Final'), React.createElement('p', { style: { fontSize: 48, fontWeight: 700, color: '#231F20' } }, prom)) : null, msg ? React.createElement('div', { style: s.mensajeToast }, msg) : null, !enviada ? React.createElement('div', { style: { display: 'flex', gap: 12, marginTop: 20 } }, React.createElement('button', { onClick: guardar, style: s.btnSecundario }, '💾 Guardar'), React.createElement('button', { onClick: enviar, style: s.btnPrimario }, '📤 Enviar')) : null);
+function EquipoLider({ cicloId, profile }) {
+  var equipo = []; var setEquipo; var colSel = null; var setColSel; var fbVis = null; var setFbVis; var detalleVisible = null; var setDetalleVisible;
+  var s1 = useState([]); equipo = s1[0]; setEquipo = s1[1]; var s2 = useState(null); colSel = s2[0]; setColSel = s2[1]; var s3 = useState(null); fbVis = s3[0]; setFbVis = s3[1]; var s4 = useState(null); detalleVisible = s4[0]; setDetalleVisible = s4[1];
+  
+  useEffect(function() { cargar(); }, [cicloId]);
+  
+  async function cargar() { 
+    var resp = await supabase.auth.getSession(); 
+    if (!resp.data.session) return; 
+    var resp2 = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', resp.data.session.user.id); 
+    if (!resp2.data) return; 
+    var eq = await Promise.all(resp2.data.map(async function(c) { 
+      var resp3 = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', c.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(); 
+      var punts = []; 
+      if (resp3.data) { 
+        var resp4 = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', resp3.data.id); 
+        punts = resp4.data || []; 
+      } 
+      var resp5 = await supabase.from('evaluaciones').select('id, estado, rating_promedio').eq('colaborador_id', c.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); 
+      var resp6 = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', c.id).maybeSingle(); 
+      return { ...c, autoevaluacion: resp3.data ? { ...resp3.data, puntuaciones: punts } : null, evaluacionLider: resp5.data, feedback: resp6.data }; 
+    })); 
+    setEquipo(eq); 
+  }
+  
+  if (colSel) return React.createElement(EvaluacionLider, { colaborador: colSel, cicloId: cicloId, onVolver: function() { setColSel(null); cargar(); } });
+  if (fbVis) return React.createElement(FeedbackForm, { feedback: fbVis, cicloId: cicloId, onVolver: function() { setFbVis(null); cargar(); } });
+
+  var filas = equipo.map(function(c) {
+    var detalleComponente = null;
+    if (detalleVisible === c.id) {
+      detalleComponente = React.createElement(DetalleAutoEvaluacion, { autoevaluacion: c.autoevaluacion });
+    }
+
+    var btnVerAuto = null;
+    if (c.autoevaluacion && c.autoevaluacion.estado === 'enviado') {
+      btnVerAuto = React.createElement('button', { 
+        onClick: function() { setDetalleVisible(detalleVisible === c.id ? null : c.id); }, 
+        style: { ...s.btnInfo, background: '#dbeafe', color: '#1e40af', fontWeight: 600 } 
+      }, detalleVisible === c.id ? '🔼 Ocultar' : '👁️ Ver Autoevaluacion');
+    }
+
+    var btnFB = React.createElement('button', { 
+      onClick: function() { setFbVis(c); }, 
+      style: { ...s.btnInfo, background: '#fef3c7', color: '#92400e' } 
+    }, '💬 FB');
+
+    var btnEvaluar = React.createElement('button', { 
+      onClick: function() { setColSel(c); }, 
+      style: s.btnPrimario 
+    }, c.evaluacionLider ? '✏️ Editar' : '📝 Evaluar');
+
+    var estadoAuto = (c.autoevaluacion && c.autoevaluacion.estado === 'enviado') ? '✅ Enviada' : '⏳ Pendiente';
+    var colorAuto = (c.autoevaluacion && c.autoevaluacion.estado === 'enviado') ? '#22c55e' : '#f59e0b';
+
+    var estadoLider = c.evaluacionLider && c.evaluacionLider.estado === 'enviado' ? '✅ Completada' : (c.evaluacionLider ? '📝 Borrador' : '❌ Sin evaluar');
+    var colorLider = c.evaluacionLider && c.evaluacionLider.estado === 'enviado' ? '#22c55e' : (c.evaluacionLider ? '#f59e0b' : '#94a3b8');
+
+    var estadoFB = c.feedback && c.feedback.confirmacion_colaborador ? '✅' : (c.feedback ? '⏳' : '-');
+    var colorFB = c.feedback && c.feedback.confirmacion_colaborador ? '#22c55e' : (c.feedback ? '#f59e0b' : '#94a3b8');
+
+    return React.createElement('div', { key: c.id, style: { ...s.tarjetaStat } },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 } },
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('h4', null, c.full_name || c.email),
+          React.createElement('p', { style: { color: '#64748b', fontSize: 13 } }, (c.area || '') + ' · ' + (c.seniority || '')),
+          React.createElement('div', { style: { display: 'flex', gap: 16, marginTop: 8, fontSize: 12 } },
+            React.createElement('span', null, '📝 Auto: ', React.createElement('strong', { style: { color: colorAuto } }, estadoAuto)),
+            React.createElement('span', null, '👥 Mi eval: ', React.createElement('strong', { style: { color: colorLider } }, estadoLider)),
+            React.createElement('span', null, '💬 FB: ', React.createElement('strong', { style: { color: colorFB } }, estadoFB))
+          )
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: 8 } }, btnVerAuto, btnFB, btnEvaluar)
+      ),
+      detalleComponente
+    );
+  });
+
+  return React.createElement('div', null,
+    React.createElement('h3', null, '👥 Mi Equipo (' + equipo.length + ')'),
+    equipo.length === 0 ? React.createElement('p', null, 'No tienes colaboradores.') : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 16 } }, filas)
+  );
 }
 
 function PanelColaborador({ userId, seniority, cicloId }) {
