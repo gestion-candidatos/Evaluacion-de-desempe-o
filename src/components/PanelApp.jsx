@@ -444,7 +444,20 @@ function ObjetivosColaborador({ profile }) {
   var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
   var [mostrarForm, setMostrarForm] = useState(false); var [editandoId, setEditandoId] = useState(null);
   var [modalCompletar, setModalCompletar] = useState(null); var [alcanceCompletar, setAlcanceCompletar] = useState(''); var [justificacionCompletar, setJustificacionCompletar] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25 });
+var [nuevoObjetivo, setNuevoObjetivo] = useState({ 
+  objetivo: '', corporativo: '', ponderacion: 25,
+  alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion || null,
+alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null,
+alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion || null,
+alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null,
+alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion || null,
+alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null,
+alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion || null,
+alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || nulldescripcion: '', alcance_0_fecha: '',
+  alcance_80_descripcion: '', alcance_80_fecha: '',
+  alcance_100_descripcion: '', alcance_100_fecha: '',
+  alcance_120_descripcion: '', alcance_120_fecha: ''
+});
   useEffect(function() { cargarObjetivos(); }, []);
   async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
   async function guardarObjetivo() { if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio'); if (editandoId) { await supabase.from('objetivos').update({ objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId); } else { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: null, colaborador_id: profile.id, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente' }); } setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); setMostrarForm(false); setEditandoId(null); cargarObjetivos(); }
@@ -455,14 +468,54 @@ function ObjetivosColaborador({ profile }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Mis Objetivos</h2><button onClick={function() { setMostrarForm(!mostrarForm); setEditandoId(null); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); }} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Nuevo Objetivo'}</button></div>
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
+    {mostrarForm && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
+          <h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Objetivo *</label>
+              <input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo principal..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Corporativo</label>
+              <input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas, Operaciones..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Ponderacion (%)</label>
+              <select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
+                <option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option>
+              </select>
+            </div>
           </div>
-          <button onClick={guardarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 {editandoId ? 'Actualizar' : 'Guardar'} Objetivo</button>
+
+          <h5 style={{ margin: '16px 0 8px 0', color: '#231F20' }}>📊 Alcances del Objetivo</h5>
+          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>Define que significa cada nivel de alcance y opcionalmente una fecha limite.</p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: '#fee2e2', padding: 12, borderRadius: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0% - No alcanzado</label>
+              <input value={nuevoObjetivo.alcance_0_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_descripcion: e.target.value}); }} placeholder="Ej: No se realizaron aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} />
+              <input type="date" value={nuevoObjetivo.alcance_0_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} />
+            </div>
+            <div style={{ background: '#fef3c7', padding: 12, borderRadius: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>80% - Parcialmente alcanzado</label>
+              <input value={nuevoObjetivo.alcance_80_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 40 aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} />
+              <input type="date" value={nuevoObjetivo.alcance_80_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} />
+            </div>
+            <div style={{ background: '#dcfce7', padding: 12, borderRadius: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>100% - Alcanzado</label>
+              <input value={nuevoObjetivo.alcance_100_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 50 aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} />
+              <input type="date" value={nuevoObjetivo.alcance_100_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} />
+            </div>
+            <div style={{ background: '#dbeafe', padding: 12, borderRadius: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>120% - Superado</label>
+              <input value={nuevoObjetivo.alcance_120_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 60+ aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} />
+              <input type="date" value={nuevoObjetivo.alcance_120_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} />
+            </div>
+          </div>
+
+          <button onClick={guardarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 16 }}>💾 {editandoId ? 'Actualizar' : 'Guardar'} Objetivo</button>
         </div>
       )}
       {modalCompletar && (
@@ -481,16 +534,13 @@ function ObjetivosColaborador({ profile }) {
             <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo} {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b' }}>(editado)</span>}</td>
-                <td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || '-'}</td>
-                <td style={td}>{obj.comentario_lider ? '"' + obj.comentario_lider.substring(0, 30) + '..."' : '-'}</td>
-                <td style={td}>
-                  {(obj.status === 'pendiente' || obj.status === 'aceptado') && <button onClick={function() { editarObjetivo(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 11, padding: '4px 8px', marginRight: 4 }}>✏️</button>}
-                  {obj.status === 'pendiente' && <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#3b82f6', fontSize: 12, padding: '6px 12px' }}>✅ Aceptar</button>}
-                  {obj.status === 'aceptado' && <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>✔️ Completar</button>}
-                </td>
+             <td style={td}>
+  {obj.alcance_0_descripcion && <div style={{ fontSize: 10, color: '#dc2626' }}>0%: {obj.alcance_0_descripcion}</div>}
+  {obj.alcance_80_descripcion && <div style={{ fontSize: 10, color: '#92400e' }}>80%: {obj.alcance_80_descripcion}</div>}
+  {obj.alcance_100_descripcion && <div style={{ fontSize: 10, color: '#166534' }}>100%: {obj.alcance_100_descripcion}</div>}
+  {obj.alcance_120_descripcion && <div style={{ fontSize: 10, color: '#1e40af' }}>120%: {obj.alcance_120_descripcion}</div>}
+  {!obj.alcance_0_descripcion && !obj.alcance_80_descripcion && !obj.alcance_100_descripcion && !obj.alcance_120_descripcion && '-'}
+</td>
               </tr>
             ); })}</tbody>
           </table>
