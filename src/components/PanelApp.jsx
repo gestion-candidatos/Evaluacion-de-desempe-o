@@ -558,11 +558,117 @@ function ObjetivosGerente({ profile }) {
 
 // Vista del líder: ve los objetivos del colaborador, puede validar/rechazar con comentario
 function GestionObjetivosLider({ colaborador, profile, onVolver }) {
-  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
-  var [modalValidar, setModalValidar] = useState(null); var [accionValidar, setAccionValidar] = useState(''); var [comentarioLider, setComentarioLider] = useState('');
+  var [objetivos, setObjetivos] = useState([]);
+  var [cargando, setCargando] = useState(true);
+  var [modalValidar, setModalValidar] = useState(null);
+  var [accionValidar, setAccionValidar] = useState('');
+  var [comentarioLider, setComentarioLider] = useState('');
+
   useEffect(function() { cargarObjetivos(); }, []);
-  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  
+
+  async function cargarObjetivos() {
+    var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false });
+    setObjetivos(data || []);
+    setCargando(false);
+  }
+
+  async function ejecutarValidacion() {
+    if (!accionValidar) return alert('Selecciona una accion');
+    if (!comentarioLider.trim()) return alert('El comentario es obligatorio');
+    var nuevoStatus = accionValidar === 'aprobar' ? 'validado' : 'pendiente';
+    await supabase.from('objetivos').update({
+      status: nuevoStatus,
+      validado_por_gerente: accionValidar === 'aprobar',
+      comentario_lider: comentarioLider,
+      fecha_validacion: new Date()
+    }).eq('id', modalValidar);
+    setModalValidar(null);
+    setAccionValidar('');
+    setComentarioLider('');
+    cargarObjetivos();
+  }
+
+  if (cargando) return <p>Cargando objetivos...</p>;
+
+  return (
+    <div>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ color: '#231F20', margin: 0 }}>🎯 Objetivos de {colaborador.full_name || colaborador.email}</h2>
+        <p style={{ color: '#64748b', margin: '4px 0' }}>{colaborador.area} · {colaborador.seniority}</p>
+      </div>
+
+      {modalValidar && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidar(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>📋 Validar Objetivo</h3>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label>
+              <select value={accionValidar} onChange={function(e) { setAccionValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}>
+                <option value="">Seleccionar...</option>
+                <option value="aprobar">✅ Aprobar</option>
+                <option value="rechazar">❌ Rechazar (devuelve a pendiente)</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label>
+              <textarea value={comentarioLider} onChange={function(e) { setComentarioLider(e.target.value); }} placeholder="Explica tu decision..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button>
+              <button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {objetivos.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados por el colaborador.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+            <thead>
+              <tr style={{ background: '#231F20' }}>
+                <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Corp.</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Status</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Alcance Colab.</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Justif. Colab.</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Mi Comentario</th>
+                <th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {objetivos.map(function(obj) {
+                return (
+                  <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={td}>{obj.objetivo}</td>
+                    <td style={td}>{obj.corporativo || '-'}</td>
+                    <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
+                    <td style={td}>
+                      <span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>
+                        {obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}
+                      </span>
+                    </td>
+                    <td style={td}>{obj.alcance_completado || '-'}</td>
+                    <td style={td}>{obj.justificacion_completado ? '"' + obj.justificacion_completado.substring(0, 30) + '..."' : '-'}</td>
+                    <td style={td}>{obj.comentario_lider ? '"' + obj.comentario_lider.substring(0, 30) + '..."' : '-'}</td>
+                    <td style={td}>
+                      {obj.status === 'completado' && (
+                        <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
   async function ejecutarValidacion() {
     if (!accionValidar) return alert('Selecciona una accion');
     if (!comentarioLider.trim()) return alert('El comentario es obligatorio');
