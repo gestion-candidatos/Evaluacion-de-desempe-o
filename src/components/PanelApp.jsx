@@ -219,8 +219,6 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
       </div>
     </div>
   );
-}
-
 function PlaceholderView({ titulo, descripcion }) { return <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><h2>{titulo}</h2><p>{descripcion}</p></div>; }
 
 function DesempenoView({ profile, cicloActivo, setCicloActivo }) {
