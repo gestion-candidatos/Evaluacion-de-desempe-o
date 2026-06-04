@@ -574,4 +574,4 @@ function ObjetivosColaborador({ profile }) {
                 </td>
                 <td style={td}>{obj.comentario_lider ? '"' + obj.comentario_lider.substring(0, 40) + '..."' : '-'}</td>
                 <td style={td}>
-                  {(obj.status === 'pendiente' || obj.status === 'aceptado') && <button onClick={function() { editarObjetivo(obj); }} style={{ ...s.btnInfo, background: '#
+{(obj.status === 'pendiente' || obj.status === 'aceptado') && <button onClick={function() { editarObjetivo(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 11, padding: '4px 8px', marginRight: 4 }}>✏️</button>}
