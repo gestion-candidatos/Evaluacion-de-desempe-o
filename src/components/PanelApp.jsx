@@ -117,9 +117,32 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
 }
 
 function ObjetivosView({ profile }) {
-  const esGerente = profile.seniority === 'Gerente' || profile.role === 'admin_rrhh';
-  if (esGerente) return <ObjetivosGerente profile={profile} />;
+  const esAdmin = profile.role === 'admin_rrhh';
+  const esGerente = profile.seniority === 'Gerente';
+  const tieneEquipo = esAdmin || esGerente;
+  
+  // Florencia (admin) y Adrián (admin/gerente) ven: su equipo Y sus propios objetivos
+  if (tieneEquipo) {
+    return <ObjetivosGerenteConPropios profile={profile} />;
+  }
+  
   return <ObjetivosColaborador profile={profile} />;
+}
+
+function ObjetivosGerenteConPropios({ profile }) {
+  const [vista, setVista] = useState('equipo');
+  const esAdmin = profile.role === 'admin_rrhh';
+  
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <button onClick={function() { setVista('equipo'); }} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
+        <button onClick={function() { setVista('misobjetivos'); }} style={vista === 'misobjetivos' ? s.btnPrimario : s.btnInfo}>🎯 Mis Objetivos</button>
+      </div>
+      {vista === 'equipo' && <ObjetivosGerente profile={profile} />}
+      {vista === 'misobjetivos' && <ObjetivosColaborador profile={profile} />}
+    </div>
+  );
 }
 
 function ObjetivosGerente({ profile }) {
