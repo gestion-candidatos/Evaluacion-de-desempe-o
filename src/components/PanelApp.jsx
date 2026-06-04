@@ -3,17 +3,17 @@ import { supabase } from '../lib/supabaseClient';
 import { jsPDF } from 'jspdf';
 
 export default function PanelApp() {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [menuActivo, setMenuActivo] = useState('desempeno');
-  const [cicloActivo, setCicloActivo] = useState(null);
+  var [profile, setProfile] = useState(null);
+  var [loading, setLoading] = useState(true);
+  var [menuActivo, setMenuActivo] = useState('desempeno');
+  var [cicloActivo, setCicloActivo] = useState(null);
 
   useEffect(function() { cargarPerfil(); }, []);
 
   async function cargarPerfil() {
-    const { data: { session } } = await supabase.auth.getSession();
+    var { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
-    const { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').eq('id', session.user.id).single();
+    var { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').eq('id', session.user.id).single();
     if (perfil && perfil.activo === false) { await supabase.auth.signOut(); alert('Cuenta desactivada.'); window.location.href = '/'; return; }
     setProfile(perfil); setLoading(false);
   }
@@ -34,39 +34,18 @@ export default function PanelApp() {
       <aside style={sidebarStyle.aside}>
         <div style={sidebarStyle.logoContainer}><img src="/logo.jpg" alt="Fabric Group" style={{ height: '40px' }} /></div>
         <nav style={sidebarStyle.nav}>
-          {/* DESEMPEÑO */}
-          <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>
-            📊 DESEMPEÑO
-          </button>
-
-          {/* OBJETIVOS */}
+          <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>📊 DESEMPENO</button>
+          
           <button onClick={function() { setMenuActivo(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj' ? '' : 'objetivos'); }} style={{ ...sidebarStyle.menuItem, background: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#D4D2C6' : 'transparent', color: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#231F20' : '#D4D2C6' }}>
             🎯 OBJETIVOS {(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '▼' : '▶'}
           </button>
-
+          
           {(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') && (
             <div style={{ paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <button onClick={function() { setMenuActivo('misobjetivos'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'misobjetivos' ? '#D4D2C6' : 'transparent', color: menuActivo === 'misobjetivos' ? '#231F20' : '#D4D2C6' }}>
-                🎯 Mis Objetivos
-              </button>
-
-              {tieneEquipo && (
-                <button onClick={function() { setMenuActivo('miequipo_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'miequipo_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'miequipo_obj' ? '#231F20' : '#D4D2C6' }}>
-                  👥 Mi Equipo
-                </button>
-              )}
-
-              {(profile.role === 'admin_rrhh' || esGerente) && (
-                <button onClick={function() { setMenuActivo('compania_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'compania_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'compania_obj' ? '#231F20' : '#D4D2C6' }}>
-                  🏢 Compañía
-                </button>
-              )}
-
-              {esSuperAdmin && (
-                <button onClick={function() { setMenuActivo('admin_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'admin_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'admin_obj' ? '#231F20' : '#D4D2C6', fontWeight: 600 }}>
-                  🔧 Panel Admin
-                </button>
-              )}
+              <button onClick={function() { setMenuActivo('misobjetivos'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'misobjetivos' ? '#D4D2C6' : 'transparent', color: menuActivo === 'misobjetivos' ? '#231F20' : '#D4D2C6' }}>🎯 Mis Objetivos</button>
+              {tieneEquipo && <button onClick={function() { setMenuActivo('miequipo_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'miequipo_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'miequipo_obj' ? '#231F20' : '#D4D2C6' }}>👥 Mi Equipo</button>}
+              {(profile.role === 'admin_rrhh' || esGerente) && <button onClick={function() { setMenuActivo('compania_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'compania_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'compania_obj' ? '#231F20' : '#D4D2C6' }}>🏢 Compañia</button>}
+              {esSuperAdmin && <button onClick={function() { setMenuActivo('admin_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'admin_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'admin_obj' ? '#231F20' : '#D4D2C6', fontWeight: 600 }}>🔧 Panel Admin</button>}
             </div>
           )}
         </nav>
@@ -78,7 +57,7 @@ export default function PanelApp() {
           {menuActivo === 'desempeno' && <DesempenoView profile={profile} cicloActivo={cicloActivo} setCicloActivo={setCicloActivo} />}
           {menuActivo === 'misobjetivos' && <ObjetivosColaborador profile={profile} />}
           {menuActivo === 'miequipo_obj' && <ObjetivosGerente profile={profile} />}
-          {menuActivo === 'compania_obj' && <PlaceholderView titulo="🏢 Objetivos de la Compañía" descripcion="Modulo en desarrollo." />}
+          {menuActivo === 'compania_obj' && <PlaceholderView titulo="🏢 Objetivos de la Compañia" descripcion="Modulo en desarrollo." />}
           {menuActivo === 'admin_obj' && <PanelAdminObjetivos profile={profile} />}
         </main>
       </div>
@@ -89,136 +68,7 @@ export default function PanelApp() {
 function PlaceholderView({ titulo, descripcion }) { return <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><h2>{titulo}</h2><p>{descripcion}</p></div>; }
 
 // =============================================
-// PANEL ADMIN OBJETIVOS (SOLO FLORENCIA Y ADRIAN)
-// =============================================
-function PanelAdminObjetivos({ profile }) {
-  var [objetivos, setObjetivos] = useState([]);
-  var [colaboradores, setColaboradores] = useState([]);
-  var [cargando, setCargando] = useState(true);
-  var [filtroArea, setFiltroArea] = useState('Todas');
-  var [filtroSeniority, setFiltroSeniority] = useState('Todos');
-  var [mostrarForm, setMostrarForm] = useState(false);
-  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({
-    objetivo: '', corporativo: '', ponderacion: 25,
-    alcance_0_fecha: '', alcance_80_fecha: '', alcance_100_fecha: '', alcance_120_fecha: ''
-  });
-
-  useEffect(function() { cargarDatos(); }, []);
-
-  async function cargarDatos() {
-    var [{ data: objs }, { data: cols }] = await Promise.all([
-      supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)
-    ]);
-    setObjetivos(objs || []);
-    setColaboradores(cols || []);
-    setCargando(false);
-  }
-
-  async function agregarObjetivoAdmin() {
-    if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo');
-    var { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('objetivos').insert({
-      gerente_id: session.user.id,
-      colaborador_id: colaboradorSeleccionado,
-      objetivo: nuevoObjetivo.objetivo,
-      corporativo: nuevoObjetivo.corporativo,
-      ponderacion: nuevoObjetivo.ponderacion,
-      alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null,
-      alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null,
-      alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null,
-      alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null,
-      status: 'pendiente'
-    });
-    setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_fecha: '', alcance_80_fecha: '', alcance_100_fecha: '', alcance_120_fecha: '' });
-    setColaboradorSeleccionado('');
-    setMostrarForm(false);
-    cargarDatos();
-  }
-
-  var areas = ['Todas'].concat([...new Set(colaboradores.map(function(c) { return c.area; }).filter(Boolean))]);
-  var seniorities = ['Todos'].concat([...new Set(colaboradores.map(function(c) { return c.seniority; }).filter(Boolean))]);
-
-  var objetivosFiltrados = objetivos.filter(function(obj) {
-    if (filtroArea !== 'Todas' && obj.colaborador?.area !== filtroArea) return false;
-    if (filtroSeniority !== 'Todos' && obj.colaborador?.seniority !== filtroSeniority) return false;
-    return true;
-  });
-
-  if (cargando) return <p>Cargando panel admin...</p>;
-
-  return (
-    <div>
-      <h2 style={{ color: '#231F20', marginBottom: 20 }}>🔧 Panel Admin - Todos los Objetivos</h2>
-
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>
-          {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las Areas' : a}</option>; })}
-        </select>
-        <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>
-          {seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}
-        </select>
-        <button onClick={function() { setMostrarForm(!mostrarForm); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Objetivo</button>
-      </div>
-
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>Asignar Objetivo a Cualquier Colaborador</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div>
-              <label style={{ fontSize: 12 }}>Colaborador *</label>
-              <select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}>
-                <option value="">Seleccionar...</option>
-                {colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}
-              </select>
-            </div>
-            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
-            <div><label style={{ fontSize: 12 }}>Fecha 0%</label><input type="date" value={nuevoObjetivo.alcance_0_fecha} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_fecha: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Fecha 80%</label><input type="date" value={nuevoObjetivo.alcance_80_fecha} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_fecha: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Fecha 100%</label><input type="date" value={nuevoObjetivo.alcance_100_fecha} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_fecha: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Fecha 120%</label><input type="date" value={nuevoObjetivo.alcance_120_fecha} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_fecha: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-          </div>
-          <button onClick={agregarObjetivoAdmin} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 Guardar Objetivo</button>
-        </div>
-      )}
-
-      {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}>
-              <th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Area</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Seniority</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Gerente</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Status</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Alcance</th>
-            </tr></thead>
-            <tbody>{objetivosFiltrados.map(function(obj) { return (
-              <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}><strong>{obj.colaborador?.full_name || '-'}</strong></td>
-                <td style={td}>{obj.colaborador?.area || '-'}</td>
-                <td style={td}>{obj.colaborador?.seniority || '-'}</td>
-                <td style={td}>{obj.gerente?.full_name || '-'}</td>
-                <td style={td}>{obj.objetivo}</td>
-                <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_validado || obj.alcance_completado || '-'}</td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================
-// DESEMPEÑO
+// DESEMPENO
 // =============================================
 function DesempenoView({ profile, cicloActivo, setCicloActivo }) {
   var esAdmin = profile.role === 'admin_rrhh';
@@ -320,7 +170,6 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
   if (verif) return <p>Verificando...</p>; if (!part) return <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p>No estas participando en este ciclo.</p></div>;
   return <div><div style={{ display: 'flex', gap: 12, marginBottom: 20 }}><button onClick={function() { setV('autoevaluacion'); }} style={v === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluacion</button>{tieneEq && <button onClick={function() { setV('equipo'); }} style={v === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>}</div>{v === 'autoevaluacion' ? <PanelColaborador userId={userId} seniority={seniority} cicloId={cicloId} soloLectura={soloLectura} /> : <EquipoLider cicloId={cicloId} profile={profile} soloLectura={soloLectura} />}</div>;
 }
-
 function DashboardView({ stats, colabs }) {
   return (
     <div>
@@ -521,16 +370,9 @@ function DetalleAutoEvaluacion({ autoevaluacion }) {
     </div>
   );
 }
-
 // =============================================
 // OBJETIVOS
 // =============================================
-function ObjetivosView({ profile }) {
-  var esGerente = profile.seniority === 'Gerente' || profile.role === 'admin_rrhh' || profile.role === 'lider';
-  if (esGerente) return <ObjetivosGerente profile={profile} />;
-  return <ObjetivosColaborador profile={profile} />;
-}
-
 function ObjetivosGerente({ profile }) {
   var [equipo, setEquipo] = useState([]); var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null); var [cargando, setCargando] = useState(true);
   useEffect(function() { cargarEquipo(); }, []);
@@ -556,183 +398,39 @@ function ObjetivosGerente({ profile }) {
   );
 }
 
-// Vista del líder: ve los objetivos del colaborador, puede validar/rechazar con comentario
 function GestionObjetivosLider({ colaborador, profile, onVolver }) {
-  var [objetivos, setObjetivos] = useState([]);
-  var [cargando, setCargando] = useState(true);
-  var [modalValidar, setModalValidar] = useState(null);
-  var [accionValidar, setAccionValidar] = useState('');
-  var [comentarioLider, setComentarioLider] = useState('');
-
+  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
+  var [modalValidar, setModalValidar] = useState(null); var [accionValidar, setAccionValidar] = useState(''); var [comentarioLider, setComentarioLider] = useState('');
   useEffect(function() { cargarObjetivos(); }, []);
-
-  async function cargarObjetivos() {
-    var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false });
-    setObjetivos(data || []);
-    setCargando(false);
-  }
-
-  async function ejecutarValidacion() {
-    if (!accionValidar) return alert('Selecciona una accion');
-    if (!comentarioLider.trim()) return alert('El comentario es obligatorio');
-    var nuevoStatus = accionValidar === 'aprobar' ? 'validado' : 'pendiente';
-    await supabase.from('objetivos').update({
-      status: nuevoStatus,
-      validado_por_gerente: accionValidar === 'aprobar',
-      comentario_lider: comentarioLider,
-      fecha_validacion: new Date()
-    }).eq('id', modalValidar);
-    setModalValidar(null);
-    setAccionValidar('');
-    setComentarioLider('');
-    cargarObjetivos();
-  }
-
+  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
+  async function ejecutarValidacion() { if (!accionValidar) return alert('Selecciona una accion'); if (!comentarioLider.trim()) return alert('El comentario es obligatorio'); var nuevoStatus = accionValidar === 'aprobar' ? 'validado' : 'pendiente'; await supabase.from('objetivos').update({ status: nuevoStatus, validado_por_gerente: accionValidar === 'aprobar', comentario_lider: comentarioLider, fecha_validacion: new Date() }).eq('id', modalValidar); setModalValidar(null); setAccionValidar(''); setComentarioLider(''); cargarObjetivos(); }
   if (cargando) return <p>Cargando objetivos...</p>;
-
   return (
     <div>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ color: '#231F20', margin: 0 }}>🎯 Objetivos de {colaborador.full_name || colaborador.email}</h2>
-        <p style={{ color: '#64748b', margin: '4px 0' }}>{colaborador.area} · {colaborador.seniority}</p>
-      </div>
-
+      <div style={{ marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Objetivos de {colaborador.full_name || colaborador.email}</h2><p style={{ color: '#64748b', margin: '4px 0' }}>{colaborador.area} · {colaborador.seniority}</p></div>
       {modalValidar && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidar(null); }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
             <h3 style={{ marginTop: 0 }}>📋 Validar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label>
-              <select value={accionValidar} onChange={function(e) { setAccionValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}>
-                <option value="">Seleccionar...</option>
-                <option value="aprobar">✅ Aprobar</option>
-                <option value="rechazar">❌ Rechazar (devuelve a pendiente)</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label>
-              <textarea value={comentarioLider} onChange={function(e) { setComentarioLider(e.target.value); }} placeholder="Explica tu decision..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button>
-              <button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button>
-            </div>
+            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label><select value={accionValidar} onChange={function(e) { setAccionValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}><option value="">Seleccionar...</option><option value="aprobar">✅ Aprobar</option><option value="rechazar">❌ Rechazar (devuelve a pendiente)</option></select></div>
+            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label><textarea value={comentarioLider} onChange={function(e) { setComentarioLider(e.target.value); }} placeholder="Explica tu decision..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} /></div>
+            <div style={{ display: 'flex', gap: 12 }}><button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button><button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
           </div>
         </div>
       )}
-
-      {objetivos.length === 0 ? (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados por el colaborador.</p>
-      ) : (
+      {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados por el colaborador.</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead>
-              <tr style={{ background: '#231F20' }}>
-                <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Corp.</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Status</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Alcance Colab.</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Justif. Colab.</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Mi Comentario</th>
-                <th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {objetivos.map(function(obj) {
-                return (
-                  <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={td}>{obj.objetivo}</td>
-                    <td style={td}>{obj.corporativo || '-'}</td>
-                    <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                    <td style={td}>
-                      <span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>
-                        {obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}
-                      </span>
-                    </td>
-                    <td style={td}>{obj.alcance_completado || '-'}</td>
-                    <td style={td}>{obj.justificacion_completado ? '"' + obj.justificacion_completado.substring(0, 30) + '..."' : '-'}</td>
-                    <td style={td}>{obj.comentario_lider ? '"' + obj.comentario_lider.substring(0, 30) + '..."' : '-'}</td>
-                    <td style={td}>
-                      {obj.status === 'completado' && (
-                        <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-  async function ejecutarValidacion() {
-    if (!accionValidar) return alert('Selecciona una accion');
-    if (!comentarioLider.trim()) return alert('El comentario es obligatorio');
-    var nuevoStatus = accionValidar === 'aprobar' ? 'validado' : 'pendiente';
-    await supabase.from('objetivos').update({ 
-      status: nuevoStatus, 
-      validado_por_gerente: accionValidar === 'aprobar',
-      comentario_lider: comentarioLider,
-      fecha_validacion: new Date()
-    }).eq('id', modalValidar);
-    setModalValidar(null); setAccionValidar(''); setComentarioLider('');
-    cargarObjetivos();
-  }
-
-  if (cargando) return <p>Cargando objetivos...</p>;
-  return (
-    <div>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
-      <div><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Objetivos de {colaborador.full_name || colaborador.email}</h2><p style={{ color: '#64748b', margin: '4px 0' }}>{colaborador.area} · {colaborador.seniority}</p></div>
-      
-      {modalValidar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidar(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>📋 Validar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label>
-              <select value={accionValidar} onChange={function(e) { setAccionValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}>
-                <option value="">Seleccionar...</option>
-                <option value="aprobar">✅ Aprobar</option>
-                <option value="rechazar">❌ Rechazar (devuelve a pendiente)</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label>
-              <textarea value={comentarioLider} onChange={function(e) { setComentarioLider(e.target.value); }} placeholder="Explica tu decision..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button>
-              <button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
-            <thead><tr style={{ background: '#231F20' }}>
-              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Justif. Colab.</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
-            </tr></thead>
+            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance Colab.</th><th style={{ ...th, color: '#D4D2C6' }}>Justif. Colab.</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Comentario</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
+                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}</span></td>
                 <td style={td}>{obj.alcance_completado || '-'}</td>
                 <td style={td}>{obj.justificacion_completado ? '"' + obj.justificacion_completado.substring(0, 30) + '..."' : '-'}</td>
                 <td style={td}>{obj.comentario_lider ? '"' + obj.comentario_lider.substring(0, 30) + '..."' : '-'}</td>
-                <td style={td}>
-                  {obj.status === 'completado' && (
-                    <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>
-                  )}
-                </td>
+                <td style={td}>{obj.status === 'completado' && <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>}</td>
               </tr>
             ); })}</tbody>
           </table>
@@ -747,38 +445,18 @@ function ObjetivosColaborador({ profile }) {
   var [mostrarForm, setMostrarForm] = useState(false); var [editandoId, setEditandoId] = useState(null);
   var [modalCompletar, setModalCompletar] = useState(null); var [alcanceCompletar, setAlcanceCompletar] = useState(''); var [justificacionCompletar, setJustificacionCompletar] = useState('');
   var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25 });
-  
   useEffect(function() { cargarObjetivos(); }, []);
   async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  
-  async function guardarObjetivo() {
-    if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio');
-    if (editandoId) {
-      await supabase.from('objetivos').update({ objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
-    } else {
-      var { data: { session } } = await supabase.auth.getSession();
-      await supabase.from('objetivos').insert({ gerente_id: null, colaborador_id: profile.id, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente' });
-    }
-    setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); setMostrarForm(false); setEditandoId(null); cargarObjetivos();
-  }
-
+  async function guardarObjetivo() { if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio'); if (editandoId) { await supabase.from('objetivos').update({ objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId); } else { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: null, colaborador_id: profile.id, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente' }); } setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); setMostrarForm(false); setEditandoId(null); cargarObjetivos(); }
   function editarObjetivo(obj) { setNuevoObjetivo({ objetivo: obj.objetivo, corporativo: obj.corporativo || '', ponderacion: obj.ponderacion }); setEditandoId(obj.id); setMostrarForm(true); }
-
   async function aceptarObjetivo(objId) { await supabase.from('objetivos').update({ status: 'aceptado', confirmado_colaborador: true, fecha_confirmacion: new Date() }).eq('id', objId); cargarObjetivos(); }
-  
   async function completarObjetivo() { if (!alcanceCompletar) return alert('Selecciona un alcance'); if (!justificacionCompletar.trim()) return alert('La justificacion es obligatoria'); await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcanceCompletar, justificacion_completado: justificacionCompletar }).eq('id', modalCompletar); setModalCompletar(null); setAlcanceCompletar(''); setJustificacionCompletar(''); cargarObjetivos(); }
-
   if (cargando) return <p>Cargando objetivos...</p>;
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ color: '#231F20', margin: 0 }}>🎯 Mis Objetivos</h2>
-        <button onClick={function() { setMostrarForm(!mostrarForm); setEditandoId(null); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); }} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Nuevo Objetivo'}</button>
-      </div>
-
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Mis Objetivos</h2><button onClick={function() { setMostrarForm(!mostrarForm); setEditandoId(null); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); }} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Nuevo Objetivo'}</button></div>
       {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
             <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
             <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
@@ -787,7 +465,6 @@ function ObjetivosColaborador({ profile }) {
           <button onClick={guardarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 {editandoId ? 'Actualizar' : 'Guardar'} Objetivo</button>
         </div>
       )}
-
       {modalCompletar && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalCompletar(null); }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
@@ -798,14 +475,10 @@ function ObjetivosColaborador({ profile }) {
           </div>
         </div>
       )}
-
       {objetivos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><p style={{ color: '#94a3b8', fontSize: 16 }}>No tienes objetivos cargados aun.</p></div> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}>
-              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
-            </tr></thead>
+            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={td}>{obj.objetivo} {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b' }}>(editado)</span>}</td>
@@ -827,7 +500,6 @@ function ObjetivosColaborador({ profile }) {
   );
 }
 
-// PANEL ADMIN OBJETIVOS (SOLO FLORENCIA Y ADRIAN) - CON EXPORTAR EXCEL Y SUBIR HISTORIAL
 function PanelAdminObjetivos({ profile }) {
   var [objetivos, setObjetivos] = useState([]); var [colaboradores, setColaboradores] = useState([]); var [cargando, setCargando] = useState(true);
   var [filtroArea, setFiltroArea] = useState('Todas'); var [filtroSeniority, setFiltroSeniority] = useState('Todos');
@@ -837,28 +509,10 @@ function PanelAdminObjetivos({ profile }) {
   var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
 
   useEffect(function() { cargarDatos(); }, []);
-
-  async function cargarDatos() {
-    var [{ data: objs }, { data: cols }] = await Promise.all([
-      supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)
-    ]);
-    setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false);
-  }
-
-  async function agregarObjetivoAdmin() {
-    if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo');
-    var { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente' });
-    setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos();
-  }
-
-  async function agregarHistorico() {
-    if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos');
-    await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true });
-    setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos();
-  }
-
+  async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
+  async function agregarObjetivoAdmin() { if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo'); var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente' }); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25 }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos(); }
+  async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
+  
   function exportarExcel() {
     var datos = objetivosFiltrados.map(function(obj, i) { return { 'N°': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance': obj.alcance_completado || obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
     var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
@@ -875,7 +529,6 @@ function PanelAdminObjetivos({ profile }) {
   return (
     <div>
       <h2 style={{ color: '#231F20', marginBottom: 20 }}>🔧 Panel Admin - Todos los Objetivos</h2>
-      
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las Areas' : a}</option>; })}</select>
         <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}</select>
@@ -883,71 +536,43 @@ function PanelAdminObjetivos({ profile }) {
         <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>📁 Subir Historico</button>
         <button onClick={exportarExcel} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>📥 Exportar Excel</button>
       </div>
-{obj.status === 'completado' && (
-                    <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>
-                  )}
-                </td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
 
-function ObjetivosColaborador({ profile }) {
-  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
-  var [mostrarForm, setMostrarForm] = useState(false); var [editandoId, setEditandoId] = useState(null);
-  var [modalCompletar, setModalCompletar] = useState(null); var [alcanceCompletar, setAlcanceCompletar] = useState(''); var [justificacionCompletar, setJustificacionCompletar] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25 });
-  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  async function aceptarObjetivo(objId) { await supabase.from('objetivos').update({ status: 'aceptado', confirmado_colaborador: true, fecha_confirmacion: new Date() }).eq('id', objId); cargarObjetivos(); }
-  async function completarObjetivo() { if (!alcanceCompletar) return alert('Selecciona un alcance'); if (!justificacionCompletar.trim()) return alert('La justificacion es obligatoria'); await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcanceCompletar, justificacion_completado: justificacionCompletar }).eq('id', modalCompletar); setModalCompletar(null); setAlcanceCompletar(''); setJustificacionCompletar(''); cargarObjetivos(); }
-  if (cargando) return <p>Cargando objetivos...</p>;
-  return (
-    <div>
-      <h2 style={{ color: '#231F20', marginBottom: 20 }}>🎯 Mis Objetivos</h2>
-      {modalCompletar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalCompletar(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>✔️ Completar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Alcance Alcanzado *</label><select value={alcanceCompletar} onChange={function(e) { setAlcanceCompletar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}><option value="">Seleccionar alcance</option><option value="0%">0% - No alcanzado</option><option value="80%">80% - Parcialmente alcanzado</option><option value="100%">100% - Alcanzado</option><option value="120%">120% - Superado</option></select></div>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Justificacion *</label><textarea value={justificacionCompletar} onChange={function(e) { setJustificacionCompletar(e.target.value); }} placeholder="Explica el resultado alcanzado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} /></div>
-            <div style={{ display: 'flex', gap: 12 }}><button onClick={completarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>✔️ Confirmar Completado</button><button onClick={function() { setModalCompletar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
+      {mostrarForm && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>Asignar Objetivo a Cualquier Colaborador</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div><label style={{ fontSize: 12 }}>Colaborador *</label><select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">Seleccionar...</option>{colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}</select></div>
+            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
+            <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
+            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
           </div>
+          <button onClick={agregarObjetivoAdmin} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 Guardar</button>
         </div>
       )}
-      {objetivos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><p style={{ color: '#94a3b8', fontSize: 16 }}>No tienes objetivos asignados aun.</p></div> : (
+
+      {mostrarHistorico && (
+        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>Subir Objetivo Historico</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div><label style={{ fontSize: 12 }}>Colaborador *</label><select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">Seleccionar...</option>{colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}</select></div>
+            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={objetivoHistorico.objetivo} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, objetivo: e.target.value}); }} placeholder="Describir..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
+            <div><label style={{ fontSize: 12 }}>Fecha Historica *</label><input type="date" value={objetivoHistorico.fecha_historica} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, fecha_historica: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
+            <div><label style={{ fontSize: 12 }}>Alcance</label><select value={objetivoHistorico.alcance} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, alcance: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">-</option><option value="0%">0%</option><option value="80%">80%</option><option value="100%">100%</option><option value="120%">120%</option></select></div>
+            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={objetivoHistorico.ponderacion} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
+          </div>
+          <button onClick={agregarHistorico} style={{ ...s.btnPrimario, background: '#8b5cf6', marginTop: 12 }}>💾 Guardar Historico</button>
+        </div>
+      )}
+
+      {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
-            <thead><tr style={{ background: '#231F20' }}>
-              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>0%</th><th style={{ ...th, color: '#D4D2C6' }}>80%</th><th style={{ ...th, color: '#D4D2C6' }}>100%</th><th style={{ ...th, color: '#D4D2C6' }}>120%</th>
-              <th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Validacion</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
-            </tr></thead>
-            <tbody>{objetivos.map(function(obj) { return (
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: '#D4D2C6' }}>Gerente</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th></tr></thead>
+            <tbody>{objetivosFiltrados.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}>{obj.alcance_0_fecha ? new Date(obj.alcance_0_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
-                <td style={td}>{obj.alcance_80_fecha ? new Date(obj.alcance_80_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
-                <td style={td}>{obj.alcance_100_fecha ? new Date(obj.alcance_100_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
-                <td style={td}>{obj.alcance_120_fecha ? new Date(obj.alcance_120_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}</span></td>
-                <td style={td}>
-                  {obj.alcance_completado && <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>{obj.alcance_completado}</div>}
-                  {obj.justificacion_completado && <div style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>"{obj.justificacion_completado.substring(0, 30)}..."</div>}
-                  {!obj.alcance_completado && '-'}
-                </td>
-                <td style={td}>
-                  {obj.alcance_validado && <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>{obj.alcance_validado}</div>}
-                  {obj.justificacion_validacion && <div style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>"{obj.justificacion_validacion.substring(0, 30)}..."</div>}
-                  {!obj.alcance_validado && '-'}
-                </td>
-                <td style={td}>
-                  {obj.status === 'pendiente' && <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#3b82f6', fontSize: 12, padding: '6px 12px' }}>✅ Aceptar</button>}
-                  {obj.status === 'aceptado' && <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>✔️ Completar</button>}
-                </td>
+                <td style={td}><strong>{obj.colaborador?.full_name || '-'}</strong></td><td style={td}>{obj.colaborador?.area || '-'}</td><td style={td}>{obj.colaborador?.seniority || '-'}</td>
+                <td style={td}>{obj.gerente?.full_name || '-'}</td><td style={td}>{obj.objetivo}</td><td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{obj.ponderacion}%</td>
+                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : '#64748b' }}>{obj.status}</span></td>
+                <td style={td}>{obj.alcance_completado || obj.alcance_validado || '-'}</td>
+                <td style={td}>{obj.es_historico ? '📁 Si' : '-'}</td>
               </tr>
             ); })}</tbody>
           </table>
