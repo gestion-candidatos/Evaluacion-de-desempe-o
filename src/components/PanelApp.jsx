@@ -163,6 +163,9 @@ function GestionObjetivos({ colaborador, profile, onVolver }) {
   const [objetivos, setObjetivos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [modalValidar, setModalValidar] = useState(null);
+  const [alcanceValidar, setAlcanceValidar] = useState('');
+  const [justificacionValidar, setJustificacionValidar] = useState('');
   const [nuevoObjetivo, setNuevoObjetivo] = useState({ 
     objetivo: '', corporativo: '', ponderacion: 25,
     alcance_0_fecha: '', alcance_80_fecha: '', alcance_100_fecha: '', alcance_120_fecha: ''
@@ -196,8 +199,19 @@ function GestionObjetivos({ colaborador, profile, onVolver }) {
     cargarObjetivos();
   }
 
-  async function validarObjetivo(objId) {
-    await supabase.from('objetivos').update({ status: 'validado', validado_por_gerente: true, fecha_validacion: new Date() }).eq('id', objId);
+  async function validarObjetivo() {
+    if (!alcanceValidar) return alert('Selecciona un alcance');
+    if (!justificacionValidar.trim()) return alert('La justificacion es obligatoria');
+    await supabase.from('objetivos').update({ 
+      status: 'validado', 
+      validado_por_gerente: true, 
+      fecha_validacion: new Date(),
+      alcance_validado: alcanceValidar,
+      justificacion_validacion: justificacionValidar
+    }).eq('id', modalValidar);
+    setModalValidar(null);
+    setAlcanceValidar('');
+    setJustificacionValidar('');
     cargarObjetivos();
   }
 
@@ -230,20 +244,74 @@ function GestionObjetivos({ colaborador, profile, onVolver }) {
         </div>
       )}
 
+      {/* Modal de Validación */}
+      {modalValidar && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidar(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>✅ Validar Objetivo</h3>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Alcance Final *</label>
+              <select value={alcanceValidar} onChange={function(e) { setAlcanceValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}>
+                <option value="">Seleccionar alcance</option>
+                <option value="0%">0% - No alcanzado</option>
+                <option value="80%">80% - Parcialmente alcanzado</option>
+                <option value="100%">100% - Alcanzado</option>
+                <option value="120%">120% - Superado</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Justificacion *</label>
+              <textarea value={justificacionValidar} onChange={function(e) { setJustificacionValidar(e.target.value); }} placeholder="Explica por que asignas este alcance..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={validarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>✅ Confirmar Validacion</button>
+              <button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos asignados.</p> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>0%</th><th style={{ ...th, color: '#D4D2C6' }}>80%</th><th style={{ ...th, color: '#D4D2C6' }}>100%</th><th style={{ ...th, color: '#D4D2C6' }}>120%</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1500 }}>
+            <thead><tr style={{ background: '#231F20' }}>
+              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Corp.</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>0%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>80%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>100%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>120%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Status</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Alcance</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Justificacion</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
+            </tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={td}>{colaborador.area || '-'}</td>
+                <td style={td}>{obj.objetivo}</td>
+                <td style={td}>{obj.corporativo || '-'}</td>
                 <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
                 <td style={td}>{obj.alcance_0_fecha ? new Date(obj.alcance_0_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_80_fecha ? new Date(obj.alcance_80_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_100_fecha ? new Date(obj.alcance_100_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_120_fecha ? new Date(obj.alcance_120_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}</span></td>
-                <td style={td}>{obj.status === 'completado' && <button onClick={function() { validarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '6px 12px' }}>✅ Validar</button>}</td>
+                <td style={td}>
+                  {obj.alcance_completado && <div style={{ fontSize: 11, color: '#3b82f6' }}>Compl: <strong>{obj.alcance_completado}</strong></div>}
+                  {obj.alcance_validado && <div style={{ fontSize: 11, color: '#22c55e' }}>Valid: <strong>{obj.alcance_validado}</strong></div>}
+                  {!obj.alcance_completado && !obj.alcance_validado && '-'}
+                </td>
+                <td style={{ ...td, maxWidth: 150 }}>
+                  {obj.justificacion_completado && <div style={{ fontSize: 11, color: '#3b82f6', marginBottom: 2 }}>"{obj.justificacion_completado.substring(0, 40)}..."</div>}
+                  {obj.justificacion_validacion && <div style={{ fontSize: 11, color: '#22c55e' }}>"{obj.justificacion_validacion.substring(0, 40)}..."</div>}
+                  {!obj.justificacion_completado && !obj.justificacion_validacion && '-'}
+                </td>
+                <td style={td}>
+                  {obj.status === 'completado' && (
+                    <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '6px 12px' }}>✅ Validar</button>
+                  )}
+                </td>
               </tr>
             ); })}</tbody>
           </table>
@@ -256,6 +324,9 @@ function GestionObjetivos({ colaborador, profile, onVolver }) {
 function ObjetivosColaborador({ profile }) {
   const [objetivos, setObjetivos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [modalCompletar, setModalCompletar] = useState(null);
+  const [alcanceCompletar, setAlcanceCompletar] = useState('');
+  const [justificacionCompletar, setJustificacionCompletar] = useState('');
 
   useEffect(function() { cargarObjetivos(); }, []);
 
@@ -270,8 +341,19 @@ function ObjetivosColaborador({ profile }) {
     cargarObjetivos();
   }
 
-  async function completarObjetivo(objId) {
-    await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date() }).eq('id', objId);
+  async function completarObjetivo() {
+    if (!alcanceCompletar) return alert('Selecciona un alcance');
+    if (!justificacionCompletar.trim()) return alert('La justificacion es obligatoria');
+    await supabase.from('objetivos').update({ 
+      status: 'completado', 
+      completado_por_colaborador: true, 
+      fecha_completado: new Date(),
+      alcance_completado: alcanceCompletar,
+      justificacion_completado: justificacionCompletar
+    }).eq('id', modalCompletar);
+    setModalCompletar(null);
+    setAlcanceCompletar('');
+    setJustificacionCompletar('');
     cargarObjetivos();
   }
 
@@ -280,23 +362,75 @@ function ObjetivosColaborador({ profile }) {
   return (
     <div>
       <h2 style={{ color: '#231F20', marginBottom: 20 }}>🎯 Mis Objetivos</h2>
+
+      {/* Modal de Completar */}
+      {modalCompletar && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalCompletar(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>✔️ Completar Objetivo</h3>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Alcance Alcanzado *</label>
+              <select value={alcanceCompletar} onChange={function(e) { setAlcanceCompletar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}>
+                <option value="">Seleccionar alcance</option>
+                <option value="0%">0% - No alcanzado</option>
+                <option value="80%">80% - Parcialmente alcanzado</option>
+                <option value="100%">100% - Alcanzado</option>
+                <option value="120%">120% - Superado</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Justificacion *</label>
+              <textarea value={justificacionCompletar} onChange={function(e) { setJustificacionCompletar(e.target.value); }} placeholder="Explica el resultado alcanzado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={completarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>✔️ Confirmar Completado</button>
+              <button onClick={function() { setModalCompletar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {objetivos.length === 0 ? (
         <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><p style={{ color: '#94a3b8', fontSize: 16 }}>No tienes objetivos asignados aun.</p></div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>0%</th><th style={{ ...th, color: '#D4D2C6' }}>80%</th><th style={{ ...th, color: '#D4D2C6' }}>100%</th><th style={{ ...th, color: '#D4D2C6' }}>120%</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
+            <thead><tr style={{ background: '#231F20' }}>
+              <th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Corp.</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Pond.</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>0%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>80%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>100%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>120%</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Status</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Validacion</th>
+              <th style={{ ...th, color: '#D4D2C6' }}>Accion</th>
+            </tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
+                <td style={td}>{obj.objetivo}</td>
+                <td style={td}>{obj.corporativo || '-'}</td>
+                <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
                 <td style={td}>{obj.alcance_0_fecha ? new Date(obj.alcance_0_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_80_fecha ? new Date(obj.alcance_80_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_100_fecha ? new Date(obj.alcance_100_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}>{obj.alcance_120_fecha ? new Date(obj.alcance_120_fecha + 'T12:00:00').toLocaleDateString('es-AR') : '-'}</td>
                 <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status === 'validado' ? '✅ Validado' : obj.status === 'completado' ? '📝 Completado' : obj.status === 'aceptado' ? '👤 Aceptado' : '⏳ Pendiente'}</span></td>
                 <td style={td}>
+                  {obj.alcance_completado && <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>{obj.alcance_completado}</div>}
+                  {obj.justificacion_completado && <div style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>"{obj.justificacion_completado.substring(0, 30)}..."</div>}
+                  {!obj.alcance_completado && '-'}
+                </td>
+                <td style={td}>
+                  {obj.alcance_validado && <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>{obj.alcance_validado}</div>}
+                  {obj.justificacion_validacion && <div style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>"{obj.justificacion_validacion.substring(0, 30)}..."</div>}
+                  {!obj.alcance_validado && '-'}
+                </td>
+                <td style={td}>
                   {obj.status === 'pendiente' && <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#3b82f6', fontSize: 12, padding: '6px 12px' }}>✅ Aceptar</button>}
-                  {obj.status === 'aceptado' && <button onClick={function() { completarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '6px 12px' }}>✔️ Completar</button>}
+                  {obj.status === 'aceptado' && <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>✔️ Completar</button>}
                 </td>
               </tr>
             ); })}</tbody>
