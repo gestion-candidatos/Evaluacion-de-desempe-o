@@ -299,7 +299,6 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
       </div>
     </div>
   );
-}
 
 function VistaComoSelector({ profile, onSelect }) {
   var [colaboradores, setColaboradores] = useState([]);
