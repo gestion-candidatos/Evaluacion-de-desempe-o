@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  var [email, setEmail] = useState('');
+  var [password, setPassword] = useState('');
+  var [loading, setLoading] = useState(false);
+  var [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
+  async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
     
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    var { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     
     if (loginError) {
       setError('Email o contraseña incorrectos');
@@ -20,42 +20,271 @@ export default function Login() {
       window.location.href = '/panel';
     }
     setLoading(false);
-  };
+  }
 
   return (
-    <div style={{
-      display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh',
-      background: 'linear-gradient(135deg, #231F20 0%, #3a3537 50%, #231F20 100%)',
-      padding: '20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      <div style={{
-        background: 'white', borderRadius: '20px', padding: '40px', width: '100%', maxWidth: '440px',
-        boxShadow: '0 25px 50px rgba(0,0,0,0.4)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img src="/logo.jpg" alt="Grupo Fabric" style={{ width: '180px', marginBottom: '16px' }} />
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#231F20', margin: '0 0 6px 0' }}>Evaluación de Desempeño</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Grupo Fabric</p>
+    <div style={styles.container}>
+      {/* Lado Izquierdo - Imagen */}
+      <div style={styles.leftSide}>
+        <div style={styles.overlay} />
+        <div style={styles.leftContent}>
+          <h1 style={styles.brandName}>Fabric Group</h1>
+          <p style={styles.tagline}>Evaluación de Desempeño</p>
+          <div style={styles.divider} />
+          <p style={styles.description}>
+            Plataforma integral para la gestión del talento, 
+            evaluación por competencias y seguimiento de objetivos.
+          </p>
         </div>
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#231F20', marginBottom: '6px', textTransform: 'uppercase' }}>Email Corporativo</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu.email@grupo-fabric.com" required
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #D4D2C6', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
+      </div>
+
+      {/* Lado Derecho - Login */}
+      <div style={styles.rightSide}>
+        <div style={styles.loginCard}>
+          <div style={styles.logoContainer}>
+            <div style={styles.logoBox}>
+              <span style={styles.logoText}>GF</span>
+            </div>
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#231F20', marginBottom: '6px', textTransform: 'uppercase' }}>Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '2px solid #D4D2C6', fontSize: '15px', boxSizing: 'border-box', outline: 'none' }} />
-          </div>
-          {error && <p style={{ color: '#dc2626', fontSize: '13px', textAlign: 'center', padding: '12px', backgroundColor: '#fef2f2', borderRadius: '8px', margin: '0' }}>{error}</p>}
-          <button type="submit" disabled={loading}
-            style={{ width: '100%', padding: '15px', backgroundColor: loading ? '#D4D2C6' : '#231F20', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '8px', boxShadow: '0 4px 12px rgba(35, 31, 32, 0.3)' }}>
-            {loading ? 'Verificando...' : 'Ingresar a la Plataforma'}
-          </button>
-        </form>
+          
+          <h2 style={styles.welcomeTitle}>Bienvenido</h2>
+          <p style={styles.welcomeSubtitle}>Ingresa a tu cuenta para continuar</p>
+
+          <form onSubmit={handleLogin} style={styles.form}>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Email Corporativo</label>
+              <div style={styles.inputWrapper}>
+                <span style={styles.inputIcon}>📧</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={function(e) { setEmail(e.target.value); }}
+                  placeholder="tu.email@grupo-fabric.com"
+                  required
+                  style={styles.input}
+                />
+              </div>
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Contraseña</label>
+              <div style={styles.inputWrapper}>
+                <span style={styles.inputIcon}>🔒</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={function(e) { setPassword(e.target.value); }}
+                  placeholder="••••••••"
+                  required
+                  style={styles.input}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div style={styles.errorBox}>
+                <span>⚠️</span> {error}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              style={loading ? {...styles.button, ...styles.buttonDisabled} : styles.button}
+            >
+              {loading ? 'Verificando...' : 'Ingresar a la Plataforma'}
+            </button>
+          </form>
+
+          <p style={styles.footerText}>
+            ¿Problemas para ingresar? Contacta a RRHH
+          </p>
+        </div>
       </div>
     </div>
   );
 }
+
+var styles = {
+  container: {
+    display: 'flex',
+    minHeight: '100vh',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  },
+  
+  // Lado Izquierdo
+  leftSide: {
+    flex: '1',
+    backgroundImage: 'url("/login-bg.jpg")',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh'
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(135deg, rgba(35, 31, 32, 0.92) 0%, rgba(35, 31, 32, 0.75) 100%)'
+  },
+  leftContent: {
+    position: 'relative',
+    zIndex: 1,
+    textAlign: 'center',
+    padding: '40px',
+    maxWidth: '500px'
+  },
+  brandName: {
+    fontSize: '42px',
+    fontWeight: '700',
+    color: '#D4D2C6',
+    margin: '0 0 8px 0',
+    letterSpacing: '2px',
+    textTransform: 'uppercase'
+  },
+  tagline: {
+    fontSize: '20px',
+    fontWeight: '300',
+    color: '#D4D2C6',
+    margin: '0 0 24px 0',
+    letterSpacing: '1px'
+  },
+  divider: {
+    width: '60px',
+    height: '3px',
+    background: '#D4D2C6',
+    margin: '0 auto 24px auto'
+  },
+  description: {
+    fontSize: '15px',
+    color: '#9ca3af',
+    lineHeight: '1.8',
+    margin: 0
+  },
+
+  // Lado Derecho
+  rightSide: {
+    flex: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#f8fafc',
+    padding: '40px'
+  },
+  loginCard: {
+    width: '100%',
+    maxWidth: '420px'
+  },
+  logoContainer: {
+    textAlign: 'center',
+    marginBottom: '32px'
+  },
+  logoBox: {
+    width: '64px',
+    height: '64px',
+    background: 'linear-gradient(135deg, #231F20, #3a3536)',
+    borderRadius: '16px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 8px 24px rgba(35, 31, 32, 0.25)'
+  },
+  logoText: {
+    color: '#D4D2C6',
+    fontSize: '24px',
+    fontWeight: '700',
+    letterSpacing: '1px'
+  },
+  welcomeTitle: {
+    fontSize: '28px',
+    fontWeight: '700',
+    color: '#231F20',
+    textAlign: 'center',
+    margin: '0 0 8px 0'
+  },
+  welcomeSubtitle: {
+    fontSize: '14px',
+    color: '#64748b',
+    textAlign: 'center',
+    margin: '0 0 32px 0'
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px'
+  },
+  inputGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  label: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  inputWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center'
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: '14px',
+    fontSize: '16px',
+    zIndex: 1
+  },
+  input: {
+    width: '100%',
+    padding: '14px 16px 14px 44px',
+    borderRadius: '10px',
+    border: '2px solid #e2e8f0',
+    fontSize: '15px',
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    background: 'white'
+  },
+  errorBox: {
+    padding: '12px 16px',
+    background: '#fef2f2',
+    borderRadius: '8px',
+    color: '#dc2626',
+    fontSize: '13px',
+    textAlign: 'center',
+    border: '1px solid #fecaca',
+    fontWeight: '500'
+  },
+  button: {
+    padding: '15px',
+    background: 'linear-gradient(135deg, #231F20, #3a3536)',
+    color: '#D4D2C6',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginTop: '8px',
+    transition: 'all 0.2s',
+    boxShadow: '0 4px 12px rgba(35, 31, 32, 0.3)',
+    letterSpacing: '0.5px'
+  },
+  buttonDisabled: {
+    background: '#94a3b8',
+    cursor: 'not-allowed',
+    boxShadow: 'none'
+  },
+  footerText: {
+    textAlign: 'center',
+    fontSize: '12px',
+    color: '#94a3b8',
+    marginTop: '24px'
+  }
+};
