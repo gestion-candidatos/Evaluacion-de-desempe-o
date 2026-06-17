@@ -832,14 +832,84 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
   var [evalData, setEvalData] = useState(null);
   var [showInfo, setShowInfo] = useState({});
 
-  useEffect(function() {
-    (async function() {
-      var [{ data: comps }, { data: { session } }] = await Promise.all([
-        supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'),
-        supabase.auth.getSession()
-      ]);
-      setComp(comps || []);
+useEffect(function() {
+    async function cargarDatos() {
+      try {
+        var { data: comps, error: errorComps } = await supabase
+          .from('competencias')
+          .select('id, nombre, descripcion')
+          .eq('aplica_a', colaborador.seniority || 'Analista');
+        
+        if (errorComps) { console.error(errorComps); setCarg(false); return; }
+        setComp(comps || []);
 
+        var { data: { session } } = await supabase.auth.getSession();
+        if (!session) { setCarg(false); return; }
+
+        // Cargar autoevaluacion
+        var { data: ae } = await supabase
+          .from('evaluaciones')
+          .select('id, estado, rating_promedio, comentarios_finales')
+          .eq('colaborador_id', colaborador.id)
+          .eq('tipo_evaluacion', 'autoevaluacion')
+          .eq('ciclo_id', cicloId)
+          .maybeSingle();
+
+        if (ae) {
+          var { data: p } = await supabase
+            .from('puntuaciones')
+            .select('id, rating, comentario, competencia_id, competencias(nombre)')
+            .eq('evaluacion_id', ae.id);
+          setAutoEval({ ...ae, puntuaciones: p || [] });
+        }
+
+        // Cargar o crear evaluacion del lider
+        var { data: liderEval } = await supabase
+          .from('evaluaciones')
+          .select('id, estado, comentarios_finales, rating_promedio')
+          .eq('colaborador_id', colaborador.id)
+          .eq('tipo_evaluacion', 'evaluacion_lider')
+          .eq('ciclo_id', cicloId)
+          .maybeSingle();
+
+        if (liderEval) {
+          setEvalData(liderEval);
+          setComFin(liderEval.comentarios_finales || '');
+          
+          var { data: punts } = await supabase
+            .from('puntuaciones')
+            .select('rating, competencia_id, comentario')
+            .eq('evaluacion_id', liderEval.id);
+          
+          var rm = {};
+          var cm = {};
+          (punts || []).forEach(function(p) { 
+            rm[p.competencia_id] = p.rating; 
+            cm[p.competencia_id] = p.comentario || ''; 
+          });
+          setRatings(rm);
+          setComent(cm);
+        } else if (!soloLectura) {
+          var { data: nueva } = await supabase
+            .from('evaluaciones')
+            .insert({
+              colaborador_id: colaborador.id,
+              evaluador_id: session.user.id,
+              tipo_evaluacion: 'evaluacion_lider',
+              estado: 'borrador',
+              ciclo_id: cicloId
+            })
+            .select()
+            .single();
+          if (nueva) setEvalData(nueva);
+        }
+      } catch(err) {
+        console.error('Error cargando datos:', err);
+      }
+      setCarg(false);
+    }
+    cargarDatos();
+  }, [cicloId, colaborador.id]);
       // Cargar autoevaluacion del colaborador con puntuaciones y comentarios
       var { data: ae } = await supabase.from('evaluaciones')
         .select('id, estado, rating_promedio, comentarios_finales')
