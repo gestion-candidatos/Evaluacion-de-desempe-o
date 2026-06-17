@@ -1056,7 +1056,6 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
           <p style={{ color: '#475569', fontStyle: 'italic' }}>{feedback.comentario_lider || 'Sin comentarios aun.'}</p>
         </div>
       );
-      }
 
       {evalLider?.rating_calibrado && (
         <div style={{ padding: 16, background: '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
