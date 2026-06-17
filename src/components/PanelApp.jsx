@@ -1023,6 +1023,12 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
 
   async function enviar() {
     if (soloLectura || enviada) return;
+    var sinRating = competencias.filter(function(c) { return !ratings[c.id] || ratings[c.id] <= 0; });
+    if (sinRating.length > 0) {
+      setMsg('❌ Debes calificar todas las competencias. Falta: ' + sinRating.map(function(c) { return c.nombre; }).join(', '));
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
     await guardar();
     var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single();
     if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id);
@@ -1055,7 +1061,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
           <h4>💬 Feedback de tu Lider</h4>
           <p style={{ color: '#475569', fontStyle: 'italic' }}>{feedback.comentario_lider || 'Sin comentarios aun.'}</p>
         </div>
-      );
+      )}
 
       {evalLider?.rating_calibrado && (
         <div style={{ padding: 16, background: '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
@@ -1063,8 +1069,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
           <p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalLider.rating_calibrado}</p>
           {evalLider.comentario_calibracion && <p style={{ color: '#475569', fontSize: 13, marginTop: 8 }}>"{evalLider.comentario_calibracion}"</p>}
         </div>
-      );
-      }
+      )}
 
       {competencias.length === 0 && <p style={{ color: '#f59e0b' }}>No hay competencias configuradas para tu seniority.</p>}
 
@@ -1120,8 +1125,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
                   );
                 })}
               </div>
-            );
-            }
+            )}
 
             <textarea
               value={comentarios[comp.id] || ''}
@@ -1139,7 +1143,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
         );
       })}
 
-<div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24 }}>
         <h4 style={s.seccionTitulo}>📝 Comentarios Finales (obligatorio)</h4>
         {enviada || soloLectura ? (
           <p style={{ color: '#475569', padding: 12, background: '#f8fafc', borderRadius: 8 }}>{comFin || 'Sin comentarios.'}</p>
@@ -1153,6 +1157,17 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
         )}
       </div>
 
+      {prom && (
+        <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid ' + clasif.color, textAlign: 'center' }}>
+          <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Resultado Final</p>
+          <p style={{ fontSize: 48, fontWeight: 700, color: clasif.color, margin: '8px 0' }}>{prom}</p>
+          <p style={{ fontSize: 18, fontWeight: 600, color: clasif.color, margin: 0 }}>{clasif.texto}</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
+            Basado en {Object.values(ratings).filter(function(r) { return r > 0; }).length} de {competencias.length} competencias evaluadas
+          </p>
+        </div>
+      )}
+
       {msg && <div style={s.mensajeToast}>{msg}</div>}
 
       {!enviada && !soloLectura && (
@@ -1160,8 +1175,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
           <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
           <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluacion</button>
         </div>
-      );
-      }
+      )}
 
       {enviada && (
         <div style={{ ...s.bannerEnviado, marginTop: 20 }}>✅ Tu evaluacion ha sido enviada y no puede modificarse.</div>
