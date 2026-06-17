@@ -1155,7 +1155,6 @@ useEffect(function() {
     </div>
   );
 }
-
 function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
   var [competencias, setComp] = useState([]);
   var [ratings, setRatings] = useState({});
