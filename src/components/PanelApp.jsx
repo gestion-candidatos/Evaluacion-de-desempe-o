@@ -1314,8 +1314,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
         );
       })}
 
-      <SeccionText titulo="📝 Comentarios Finales (obligatorio)" valor={comFin} onChange={enviada || soloLectura ? function() {} : setComFin} disabled={enviada || soloLectura} />
-
+<SeccionText titulo="📝 Comentarios Finales (obligatorio)" valor={comFin} onChange={enviada || soloLectura ? function() {} : function(e) { setComFin(e.target.value); }} disabled={enviada || soloLectura} />
       {prom && (
         <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid ' + clasif.color, textAlign: 'center' }}>
           <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Resultado Final</p>
@@ -1644,8 +1643,20 @@ function clasificarRating(prom) {
 }
 
 function RatingDesc({ competenciaId, rating }) { var [desc, setDesc] = useState('...'); useEffect(function() { (async function() { var { data } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (data) setDesc(data.titulo + ': ' + data.descripcion); })(); }, [competenciaId, rating]); return <span>{desc}</span>; }
-function SeccionText({ titulo, valor, onChange, disabled }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={onChange} style={{ ...s.textarea }} disabled={disabled} readOnly={disabled} /></div>; }
-
+function SeccionText({ titulo, valor, onChange, disabled }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h4 style={s.seccionTitulo}>{titulo}</h4>
+      <textarea 
+        value={valor} 
+        onChange={function(e) { if (onChange) onChange(e); }} 
+        style={{ ...s.textarea, borderColor: disabled ? '#D4D2C6' : (valor?.trim() ? '#D4D2C6' : '#dc2626') }} 
+        disabled={disabled} 
+        readOnly={disabled} 
+      />
+    </div>
+  );
+}
 var th = { textAlign: 'left', padding: '6px 8px', color: '#231F20', fontSize: '11px' };
 var td = { padding: '6px 8px', fontSize: '13px' };
 var sidebarStyle = { aside: { width: '260px', background: '#231F20', minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '20px 0' }, logoContainer: { padding: '0 20px 20px', borderBottom: '1px solid #D4D2C6', marginBottom: 16, textAlign: 'center' }, nav: { display: 'flex', flexDirection: 'column', gap: 4, padding: '0 12px', flex: 1 }, menuItem: { padding: '14px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 500, transition: 'all 0.15s', width: '100%' }, subMenuItem: { padding: '10px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 400, transition: 'all 0.15s', width: '100%' }, footer: { padding: '16px 20px', borderTop: '1px solid #D4D2C6' } };
