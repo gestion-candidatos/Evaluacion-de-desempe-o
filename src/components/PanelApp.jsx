@@ -1182,7 +1182,6 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
       )}
     </div>
   );
-}
 function DetalleAutoEvaluacion({ autoevaluacion }) {
   if (!autoevaluacion) return <p style={{ padding: 16, color: '#94a3b8' }}>Sin autoevaluacion.</p>;
   var puntuaciones = autoevaluacion.puntuaciones || [];
@@ -1207,7 +1206,6 @@ function DetalleAutoEvaluacion({ autoevaluacion }) {
       </div>
     </div>
   );
-}
 
 function ObjetivosView({ profile }) {
   var esGerente = profile.seniority === 'Gerente' || profile.role === 'admin_rrhh' || profile.role === 'lider';
@@ -1238,7 +1236,6 @@ function ObjetivosGerente({ profile }) {
       )}
     </div>
   );
-}
 
 function GestionObjetivosLider({ colaborador, profile, onVolver }) {
   var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
@@ -1298,7 +1295,6 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
       )}
     </div>
   );
-}
 
 function ObjetivosColaborador({ profile }) {
   var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
@@ -1381,7 +1377,6 @@ function ObjetivosColaborador({ profile }) {
       )}
     </div>
   );
-}
 
 function ObjetivoDetalle({ objetivo, onVolver, esLider }) {
   var [detalle, setDetalle] = useState(null);
