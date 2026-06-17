@@ -909,53 +909,7 @@ useEffect(function() {
       setCarg(false);
     }
     cargarDatos();
-      // Cargar autoevaluacion del colaborador con puntuaciones y comentarios
-      var { data: ae } = await supabase.from('evaluaciones')
-        .select('id, estado, rating_promedio, comentarios_finales')
-        .eq('colaborador_id', colaborador.id)
-        .eq('tipo_evaluacion', 'autoevaluacion')
-        .eq('ciclo_id', cicloId)
-        .maybeSingle();
-      
-      if (ae) {
-        var { data: p } = await supabase.from('puntuaciones')
-          .select('id, rating, comentario, competencia_id, competencias!inner(nombre)')
-          .eq('evaluacion_id', ae.id);
-        setAutoEval({ ...ae, puntuaciones: p || [] });
-      }
-
-      // Cargar o crear evaluacion del lider
-      var { data: liderEval } = await supabase.from('evaluaciones')
-        .select('id, estado, comentarios_finales, rating_promedio')
-        .eq('colaborador_id', colaborador.id)
-        .eq('tipo_evaluacion', 'evaluacion_lider')
-        .eq('ciclo_id', cicloId)
-        .maybeSingle();
-      
-      if (liderEval) {
-        setEvalData(liderEval);
-        setComFin(liderEval.comentarios_finales || '');
-        var { data: punts } = await supabase.from('puntuaciones')
-          .select('rating, competencia_id, comentario')
-          .eq('evaluacion_id', liderEval.id);
-        var rm = {};
-        var cm = {};
-        (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
-        setRatings(rm);
-        setComent(cm);
-      } else if (!soloLectura) {
-        await supabase.from('evaluaciones').insert({
-          colaborador_id: colaborador.id,
-          evaluador_id: session.user.id,
-          tipo_evaluacion: 'evaluacion_lider',
-          estado: 'borrador',
-          ciclo_id: cicloId
-        });
-      }
-      setCarg(false);
-    })();
-  }, []);
-
+     
   async function guardar() {
     if (soloLectura || enviada) return;
     
