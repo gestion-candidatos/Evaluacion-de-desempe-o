@@ -486,68 +486,272 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
   }
 
-  function generarPDFCompleto(d) {
-    var pdf = new jsPDF(); var NEGRO = '#231F20'; var BEIGE = '#D4D2C6'; var pageWidth = 210; var marginX = 15; var y = 28;
-    function agregarCabecera() { try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {} pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26); }
-    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
+ function generarPDFCompleto(d) {
+    var pdf = new jsPDF();
+    var NEGRO = '#231F20';
+    var BEIGE = '#D4D2C6';
+    var pageWidth = 210;
+    var marginX = 15;
+    var y = 28;
+
+    function agregarCabecera() {
+      try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {}
+      pdf.setDrawColor(BEIGE);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginX, 26, pageWidth - marginX, 26);
+    }
+
+    function agregarPie() {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6);
+      pdf.setTextColor('#94a3b8');
+      pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
+    }
+
+    function verificarSalto(alturaNecesaria) {
+      if (y + alturaNecesaria > 275) {
+        agregarPie();
+        pdf.addPage();
+        agregarCabecera();
+        y = 30;
+      }
+    }
+
     agregarCabecera();
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACION DE DESEMPENO', marginX, y); y += 8;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+
+    // ENCABEZADO GENERAL
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(NEGRO);
+    pdf.text('EVALUACION DE DESEMPENO', marginX, y);
+    y += 8;
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
     pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), marginX, y); y += 5;
     pdf.text('Email: ' + d.colaborador.email, marginX, y); y += 5;
-    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y); y += 8;
+    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y);
+    y += 10;
 
-    // SECCION 1: Autoevaluacion
-    pdf.setFillColor(BEIGE); pdf.rect(marginX, y, pageWidth - (marginX * 2), 6, 'F');
-    pdf.setTextColor(NEGRO); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
-    pdf.text('AUTOEVALUACION', marginX + 2, y + 4); y += 10;
-    var autoPunts = {}; var autoComs = {}; (d.autoevaluacion?.puntuaciones || []).forEach(function(p) { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
-    var todasCompsAuto = Object.keys(autoPunts);
-    if (todasCompsAuto.length > 0) {
-      pdf.setFontSize(7);
-      todasCompsAuto.forEach(function(compId, i) {
-        var nombre = (d.autoevaluacion?.puntuaciones?.find(function(p) { return p.competencia_id === compId; })?.competencias?.nombre || 'Competencia').substring(0, 25);
-        if (i % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, 180, 5, 'F'); }
-        pdf.text(nombre, marginX + 2, y); pdf.text(String(autoPunts[compId] || '-'), 120, y);
-        if (autoComs[compId]) pdf.text(autoComs[compId].substring(0, 40), 140, y);
+    // =============================================
+    // SECCION 1: AUTOEVALUACION
+    // =============================================
+    verificarSalto(20);
+    pdf.setFillColor(BEIGE);
+    pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F');
+    pdf.setTextColor(NEGRO);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.text('SECCION 1: AUTOEVALUACION', marginX + 2, y + 5);
+    y += 12;
+
+    var autoPunts = {};
+    var autoComs = {};
+    (d.autoevaluacion?.puntuaciones || []).forEach(function(p) {
+      autoPunts[p.competencia_id] = p.rating;
+      autoComs[p.competencia_id] = p.comentario || '';
+    });
+
+    if (Object.keys(autoPunts).length > 0) {
+      // Tabla de competencias
+      pdf.setFillColor(NEGRO);
+      pdf.rect(marginX, y, pageWidth - (marginX * 2), 6, 'F');
+      pdf.setTextColor('#FFFFFF');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6);
+      pdf.text('Competencia', marginX + 2, y + 4);
+      pdf.text('Rating', 120, y + 4);
+      pdf.text('Comentario', 135, y + 4);
+      y += 8;
+      pdf.setTextColor(NEGRO);
+
+      Object.keys(autoPunts).forEach(function(compId, i) {
+        verificarSalto(10);
+        var nombre = (d.autoevaluacion?.puntuaciones?.find(function(p) { return p.competencia_id === compId; })?.competencias?.nombre || 'Competencia').substring(0, 22);
+        var rating = String(autoPunts[compId] || '-');
+        var comentario = autoComs[compId] || '-';
+
+        if (i % 2 === 0) {
+          pdf.setFillColor(248, 248, 248);
+          pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), 6, 'F');
+        }
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.text(nombre, marginX + 2, y);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(rating, 120, y);
+
+        // Comentario (truncado si es muy largo)
+        var comLines = pdf.splitTextToSize(comentario, 55);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(6);
+        pdf.text(comLines[0] || '', 135, y);
+        if (comLines.length > 1) {
+          y += 3;
+          pdf.text(comLines[1] || '', 135, y);
+        }
         y += 5;
       });
-    }
-    if (d.autoevaluacion?.comentarios_finales) { y += 2; pdf.setFontSize(7); pdf.text('Comentarios Finales: ' + d.autoevaluacion.comentarios_finales.substring(0, 100), marginX, y); y += 5; }
-    if (d.promAuto) { pdf.setFontSize(9); pdf.text('Rating Auto: ' + d.promAuto, marginX, y); y += 6; }
-    y += 6;
 
-    // SECCION 2: Evaluacion del Lider
-    if (d.evaluacionLider) {
-      if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-      pdf.setFillColor(BEIGE); pdf.rect(marginX, y, pageWidth - (marginX * 2), 6, 'F');
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
-      pdf.text('EVALUACION DEL LIDER', marginX + 2, y + 4); y += 10;
-      var liderPunts = {}; var liderComs = {}; (d.evaluacionLider?.puntuaciones || []).forEach(function(p) { liderPunts[p.competencia_id] = p.rating; liderComs[p.competencia_id] = p.comentario || ''; });
-      var todasCompsLider = Object.keys(liderPunts);
-      if (todasCompsLider.length > 0) {
+      y += 3;
+
+      // Comentarios finales autoevaluacion
+      if (d.autoevaluacion?.comentarios_finales) {
+        verificarSalto(20);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.text('Comentarios Finales:', marginX, y);
+        y += 4;
+        pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(7);
-        todasCompsLider.forEach(function(compId, i) {
-          var nombre = (d.evaluacionLider?.puntuaciones?.find(function(p) { return p.competencia_id === compId; })?.competencias?.nombre || 'Competencia').substring(0, 25);
-          if (i % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, 180, 5, 'F'); }
-          pdf.text(nombre, marginX + 2, y); pdf.text(String(liderPunts[compId] || '-'), 120, y);
-          if (liderComs[compId]) pdf.text(liderComs[compId].substring(0, 40), 140, y);
-          y += 5;
+        var finalLines = pdf.splitTextToSize(d.autoevaluacion.comentarios_finales, pageWidth - (marginX * 2));
+        finalLines.forEach(function(line) {
+          verificarSalto(5);
+          pdf.text(line, marginX + 2, y);
+          y += 3.5;
         });
       }
-      if (d.evaluacionLider?.comentarios_finales) { y += 2; pdf.setFontSize(7); pdf.text('Comentarios Finales: ' + d.evaluacionLider.comentarios_finales.substring(0, 100), marginX, y); y += 5; }
-      if (d.promLider) { pdf.setFontSize(9); pdf.text('Rating Lider: ' + d.promLider, marginX, y); y += 6; }
-      y += 6;
+
+      // Rating autoevaluacion
+      if (d.promAuto) {
+        verificarSalto(10);
+        y += 2;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        var clasifAuto = clasificarRating(parseFloat(d.promAuto));
+        pdf.setTextColor(clasifAuto.color);
+        pdf.text('Rating Final Autoevaluacion: ' + d.promAuto + ' - ' + clasifAuto.texto, marginX, y);
+        pdf.setTextColor(NEGRO);
+      }
+    }
+    y += 8;
+
+    // =============================================
+    // SECCION 2: EVALUACION DEL LIDER
+    // =============================================
+    if (d.evaluacionLider) {
+      verificarSalto(20);
+      pdf.setFillColor(BEIGE);
+      pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F');
+      pdf.setTextColor(NEGRO);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.text('SECCION 2: EVALUACION DEL LIDER', marginX + 2, y + 5);
+      y += 12;
+
+      var liderPunts = {};
+      var liderComs = {};
+      (d.evaluacionLider?.puntuaciones || []).forEach(function(p) {
+        liderPunts[p.competencia_id] = p.rating;
+        liderComs[p.competencia_id] = p.comentario || '';
+      });
+
+      if (Object.keys(liderPunts).length > 0) {
+        pdf.setFillColor(NEGRO);
+        pdf.rect(marginX, y, pageWidth - (marginX * 2), 6, 'F');
+        pdf.setTextColor('#FFFFFF');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(6);
+        pdf.text('Competencia', marginX + 2, y + 4);
+        pdf.text('Rating', 120, y + 4);
+        pdf.text('Comentario', 135, y + 4);
+        y += 8;
+        pdf.setTextColor(NEGRO);
+
+        Object.keys(liderPunts).forEach(function(compId, i) {
+          verificarSalto(10);
+          var nombre = (d.evaluacionLider?.puntuaciones?.find(function(p) { return p.competencia_id === compId; })?.competencias?.nombre || 'Competencia').substring(0, 22);
+          var rating = String(liderPunts[compId] || '-');
+          var comentario = liderComs[compId] || '-';
+
+          if (i % 2 === 0) {
+            pdf.setFillColor(248, 248, 248);
+            pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), 6, 'F');
+          }
+
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+          pdf.text(nombre, marginX + 2, y);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(rating, 120, y);
+
+          var comLines = pdf.splitTextToSize(comentario, 55);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(6);
+          pdf.text(comLines[0] || '', 135, y);
+          if (comLines.length > 1) {
+            y += 3;
+            pdf.text(comLines[1] || '', 135, y);
+          }
+          y += 5;
+        });
+
+        y += 3;
+
+        if (d.evaluacionLider?.comentarios_finales) {
+          verificarSalto(20);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8);
+          pdf.text('Comentarios Finales del Lider:', marginX, y);
+          y += 4;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+          var finalLines = pdf.splitTextToSize(d.evaluacionLider.comentarios_finales, pageWidth - (marginX * 2));
+          finalLines.forEach(function(line) {
+            verificarSalto(5);
+            pdf.text(line, marginX + 2, y);
+            y += 3.5;
+          });
+        }
+
+        if (d.promLider) {
+          verificarSalto(10);
+          y += 2;
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(9);
+          var clasifLider = clasificarRating(parseFloat(d.promLider));
+          pdf.setTextColor(clasifLider.color);
+          pdf.text('Rating Final Lider: ' + d.promLider + ' - ' + clasifLider.texto, marginX, y);
+          pdf.setTextColor(NEGRO);
+        }
+      }
+    }
+    y += 8;
+
+    // =============================================
+    // SECCION 3: CALIBRACION
+    // =============================================
+    if (d.ratingFinal) {
+      verificarSalto(30);
+      y += 4;
+      pdf.setFillColor(NEGRO);
+      pdf.rect(marginX, y, pageWidth - (marginX * 2), 24, 'F');
+      pdf.setTextColor('#FFFFFF');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      pdf.text('RESULTADO FINAL CALIBRADO', marginX + 4, y + 10);
+      pdf.setFontSize(18);
+      var clasifCal = clasificarRating(parseFloat(d.ratingFinal));
+      pdf.setTextColor(clasifCal.color);
+      pdf.text(String(d.ratingFinal) + ' - ' + clasifCal.texto, marginX + 4, y + 20);
+      pdf.setTextColor('#FFFFFF');
+
+      if (d.comentarioCalibracion) {
+        y += 30;
+        verificarSalto(10);
+        pdf.setTextColor(NEGRO);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Justificacion de Calibracion:', marginX, y);
+        y += 4;
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(d.comentarioCalibracion, marginX, y);
+      }
     }
 
-    // SECCION 3: Calibracion
-    if (d.ratingFinal) {
-      if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 22, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(11); pdf.text('RESULTADO FINAL CALIBRADO', marginX + 4, y + 8); pdf.setFontSize(16); pdf.text(String(d.ratingFinal), marginX + 4, y + 18);
-      if (d.comentarioCalibracion) { y += 28; pdf.setTextColor(NEGRO); pdf.setFontSize(8); pdf.text('Justificacion: ' + d.comentarioCalibracion, marginX, y); }
-    }
-    agregarPie(); return pdf;
+    agregarPie();
+    return pdf;
   }
 
   function verPDF(d) { generarPDFCompleto(d).save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
