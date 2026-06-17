@@ -384,79 +384,76 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     y += 10;
 
     // ---- COMPETENCIAS — una por una ----
+    var LINE_H = 4.2;
+    var FONT_COM = 7;
+    var COM_W = COL_W - 4;
+
     compsOrden.forEach(function(comp, idx) {
       var autoP = autoPunts[comp.id];
       var liderP = liderPunts[comp.id];
       var autoC = autoComs[comp.id] || '';
       var liderC = liderComs[comp.id] || '';
 
-      // calcular altura necesaria
-      pdf.setFontSize(6.5);
-      var linAuto = autoC ? pdf.splitTextToSize(autoC, COL_W - 14) : [];
-      var linLider = liderC ? pdf.splitTextToSize(liderC, COL_W - 14) : [];
-      var maxLineas = Math.max(linAuto.length, linLider.length, 1);
-      var bloqueH = Math.max(22, maxLineas * 4 + 14);
+      pdf.setFontSize(FONT_COM);
+      var linAuto = pdf.splitTextToSize(autoC || 'Sin comentario', COM_W);
+      var linLider = pdf.splitTextToSize(liderC || 'Sin comentario', COM_W);
+      var maxLineas = Math.max(linAuto.length, linLider.length);
+      // altura cuerpo: fila puntaje 10mm + líneas + padding
+      var bloqueH = Math.max(22, 10 + maxLineas * LINE_H + 4);
 
-      chk(bloqueH + 6);
+      chk(bloqueH + 12);
 
-      // fondo del bloque completo (alternado)
-      if (idx % 2 === 0) {
-        pdf.setFillColor(250, 249, 247);
-        pdf.rect(MX, y, PW - MX * 2, bloqueH + 4, 'F');
-      }
-
-      // nombre de la competencia — ancho completo
+      // nombre competencia ancho total
       pdf.setFillColor(212, 210, 198);
       pdf.rect(MX, y, PW - MX * 2, 7, 'F');
       pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
       pdf.text(comp.nombre.toUpperCase(), MX + 2, y + 5);
-      y += 9;
+      y += 8;
+
+      // fondo cuerpo alternado
+      pdf.setFillColor(idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 249 : 255, idx % 2 === 0 ? 247 : 255);
+      pdf.rect(MX, y, PW - MX * 2, bloqueH, 'F');
 
       // línea divisoria vertical
       pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.3);
-      pdf.line(MID, y - 1, MID, y + bloqueH - 2);
+      pdf.line(MID, y, MID, y + bloqueH);
 
-      var yBloque = y;
+      var yB = y + 2;
 
-      // --- columna izquierda: AUTO ---
+      // columna AUTO (izquierda)
       if (autoP) {
-        puntCirculo(COL_L + 5, yBloque + 4.5, autoP, 35, 31, 32, 212, 210, 198);
+        puntCirculo(COL_L + 4.5, yB + 3.5, autoP, 35, 31, 32, 212, 210, 198);
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
-        pdf.text('Puntaje: ' + autoP, COL_L + 11, yBloque + 5.5);
+        pdf.text('Puntaje: ' + autoP, COL_L + 11, yB + 4.5);
       } else {
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
-        pdf.text('Sin puntaje', COL_L + 2, yBloque + 5.5);
+        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin puntaje', COL_L + 2, yB + 4.5);
       }
-      if (linAuto.length > 0) {
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(71, 85, 105);
-        linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yBloque + 12 + i * 4); });
-      } else {
-        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
-        pdf.text('Sin comentario', COL_L + 2, yBloque + 12);
-      }
+      pdf.setFont(autoC ? 'helvetica' : 'helvetica', autoC ? 'normal' : 'italic');
+      pdf.setFontSize(FONT_COM);
+      pdf.setTextColor(autoC ? 71 : 148, autoC ? 85 : 163, autoC ? 105 : 184);
+      linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yB + 10 + i * LINE_H); });
 
-      // --- columna derecha: LIDER ---
+      // columna LIDER (derecha)
       if (liderP) {
-        puntCirculo(COL_R + 5, yBloque + 4.5, liderP, 212, 210, 198, 35, 31, 32);
+        puntCirculo(COL_R + 4.5, yB + 3.5, liderP, 212, 210, 198, 35, 31, 32);
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
-        pdf.text('Puntaje: ' + liderP, COL_R + 11, yBloque + 5.5);
+        pdf.text('Puntaje: ' + liderP, COL_R + 11, yB + 4.5);
       } else {
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
-        pdf.text('Sin puntaje', COL_R + 2, yBloque + 5.5);
+        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin puntaje', COL_R + 2, yB + 4.5);
       }
-      if (linLider.length > 0) {
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(71, 85, 105);
-        linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yBloque + 12 + i * 4); });
-      } else {
-        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
-        pdf.text('Sin comentario', COL_R + 2, yBloque + 12);
-      }
+      pdf.setFont(liderC ? 'helvetica' : 'helvetica', liderC ? 'normal' : 'italic');
+      pdf.setFontSize(FONT_COM);
+      pdf.setTextColor(liderC ? 71 : 148, liderC ? 85 : 163, liderC ? 105 : 184);
+      linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yB + 10 + i * LINE_H); });
 
-      y += bloqueH + 4;
+      y += bloqueH + 2;
       pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.2);
       pdf.line(MX, y, PW - MX, y);
       y += 2;
     });
+
 
     y += 4;
 
@@ -582,8 +579,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                   <td style={{ ...td, textAlign: 'center' }}>
                     {d.evaluacionLider && !soloLectura ? (
                       <select value={d.ratingFinal || ''} onChange={function(e) { guardarCal(d.evaluacionLider.id, parseFloat(e.target.value), d.comentarioCalibracion || ''); }} style={{ padding: '6px 10px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, fontWeight: 600, background: 'white' }}>
-                        <option value="">Seleccionar</option>
-                        <option value="1">1.0</option><option value="1.5">1.5</option><option value="2">2.0</option><option value="2.5">2.5</option><option value="3">3.0</option><option value="3.5">3.5</option><option value="4">4.0</option><option value="4.5">4.5</option><option value="5">5.0</option>
+                        <option value="">Seleccionar</option><option value="1.0">1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option><option value="1.3">1.3</option><option value="1.4">1.4</option><option value="1.5">1.5</option><option value="1.6">1.6</option><option value="1.7">1.7</option><option value="1.8">1.8</option><option value="1.9">1.9</option><option value="2.0">2.0</option><option value="2.1">2.1</option><option value="2.2">2.2</option><option value="2.3">2.3</option><option value="2.4">2.4</option><option value="2.5">2.5</option><option value="2.6">2.6</option><option value="2.7">2.7</option><option value="2.8">2.8</option><option value="2.9">2.9</option><option value="3.0">3.0</option><option value="3.1">3.1</option><option value="3.2">3.2</option><option value="3.3">3.3</option><option value="3.4">3.4</option><option value="3.5">3.5</option><option value="3.6">3.6</option><option value="3.7">3.7</option><option value="3.8">3.8</option><option value="3.9">3.9</option><option value="4.0">4.0</option><option value="4.1">4.1</option><option value="4.2">4.2</option><option value="4.3">4.3</option><option value="4.4">4.4</option><option value="4.5">4.5</option><option value="4.6">4.6</option><option value="4.7">4.7</option><option value="4.8">4.8</option><option value="4.9">4.9</option><option value="5.0">5.0</option>
                       </select>
                     ) : (
                       <div>
