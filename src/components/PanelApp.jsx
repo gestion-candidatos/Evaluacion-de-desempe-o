@@ -417,7 +417,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       pdf.setFillColor(212, 210, 198);
       pdf.rect(MX, y, PW - MX * 2, 7, 'F');
       pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
-      pdf.text(t(comp.nombre.toUpperCase(), MX + 2, y + 5);
       pdf.text(t(comp.nombre.toUpperCase()), MX + 2, y + 5);
 
       // fondo cuerpo alternado
