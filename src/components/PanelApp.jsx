@@ -355,6 +355,16 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     function nuevaPag() { pie(); pdf.addPage(); cab(); y = 30; }
     function chk(h) { if (y + h > 278) nuevaPag(); }
 
+    // Normalizar texto para jsPDF helvetica (no soporta tildes)
+    function t(str) {
+      return (str || '')
+        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+        .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u')
+        .replace(/[ÁÀÄÂ]/g,'A').replace(/[ÉÈËÊ]/g,'E').replace(/[ÍÌÏÎ]/g,'I')
+        .replace(/[ÓÒÖÔ]/g,'O').replace(/[ÚÙÜÛ]/g,'U')
+        .replace(/[ñ]/g,'n').replace(/[Ñ]/g,'N')
+        .replace(/[^\x00-\x7E]/g,'?');
+    }
     function puntCirculo(x, yPos, valor, bgR, bgG, bgB, textR, textG, textB) {
       pdf.setFillColor(bgR, bgG, bgB);
       pdf.circle(x, yPos, 4.5, 'F');
@@ -370,8 +380,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
     pdf.text('EVALUACION DE DESEMPENO', MX, y); y += 7;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
-    pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), MX, y); y += 5;
-    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), MX, y); y += 8;
+    pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
+    pdf.text(t('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
 
     // ---- CABECERA DE COLUMNAS ----
     chk(12);
@@ -395,8 +405,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       var liderC = liderComs[comp.id] || '';
 
       pdf.setFontSize(FONT_COM);
-      var linAuto = pdf.splitTextToSize(autoC || 'Sin comentario', COM_W);
-      var linLider = pdf.splitTextToSize(liderC || 'Sin comentario', COM_W);
+      var linAuto = pdf.splitTextToSize(t(autoC || 'Sin comentario'), COM_W);
+      var linLider = pdf.splitTextToSize(t(liderC || 'Sin comentario'), COM_W);
       var maxLineas = Math.max(linAuto.length, linLider.length);
       // altura cuerpo: fila puntaje 10mm + líneas + padding
       var bloqueH = Math.max(22, 10 + maxLineas * LINE_H + 4);
@@ -407,8 +417,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       pdf.setFillColor(212, 210, 198);
       pdf.rect(MX, y, PW - MX * 2, 7, 'F');
       pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
-      pdf.text(comp.nombre.toUpperCase(), MX + 2, y + 5);
-      y += 8;
+      pdf.text(t(comp.nombre.toUpperCase(), MX + 2, y + 5);
+      pdf.text(t(comp.nombre.toUpperCase()), MX + 2, y + 5);
 
       // fondo cuerpo alternado
       pdf.setFillColor(idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 249 : 255, idx % 2 === 0 ? 247 : 255);
@@ -432,7 +442,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       pdf.setFont(autoC ? 'helvetica' : 'helvetica', autoC ? 'normal' : 'italic');
       pdf.setFontSize(FONT_COM);
       pdf.setTextColor(autoC ? 71 : 148, autoC ? 85 : 163, autoC ? 105 : 184);
-      linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yB + 10 + i * LINE_H); });
+      linAuto.forEach(function(l, i) { pdf.text(t(l), COL_L + 2, yB + 10 + i * LINE_H); });
 
       // columna LIDER (derecha)
       if (liderP) {
@@ -446,7 +456,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       pdf.setFont(liderC ? 'helvetica' : 'helvetica', liderC ? 'normal' : 'italic');
       pdf.setFontSize(FONT_COM);
       pdf.setTextColor(liderC ? 71 : 148, liderC ? 85 : 163, liderC ? 105 : 184);
-      linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yB + 10 + i * LINE_H); });
+      linLider.forEach(function(l, i) { pdf.text(t(l), COL_R + 2, yB + 10 + i * LINE_H); });
 
       y += bloqueH + 2;
       pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.2);
@@ -468,18 +478,18 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
         pdf.text('Colaborador:', MX, y); y += 4;
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
-        var lA = pdf.splitTextToSize(autoComentFin, PW - MX * 2);
+        var lA = pdf.splitTextToSize(t(autoComentFin), PW - MX * 2);
         chk(lA.length * 4 + 3);
-        lA.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
+        lA.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
         y += 3;
       }
       if (liderComentFin) {
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
         pdf.text('Lider:', MX, y); y += 4;
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
-        var lL = pdf.splitTextToSize(liderComentFin, PW - MX * 2);
+        var lL = pdf.splitTextToSize(t(liderComentFin), PW - MX * 2);
         chk(lL.length * 4 + 3);
-        lL.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
+        lL.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
         y += 3;
       }
     }
@@ -533,8 +543,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     if (d.comentarioCalibracion) {
       chk(12);
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
-      var lJ = pdf.splitTextToSize('Justificacion: ' + d.comentarioCalibracion, PW - MX * 2);
-      lJ.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
+      var lJ = pdf.splitTextToSize(t('Justificacion: ' + d.comentarioCalibracion), PW - MX * 2);
+      lJ.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
     }
 
     pie();
@@ -634,6 +644,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
   var [msg, setMsg] = useState('');
   var [carg, setCarg] = useState(true);
   var [autoEval, setAutoEval] = useState(null);
+  var [autoPuntsMap, setAutoPuntsMap] = useState({});
   var [evalData, setEvalData] = useState(null);
   var [showInfo, setShowInfo] = useState({});
 
@@ -644,21 +655,44 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         supabase.auth.getSession()
       ]);
       setComp(comps || []);
-      var { data: ae } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle();
+
+      // Siempre cargar autoevaluacion sin importar el estado
+      var { data: ae } = await supabase.from('evaluaciones')
+        .select('id, estado, rating_promedio, comentarios_finales')
+        .eq('colaborador_id', colaborador.id)
+        .eq('tipo_evaluacion', 'autoevaluacion')
+        .eq('ciclo_id', cicloId)
+        .maybeSingle();
       if (ae) {
-        var { data: ap } = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', ae.id);
+        var { data: ap } = await supabase.from('puntuaciones')
+          .select('id, rating, comentario, competencia_id, competencias!inner(nombre)')
+          .eq('evaluacion_id', ae.id);
         setAutoEval({ ...ae, puntuaciones: ap || [] });
+        // mapa rápido: competencia_id -> { rating, comentario }
+        var mapa = {};
+        (ap || []).forEach(function(p) { mapa[p.competencia_id] = { rating: p.rating, comentario: p.comentario || '' }; });
+        setAutoPuntsMap(mapa);
       }
-      var { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+
+      var { data: liderEval } = await supabase.from('evaluaciones')
+        .select('id, estado, comentarios_finales, rating_promedio')
+        .eq('colaborador_id', colaborador.id)
+        .eq('tipo_evaluacion', 'evaluacion_lider')
+        .eq('ciclo_id', cicloId)
+        .maybeSingle();
       if (liderEval) {
         setEvalData(liderEval);
         setComFin(liderEval.comentarios_finales || '');
-        var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', liderEval.id);
+        var { data: punts } = await supabase.from('puntuaciones')
+          .select('rating, competencia_id, comentario')
+          .eq('evaluacion_id', liderEval.id);
         var rm = {}; var cm = {};
         (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
         setRatings(rm); setComent(cm);
       } else if (!soloLectura) {
-        var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
+        var { data: nuevo } = await supabase.from('evaluaciones')
+          .insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId })
+          .select('id').single();
         if (nuevo) setEvalData(nuevo);
       }
       setCarg(false);
@@ -707,50 +741,106 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
   if (carg) return <p>Cargando...</p>;
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 960 }}>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
       <h3>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p>{colaborador.area} - {colaborador.seniority}</p>
+      <p style={{ color: '#64748b' }}>{colaborador.area} - {colaborador.seniority}</p>
+
       {yaEnviada && (
         <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
           <strong style={{ color: '#166534', fontSize: 15 }}>Evaluacion enviada. No se puede modificar.</strong>
         </div>
       )}
-      {autoEval?.estado === 'enviado' && <DetalleAutoEvaluacion autoevaluacion={autoEval} />}
+
+      {/* Resumen autoevaluacion si existe */}
+      {autoEval && (
+        <div style={{ background: '#f8fafc', border: '2px solid #D4D2C6', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h4 style={{ margin: 0, color: '#231F20' }}>Autoevaluacion del colaborador</h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 12, color: autoEval.estado === 'enviado' ? '#166534' : '#92400e', fontWeight: 600 }}>
+                {autoEval.estado === 'enviado' ? 'Enviada' : 'Borrador'}
+              </span>
+              {autoEval.rating_promedio && (
+                <span style={{ background: '#231F20', color: '#D4D2C6', padding: '4px 12px', borderRadius: 8, fontWeight: 700, fontSize: 16 }}>
+                  {autoEval.rating_promedio}
+                </span>
+              )}
+            </div>
+          </div>
+          {autoEval.comentarios_finales && (
+            <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px 0' }}>
+              <strong>Comentarios finales:</strong> {autoEval.comentarios_finales}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Competencias con autoevaluacion visible al lado */}
       {competencias.map(function(comp) {
+        var autoData = autoPuntsMap[comp.id];
         return (
-          <div key={comp.id} style={s.competenciaCard}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div>
-              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'v' : '>'}</button>
+          <div key={comp.id} style={{ ...s.competenciaCard, padding: 0, overflow: 'hidden' }}>
+            {/* Cabecera competencia */}
+            <div style={{ background: '#D4D2C6', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h5 style={{ margin: 0, color: '#231F20', fontSize: 14 }}>{comp.nombre}</h5>
+              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'Ocultar niveles' : 'Ver niveles'}</button>
             </div>
             {showInfo[comp.id] && (
-              <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>
+              <div style={{ ...s.ratingInfoBox, margin: 12, marginBottom: 0 }}>
                 {[1,2,3,4,5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}
               </div>
             )}
-            <div style={s.ratingRow}>
-              {[1,2,3,4,5].map(function(r) {
-                return (
-                  <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
-                    style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
-                    {r}
-                  </button>
-                );
-              })}
+            {/* Dos columnas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+              {/* Columna izquierda: autoevaluacion (solo lectura) */}
+              <div style={{ padding: 14, borderRight: '2px solid #e2e8f0', background: '#fafaf8' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>Autoevaluacion</p>
+                {autoData ? (
+                  <>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      {[1,2,3,4,5].map(function(r) {
+                        return (
+                          <div key={r} style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, background: autoData.rating === r ? '#231F20' : '#e2e8f0', color: autoData.rating === r ? '#D4D2C6' : '#94a3b8' }}>{r}</div>
+                        );
+                      })}
+                    </div>
+                    <p style={{ fontSize: 13, color: '#475569', margin: 0, fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
+                      {autoData.comentario || 'Sin comentario'}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic' }}>Sin autoevaluacion</p>
+                )}
+              </div>
+              {/* Columna derecha: evaluacion lider (editable) */}
+              <div style={{ padding: 14 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#231F20', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>Mi evaluacion</p>
+                <div style={s.ratingRow}>
+                  {[1,2,3,4,5].map(function(r) {
+                    return (
+                      <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                        style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+                <textarea
+                  value={comentarios[comp.id] || ''}
+                  onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+                  placeholder="Comentario del lider..."
+                  style={{ ...s.textareaSmall, marginTop: 4 }}
+                  readOnly={bloqueado}
+                />
+              </div>
             </div>
-            <textarea
-              value={comentarios[comp.id] || ''}
-              onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
-              placeholder="Comentario"
-              style={s.textareaSmall}
-              readOnly={bloqueado}
-            />
           </div>
         );
       })}
+
       <RatingFinalBadge ratings={ratings} />
-      <SeccionText titulo="Comentarios Finales" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
+      <SeccionText titulo="Comentarios Finales del Lider" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
       {msg && <div style={s.mensajeToast}>{msg}</div>}
       {!bloqueado && (
         <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
