@@ -304,53 +304,152 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   }
   async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
 
-  function generarPDFCompleto(d) {
-    var pdf = new jsPDF(); var NEGRO = '#231F20'; var BEIGE = '#D4D2C6'; var pageWidth = 210; var marginX = 15; var y = 28;
-    function agregarCabecera() { try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {} pdf.setDrawColor(BEIGE); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26); }
-    function agregarPie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor('#94a3b8'); pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292); }
+  async function generarPDFCompleto(d) {
+    // Traer puntuaciones frescas con nombre de competencia
+    var autoId = d.autoevaluacion?.id;
+    var liderId = d.evaluacionLider?.id;
+    var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsInfo = {};
+    var autoComentFin = d.autoevaluacion?.comentarios_finales || '';
+    var liderComentFin = d.evaluacionLider?.comentarios_finales || '';
+
+    if (autoId) {
+      var { data: apunts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', autoId);
+      (apunts || []).forEach(function(p) {
+        autoPunts[p.competencia_id] = p.rating;
+        autoComs[p.competencia_id] = p.comentario || '';
+        if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
+      });
+    }
+    if (liderId) {
+      var { data: lpunts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', liderId);
+      // traer comentarios_finales del lider también
+      var { data: liderEvFull } = await supabase.from('evaluaciones').select('comentarios_finales').eq('id', liderId).single();
+      liderComentFin = liderEvFull?.comentarios_finales || '';
+      (lpunts || []).forEach(function(p) {
+        liderPunts[p.competencia_id] = p.rating;
+        liderComs[p.competencia_id] = p.comentario || '';
+        if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
+      });
+    }
+
+    var pdf = new jsPDF();
+    var NEGRO = '#231F20'; var BEIGE = '#D4D2C6'; var pageWidth = 210; var marginX = 15; var y = 28;
+
+    function agregarCabecera() {
+      try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {}
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26);
+    }
+    function agregarPie() {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
+      pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
+    }
+    function nuevaPagina() { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
+    function checkPagina(alto) { if (y + alto > 275) nuevaPagina(); }
+
     agregarCabecera();
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(NEGRO); pdf.text('EVALUACION DE DESEMPENO', marginX, y); y += 8;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+
+    // --- ENCABEZADO COLABORADOR ---
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(35, 31, 32);
+    pdf.text('EVALUACION DE DESEMPENO', marginX, y); y += 8;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
     pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), marginX, y); y += 5;
     pdf.text('Email: ' + d.colaborador.email, marginX, y); y += 5;
-    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y); y += 8;
-    var autoPunts = {}; var autoComs = {}; (d.autoevaluacion?.puntuaciones || []).forEach(function(p) { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
-    var liderPunts = {}; var liderComs = {}; (d.evaluacionLider?.puntuaciones || []).forEach(function(p) { liderPunts[p.competencia_id] = p.rating; liderComs[p.competencia_id] = p.comentario || ''; });
+    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y); y += 10;
+
     var todasComps = Object.keys(autoPunts).concat(Object.keys(liderPunts)).filter(function(v, i, a) { return a.indexOf(v) === i; });
-    var compsInfo = {}; (d.autoevaluacion?.puntuaciones || []).concat(d.evaluacionLider?.puntuaciones || []).forEach(function(p) { if (!compsInfo[p.competencia_id] && p.competencias) compsInfo[p.competencia_id] = p.competencias.nombre || 'Competencia'; });
+
     if (todasComps.length > 0) {
-      var colComp = marginX; var colAutoR = 57; var colAutoC = 68; var colLiderR = 118; var colLiderC = 129;
-      pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 7, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6);
-      pdf.text('Competencia', colComp + 1, y + 5); pdf.text('A', colAutoR, y + 5); pdf.text('Comentario Autoevaluacion', colAutoC, y + 5); pdf.text('L', colLiderR, y + 5); pdf.text('Comentario Lider', colLiderC, y + 5);
-      y += 9; pdf.setTextColor(NEGRO);
+      // --- TABLA COMPARATIVA ---
+      checkPagina(20);
+      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 8, 'F');
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
+      var c1 = marginX + 1, c2 = 72, c3 = 83, c4 = 130, c5 = 141;
+      pdf.text('Competencia', c1, y + 5.5);
+      pdf.text('Auto', c2, y + 5.5);
+      pdf.text('Comentario Autoevaluacion', c3, y + 5.5);
+      pdf.text('Lider', c4, y + 5.5);
+      pdf.text('Comentario Lider', c5, y + 5.5);
+      y += 10; pdf.setTextColor(35, 31, 32);
+
       todasComps.forEach(function(compId, index) {
-        var nombre = (compsInfo[compId] || 'Competencia').substring(0, 18); var autoR = String(autoPunts[compId] || '-'); var liderR = String(liderPunts[compId] || '-');
-        var autoC = autoComs[compId] || '-'; var liderC = liderComs[compId] || '-';
-        var lineasAuto = pdf.splitTextToSize(autoC, 44); var lineasLider = pdf.splitTextToSize(liderC, 58); var altura = Math.max(7, Math.max(lineasAuto.length, lineasLider.length) * 3.5);
-        if (y + altura > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 2, pageWidth - (marginX * 2), altura + 1, 'F'); }
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6); pdf.text(nombre, colComp + 1, y); pdf.setFont('helvetica', 'normal');
-        pdf.setFillColor(BEIGE); pdf.circle(colAutoR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor(NEGRO); pdf.setFontSize(6.5); pdf.text(autoR, colAutoR + 2.5, y + 0.5);
-        lineasAuto.forEach(function(l, i) { pdf.text(l, colAutoC, y + (i * 3.2)); });
-        pdf.setFillColor(NEGRO); pdf.circle(colLiderR + 4, y - 1.5, 3.5, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFontSize(6.5); pdf.text(liderR, colLiderR + 2.5, y + 0.5); pdf.setTextColor(NEGRO);
-        lineasLider.forEach(function(l, i) { pdf.text(l, colLiderC, y + (i * 3.2)); });
-        y += altura + 1; pdf.setDrawColor(230, 230, 230); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
+        var nombre = (compsInfo[compId] || 'Competencia').substring(0, 22);
+        var autoR = String(autoPunts[compId] || '-');
+        var liderR = String(liderPunts[compId] || '-');
+        var autoC = autoComs[compId] || '-';
+        var liderC = liderComs[compId] || '-';
+        var lineasAuto = pdf.splitTextToSize(autoC, 42);
+        var lineasLider = pdf.splitTextToSize(liderC, 55);
+        var altura = Math.max(8, Math.max(lineasAuto.length, lineasLider.length) * 3.8 + 2);
+        checkPagina(altura);
+        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, altura, 'F'); }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
+        pdf.text(nombre, c1, y + 4);
+        pdf.setFont('helvetica', 'normal');
+        // círculo auto
+        pdf.setFillColor(212, 210, 198); pdf.circle(c2 + 3, y + 3, 3.5, 'F');
+        pdf.setTextColor(35, 31, 32); pdf.setFontSize(7); pdf.text(autoR, c2 + 1.5, y + 4.5);
+        // texto auto
+        pdf.setFontSize(6); pdf.setTextColor(71, 85, 105);
+        lineasAuto.forEach(function(l, i) { pdf.text(l, c3, y + 3 + i * 3.5); });
+        // círculo lider
+        pdf.setFillColor(35, 31, 32); pdf.circle(c4 + 3, y + 3, 3.5, 'F');
+        pdf.setTextColor(255, 255, 255); pdf.setFontSize(7); pdf.text(liderR, c4 + 1.5, y + 4.5);
+        // texto lider
+        pdf.setFontSize(6); pdf.setTextColor(71, 85, 105);
+        lineasLider.forEach(function(l, i) { pdf.text(l, c5, y + 3 + i * 3.5); });
+        y += altura;
+        pdf.setDrawColor(225, 225, 225); pdf.setLineWidth(0.1);
+        pdf.line(marginX, y, pageWidth - marginX, y);
+        pdf.setLineWidth(0.5);
       });
-      y += 5;
+      y += 6;
     }
-    // Rating final con clasificación (Punto 7)
+
+    // --- COMENTARIOS AUTOEVALUACION ---
+    if (autoComentFin) {
+      checkPagina(20);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
+      pdf.text('Comentarios Finales - Colaborador:', marginX, y); y += 5;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
+      var lineasComentAuto = pdf.splitTextToSize(autoComentFin, pageWidth - marginX * 2);
+      checkPagina(lineasComentAuto.length * 4 + 4);
+      lineasComentAuto.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+      y += 4;
+    }
+
+    // --- COMENTARIOS LIDER ---
+    if (liderComentFin) {
+      checkPagina(20);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
+      pdf.text('Comentarios Finales - Lider:', marginX, y); y += 5;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
+      var lineasComentLider = pdf.splitTextToSize(liderComentFin, pageWidth - marginX * 2);
+      checkPagina(lineasComentLider.length * 4 + 4);
+      lineasComentLider.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+      y += 4;
+    }
+
+    // --- RESULTADO FINAL CALIBRADO ---
     var rf = d.ratingFinal || '-';
     var clasif = clasificarRating(parseFloat(rf));
-    y += 8; if (y > 250) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-    pdf.setFillColor(NEGRO); pdf.rect(marginX, y, pageWidth - (marginX * 2), 28, 'F'); pdf.setTextColor('#FFFFFF'); pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11); pdf.text('RESULTADO FINAL CALIBRADO', marginX + 4, y + 8);
-    pdf.setFontSize(18); pdf.text(String(rf), marginX + 4, y + 20);
-    if (clasif) { pdf.setFontSize(9); pdf.text(clasif.label, marginX + 20, y + 20); }
-    if (d.comentarioCalibracion) { y += 34; pdf.setTextColor(NEGRO); pdf.setFontSize(8); pdf.text('Justificacion: ' + d.comentarioCalibracion, marginX, y); }
-    agregarPie(); return pdf;
+    checkPagina(32);
+    y += 4;
+    pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 28, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10); pdf.text('RESULTADO FINAL CALIBRADO', marginX + 4, y + 8);
+    pdf.setFontSize(20); pdf.text(String(rf), marginX + 4, y + 22);
+    if (clasif) { pdf.setFontSize(9); pdf.text(clasif.label, marginX + 22, y + 22); }
+    y += 34;
+    if (d.comentarioCalibracion) {
+      pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+      var lineasJust = pdf.splitTextToSize('Justificacion: ' + d.comentarioCalibracion, pageWidth - marginX * 2);
+      lineasJust.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+    }
+    agregarPie();
+    return pdf;
   }
 
-  function verPDF(d) { generarPDFCompleto(d).save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
+  async function verPDF(d) { var pdf = await generarPDFCompleto(d); pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
 
   var areas = useMemo(function() { return ['Todas'].concat([...new Set(datos.map(function(d) { return d.colaborador.area; }).filter(Boolean))]); }, [datos]);
   var df = filtro === 'Todas' ? datos : datos.filter(function(d) { return d.colaborador.area === filtro; });
@@ -440,8 +539,41 @@ function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] 
 function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
   var [competencias, setComp] = useState([]); var [ratings, setRatings] = useState({}); var [comentarios, setComent] = useState({}); var [comFin, setComFin] = useState(''); var [msg, setMsg] = useState(''); var [carg, setCarg] = useState(true); var [autoEval, setAutoEval] = useState(null); var [evalData, setEvalData] = useState(null); var [showInfo, setShowInfo] = useState({});
   useEffect(function() { (async function() { var [{ data: comps }, { data: { session } }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.auth.getSession()]); setComp(comps || []); var { data: ae } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(); if (ae) { var { data: p } = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', ae.id); setAutoEval({ ...ae, puntuaciones: p || [] }); } var { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (liderEval) { setEvalData(liderEval); setComFin(liderEval.comentarios_finales || ''); var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', liderEval.id); var rm = {}; var cm = {}; (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComent(cm); } else if (!soloLectura) { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCarg(false); })(); }, []);
-  async function guardar() { if (soloLectura) return; var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (!ev) return; var prom = calcularRating(ratings); await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', ev.id); for (var [cid, r] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500); }
-  async function enviar() { if (soloLectura) return; await guardar(); var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMsg('🎉 Enviada'); }
+  async function obtenerOCrearEvalId() {
+    // Primero intentar desde estado local
+    if (evalData?.id) return evalData.id;
+    // Si no, buscar en DB
+    var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+    if (ev?.id) { setEvalData(ev); return ev.id; }
+    // Si no existe, crear
+    var { data: { session } } = await supabase.auth.getSession();
+    var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
+    if (nuevo?.id) { setEvalData(nuevo); return nuevo.id; }
+    return null;
+  }
+  async function guardar() {
+    if (soloLectura) return;
+    var evId = await obtenerOCrearEvalId();
+    if (!evId) { setMsg('❌ Error al guardar'); return; }
+    var prom = calcularRating(ratings);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+    for (var [cid, r] of Object.entries(ratings)) {
+      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
+    }
+    setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500);
+  }
+  async function enviar() {
+    if (soloLectura) return;
+    var evId = await obtenerOCrearEvalId();
+    if (!evId) { setMsg('❌ Error al enviar'); return; }
+    var prom = calcularRating(ratings);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+    for (var [cid, r] of Object.entries(ratings)) {
+      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
+    }
+    await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    setMsg('🎉 Evaluacion enviada correctamente');
+  }
   if (carg) return <p>Cargando...</p>;
   return (
     <div style={{ maxWidth: 900 }}>
@@ -752,7 +884,7 @@ function PanelAdminObjetivos({ profile }) {
 // HELPERS DE COMPONENTES
 // =============================================
 function RatingDesc({ competenciaId, rating }) { var [desc, setDesc] = useState('...'); useEffect(function() { (async function() { var { data } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (data) setDesc(data.titulo + ': ' + data.descripcion); })(); }, [competenciaId, rating]); return <span>{desc}</span>; }
-function SeccionText({ titulo, valor, onChange, disabled }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={onChange} style={{ ...s.textarea }} disabled={disabled} readOnly={disabled} /></div>; }
+function SeccionText({ titulo, valor, onChange, disabled }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={function(e) { onChange(e.target.value); }} style={{ ...s.textarea }} disabled={disabled} readOnly={disabled} /></div>; }
 
 // =============================================
 // ESTILOS
