@@ -1315,15 +1315,19 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
       })}
 
 {!enviada && !soloLectura ? (
-  <div style={{ marginBottom: 24 }}>
-    <h4 style={s.seccionTitulo}>📝 Comentarios Finales (obligatorio)</h4>
+<div style={{ marginBottom: 24 }}>
+  <h4 style={s.seccionTitulo}>📝 Comentarios Finales (obligatorio)</h4>
+  {enviada || soloLectura ? (
+    <p style={{ color: '#475569', padding: 12, background: '#f8fafc', borderRadius: 8 }}>{comFin || 'Sin comentarios.'}</p>
+  ) : (
     <textarea 
       value={comFin} 
-      onChange={function(e) { setComFin(e.target.value); }} 
+      onInput={function(e) { setComFin(e.target.value); }} 
       style={{ ...s.textarea, borderColor: comFin?.trim() ? '#D4D2C6' : '#dc2626' }} 
-      placeholder="Escribe tus comentarios finales..."
+      placeholder="Escribe tus comentarios finales como líder..."
     />
-  </div>
+  )}
+</div>
 ) : (
   <div style={{ marginBottom: 24 }}>
     <h4 style={s.seccionTitulo}>📝 Comentarios Finales</h4>
@@ -1659,16 +1663,19 @@ function clasificarRating(prom) {
 function RatingDesc({ competenciaId, rating }) { var [desc, setDesc] = useState('...'); useEffect(function() { (async function() { var { data } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (data) setDesc(data.titulo + ': ' + data.descripcion); })(); }, [competenciaId, rating]); return <span>{desc}</span>; }
 function SeccionText({ titulo, valor, onChange, disabled }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h4 style={s.seccionTitulo}>{titulo}</h4>
-      <textarea 
-        value={valor} 
-        onChange={function(e) { if (onChange) onChange(e); }} 
-        style={{ ...s.textarea, borderColor: disabled ? '#D4D2C6' : (valor?.trim() ? '#D4D2C6' : '#dc2626') }} 
-        disabled={disabled} 
-        readOnly={disabled} 
-      />
-    </div>
+<div style={{ marginBottom: 24 }}>
+  <h4 style={s.seccionTitulo}>📝 Comentarios Finales (obligatorio)</h4>
+  {enviada || soloLectura ? (
+    <p style={{ color: '#475569', padding: 12, background: '#f8fafc', borderRadius: 8 }}>{comFin || 'Sin comentarios.'}</p>
+  ) : (
+    <textarea 
+      value={comFin} 
+      onInput={function(e) { setComFin(e.target.value); }} 
+      style={{ ...s.textarea, borderColor: comFin?.trim() ? '#D4D2C6' : '#dc2626' }} 
+      placeholder="Escribe tus comentarios finales..."
+    />
+  )}
+</div>
   );
 }
 var th = { textAlign: 'left', padding: '6px 8px', color: '#231F20', fontSize: '11px' };
