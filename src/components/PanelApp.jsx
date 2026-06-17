@@ -1314,8 +1314,22 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
         );
       })}
 
-<SeccionText titulo="📝 Comentarios Finales (obligatorio)" valor={comFin} onChange={enviada || soloLectura ? function() {} : function(e) { setComFin(e.target.value); }} disabled={enviada || soloLectura} />
-      {prom && (
+{!enviada && !soloLectura ? (
+  <div style={{ marginBottom: 24 }}>
+    <h4 style={s.seccionTitulo}>📝 Comentarios Finales (obligatorio)</h4>
+    <textarea 
+      value={comFin} 
+      onChange={function(e) { setComFin(e.target.value); }} 
+      style={{ ...s.textarea, borderColor: comFin?.trim() ? '#D4D2C6' : '#dc2626' }} 
+      placeholder="Escribe tus comentarios finales..."
+    />
+  </div>
+) : (
+  <div style={{ marginBottom: 24 }}>
+    <h4 style={s.seccionTitulo}>📝 Comentarios Finales</h4>
+    <p style={{ color: '#475569', padding: 12, background: '#f8fafc', borderRadius: 8 }}>{comFin || 'Sin comentarios.'}</p>
+  </div>
+)}      {prom && (
         <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid ' + clasif.color, textAlign: 'center' }}>
           <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Resultado Final</p>
           <p style={{ fontSize: 48, fontWeight: 700, color: clasif.color, margin: '8px 0' }}>{prom}</p>
