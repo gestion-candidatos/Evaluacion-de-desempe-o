@@ -407,8 +407,57 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 
 function DashboardView({ stats, colabs }) { return <div><div style={s.grid}><div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colabs.length}</p></div><div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div><div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div><div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div></div></div>; }
 function ParticipantesView({ colabs }) { return <div style={s.tarjetaStat}><h4>👥 Participantes ({colabs.length})</h4><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Nombre</th><th style={th}>Email</th><th style={th}>Area</th><th style={th}>Seniority</th></tr></thead><tbody>{colabs.map(function(c) { return (<tr key={c.id}><td style={td}>{c.full_name || '-'}</td><td style={td}>{c.email}</td><td style={td}>{c.area || '-'}</td><td style={td}>{c.seniority || '-'}</td></tr>); })}</tbody></table></div>; }
-function EvaluacionesAdmin({ cicloId }) { var [evs, setEvs] = useState([]); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data } = await supabase.from('evaluaciones').select('id,colaborador_id,tipo_evaluacion,estado,rating_promedio,rating_calibrado,created_at,colaborador:colaborador_id(email,full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setEvs(data || []); setCarg(false); })(); }, [cicloId]); if (carg) return <p>Cargando...</p>; return <div style={s.tarjetaStat}><h4>📋 Evaluaciones ({evs.length})</h4><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Colaborador</th><th style={th}>Tipo</th><th style={th}>Estado</th><th style={th}>Rating</th><th style={th}>Calibrado</th><th style={th}>Fecha</th></tr></thead><tbody>{evs.map(function(ev) { var tipo = ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Lider'; return (<tr key={ev.id}><td style={td}>{ev.colaborador?.full_name || '-'}</td><td style={td}>{tipo}</td><td style={td}>{ev.estado}</td><td style={{ ...td, fontWeight: 700 }}>{ev.rating_promedio || '-'}</td><td style={td}>{ev.rating_calibrado || '-'}</td><td style={td}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td></tr>); })}</tbody></table></div></div>; }
-
+function EvaluacionesAdmin({ cicloId }) {
+  var [evs, setEvs] = useState([]);
+  var [carg, setCarg] = useState(true);
+  
+  useEffect(function() {
+    (async function() {
+      var { data } = await supabase.from('evaluaciones')
+        .select('id,colaborador_id,tipo_evaluacion,estado,rating_promedio,rating_calibrado,created_at,colaborador:colaborador_id(email,full_name)')
+        .eq('ciclo_id', cicloId)
+        .order('created_at', { ascending: false });
+      setEvs(data || []);
+      setCarg(false);
+    })();
+  }, [cicloId]);
+  
+  if (carg) return <p>Cargando...</p>;
+  
+  return (
+    <div style={s.tarjetaStat}>
+      <h4>📋 Evaluaciones ({evs.length})</h4>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>Colaborador</th>
+            <th style={th}>Tipo</th>
+            <th style={th}>Estado</th>
+            <th style={th}>Rating</th>
+            <th style={th}>Calibrado</th>
+            <th style={th}>Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {evs.map(function(ev) {
+            var tipo = ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Lider';
+            var fecha = new Date(ev.created_at).toLocaleDateString('es-AR');
+            return (
+              <tr key={ev.id}>
+                <td style={td}>{ev.colaborador?.full_name || '-'}</td>
+                <td style={td}>{tipo}</td>
+                <td style={td}>{ev.estado}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{ev.rating_promedio || '-'}</td>
+                <td style={td}>{ev.rating_calibrado || '-'}</td>
+                <td style={td}>{fecha}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState('Todas');
   useEffect(function() { cargar(); }, [cicloId]);
