@@ -1273,8 +1273,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
           </div>
         </div>
       );
-      }
-
+      
       {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
