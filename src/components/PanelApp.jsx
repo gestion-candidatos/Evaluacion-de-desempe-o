@@ -938,19 +938,37 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
   async function enviar() {
     if (soloLectura || enviada) return;
+    
+    // Validar que todas las competencias tengan rating
+    var sinRating = competencias.filter(function(c) { return !ratings[c.id] || ratings[c.id] <= 0; });
+    if (sinRating.length > 0) {
+      setMsg('❌ Debes calificar todas las competencias. Falta: ' + sinRating.map(function(c) { return c.nombre; }).join(', '));
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
+    
+    // Validar comentarios obligatorios por competencia
+    var falt = competencias.filter(function(c) { return !comentarios[c.id]?.trim(); });
+    if (falt.length > 0) {
+      setMsg('❌ Completa el comentario de: ' + falt.map(function(c) { return c.nombre; }).join(', '));
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
+    
+    // Validar comentarios finales
+    if (!comFin?.trim()) {
+      setMsg('❌ Los comentarios finales son obligatorios');
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
+
     await guardar();
-    var { data: ev } = await supabase.from('evaluaciones')
-      .select('id')
-      .eq('colaborador_id', colaborador.id)
-      .eq('tipo_evaluacion', 'evaluacion_lider')
-      .eq('ciclo_id', cicloId)
-      .single();
+    var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single();
     if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id);
     setEvalData(function(p) { return { ...p, estado: 'enviado' }; });
     setMsg('🎉 Evaluacion enviada correctamente');
     setTimeout(function() { setMsg(''); }, 3000);
   }
-
   var calcProm = function() {
     var v = Object.values(ratings).filter(function(r) { return r > 0; });
     return v.length > 0 ? (v.reduce(function(a, b) { return a + b; }, 0) / v.length).toFixed(1) : null;
