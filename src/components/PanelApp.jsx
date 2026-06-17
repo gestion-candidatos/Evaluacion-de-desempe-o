@@ -618,13 +618,297 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
 function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert('✅ Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>💬 Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>✅ Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>💾 Guardar</button></div>; }
 
 function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
-  var [competencias, setComp] = useState([]); var [ratings, setRatings] = useState({}); var [comentarios, setComent] = useState({}); var [comFin, setComFin] = useState(''); var [msg, setMsg] = useState(''); var [carg, setCarg] = useState(true); var [autoEval, setAutoEval] = useState(null); var [evalData, setEvalData] = useState(null); var [showInfo, setShowInfo] = useState({});
-  useEffect(function() { (async function() { var [{ data: comps }, { data: { session } }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.auth.getSession()]); setComp(comps || []); var { data: ae } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(); if (ae) { var { data: p } = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', ae.id); setAutoEval({ ...ae, puntuaciones: p || [] }); } var { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (liderEval) { setEvalData(liderEval); setComFin(liderEval.comentarios_finales || ''); var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', liderEval.id); var rm = {}; var cm = {}; (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComent(cm); } else if (!soloLectura) { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCarg(false); })(); }, []);
-  async function guardar() { if (soloLectura) return; var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (!ev) return; var vals = Object.values(ratings).filter(function(r) { return r > 0; }); var prom = vals.length > 0 ? parseFloat((vals.reduce(function(a, b) { return a + b; }, 0) / vals.length).toFixed(1)) : null; var clasif = clasificarRating(prom ? parseFloat(prom) : 0); await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom, rating_final: prom, clasificacion: clasif.texto }).eq('id', ev.id); for (var [cid, r] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500); }
-  async function enviar() { if (soloLectura) return; await guardar(); var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMsg('🎉 Enviada'); }
-  var calcProm = function() { var v = Object.values(ratings).filter(function(r) { return r > 0; }); return v.length > 0 ? (v.reduce(function(a, b) { return a + b; }, 0) / v.length).toFixed(1) : null; };
-  if (carg) return <p>Cargando...</p>; var enviada = evalData?.estado === 'enviado'; var prom = calcProm(); var clasif = clasificarRating(prom ? parseFloat(prom) : 0);
-  return <div style={{ maxWidth: 900 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3><p>{colaborador.area} · {colaborador.seniority}</p>{autoEval?.estado === 'enviado' && <DetalleAutoEvaluacion autoevaluacion={autoEval} />}{competencias.map(function(comp) { return (<div key={comp.id} style={s.competenciaCard}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? '🔼' : '🔽'}</button></div>{showInfo[comp.id] && <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>{[1, 2, 3, 4, 5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}</div>}<div style={s.ratingRow}>{[1, 2, 3, 4, 5].map(function(r) { return <button key={r} onClick={function() { if (!soloLectura) setRatings({ ...ratings, [comp.id]: r }); }} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: soloLectura ? 'default' : 'pointer' }}>{r}</button>; })}</div><textarea value={comentarios[comp.id] || ''} onChange={function(e) { if (!soloLectura) setComent({ ...comentarios, [comp.id]: e.target.value }); }} placeholder="Comentario" style={s.textareaSmall} readOnly={soloLectura} /></div>); })}<SeccionText titulo="📝 Comentarios Finales" valor={comFin} onChange={soloLectura ? function() {} : setComFin} disabled={soloLectura} />{prom && <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid ' + clasif.color, textAlign: 'center' }}><p style={{ color: '#64748b' }}>Resultado Final</p><p style={{ fontSize: 48, fontWeight: 700, color: clasif.color }}>{prom}</p><p style={{ fontSize: 18, fontWeight: 600, color: clasif.color }}>{clasif.texto}</p></div>}{msg && <div style={s.mensajeToast}>{msg}</div>}{!enviada && <div style={{ display: 'flex', gap: 12, marginTop: 20 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}</div>;
+  var [competencias, setComp] = useState([]);
+  var [ratings, setRatings] = useState({});
+  var [comentarios, setComent] = useState({});
+  var [comFin, setComFin] = useState('');
+  var [msg, setMsg] = useState('');
+  var [carg, setCarg] = useState(true);
+  var [autoEval, setAutoEval] = useState(null);
+  var [evalData, setEvalData] = useState(null);
+  var [showInfo, setShowInfo] = useState({});
+
+  useEffect(function() {
+    (async function() {
+      var [{ data: comps }, { data: { session } }] = await Promise.all([
+        supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'),
+        supabase.auth.getSession()
+      ]);
+      setComp(comps || []);
+
+      // Cargar autoevaluacion del colaborador con puntuaciones y comentarios
+      var { data: ae } = await supabase.from('evaluaciones')
+        .select('id, estado, rating_promedio, comentarios_finales')
+        .eq('colaborador_id', colaborador.id)
+        .eq('tipo_evaluacion', 'autoevaluacion')
+        .eq('ciclo_id', cicloId)
+        .maybeSingle();
+      
+      if (ae) {
+        var { data: p } = await supabase.from('puntuaciones')
+          .select('id, rating, comentario, competencia_id, competencias!inner(nombre)')
+          .eq('evaluacion_id', ae.id);
+        setAutoEval({ ...ae, puntuaciones: p || [] });
+      }
+
+      // Cargar o crear evaluacion del lider
+      var { data: liderEval } = await supabase.from('evaluaciones')
+        .select('id, estado, comentarios_finales, rating_promedio')
+        .eq('colaborador_id', colaborador.id)
+        .eq('tipo_evaluacion', 'evaluacion_lider')
+        .eq('ciclo_id', cicloId)
+        .maybeSingle();
+      
+      if (liderEval) {
+        setEvalData(liderEval);
+        setComFin(liderEval.comentarios_finales || '');
+        var { data: punts } = await supabase.from('puntuaciones')
+          .select('rating, competencia_id, comentario')
+          .eq('evaluacion_id', liderEval.id);
+        var rm = {};
+        var cm = {};
+        (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
+        setRatings(rm);
+        setComent(cm);
+      } else if (!soloLectura) {
+        await supabase.from('evaluaciones').insert({
+          colaborador_id: colaborador.id,
+          evaluador_id: session.user.id,
+          tipo_evaluacion: 'evaluacion_lider',
+          estado: 'borrador',
+          ciclo_id: cicloId
+        });
+      }
+      setCarg(false);
+    })();
+  }, []);
+
+  async function guardar() {
+    if (soloLectura || enviada) return;
+    
+    // Validar comentarios obligatorios por competencia
+    var falt = competencias.filter(function(c) { return !comentarios[c.id]?.trim(); });
+    if (falt.length > 0) {
+      setMsg('❌ Completa el comentario de: ' + falt.map(function(c) { return c.nombre; }).join(', '));
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
+    
+    // Validar comentarios finales
+    if (!comFin?.trim()) {
+      setMsg('❌ Los comentarios finales son obligatorios');
+      setTimeout(function() { setMsg(''); }, 4000);
+      return;
+    }
+
+    var { data: ev } = await supabase.from('evaluaciones')
+      .select('id')
+      .eq('colaborador_id', colaborador.id)
+      .eq('tipo_evaluacion', 'evaluacion_lider')
+      .eq('ciclo_id', cicloId)
+      .single();
+    if (!ev) return;
+
+    var vals = Object.values(ratings).filter(function(r) { return r > 0; });
+    var prom = vals.length > 0 ? parseFloat((vals.reduce(function(a, b) { return a + b; }, 0) / vals.length).toFixed(1)) : null;
+    var clasif = clasificarRating(prom ? parseFloat(prom) : 0);
+
+    await supabase.from('evaluaciones').update({
+      comentarios_finales: comFin,
+      rating_promedio: prom,
+      rating_final: prom,
+      clasificacion: clasif.texto
+    }).eq('id', ev.id);
+
+    for (var [cid, r] of Object.entries(ratings)) {
+      await supabase.from('puntuaciones').upsert({
+        evaluacion_id: ev.id,
+        competencia_id: cid,
+        rating: r,
+        comentario: comentarios[cid] || ''
+      }, { onConflict: 'evaluacion_id, competencia_id' });
+    }
+    setMsg('✅ Guardado');
+    setTimeout(function() { setMsg(''); }, 2500);
+  }
+
+  async function enviar() {
+    if (soloLectura || enviada) return;
+    await guardar();
+    var { data: ev } = await supabase.from('evaluaciones')
+      .select('id')
+      .eq('colaborador_id', colaborador.id)
+      .eq('tipo_evaluacion', 'evaluacion_lider')
+      .eq('ciclo_id', cicloId)
+      .single();
+    if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id);
+    setEvalData(function(p) { return { ...p, estado: 'enviado' }; });
+    setMsg('🎉 Evaluacion enviada correctamente');
+    setTimeout(function() { setMsg(''); }, 3000);
+  }
+
+  var calcProm = function() {
+    var v = Object.values(ratings).filter(function(r) { return r > 0; });
+    return v.length > 0 ? (v.reduce(function(a, b) { return a + b; }, 0) / v.length).toFixed(1) : null;
+  };
+
+  if (carg) return <p style={{ padding: 20 }}>Cargando...</p>;
+
+  var enviada = evalData?.estado === 'enviado';
+  var prom = calcProm();
+  var clasif = clasificarRating(prom ? parseFloat(prom) : 0);
+
+  // Mapa de autoevaluacion para acceso rapido
+  var autoRatings = {};
+  var autoComentarios = {};
+  (autoEval?.puntuaciones || []).forEach(function(p) {
+    autoRatings[p.competencia_id] = p.rating;
+    autoComentarios[p.competencia_id] = p.comentario || '';
+  });
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
+      
+      <h3 style={{ color: '#231F20' }}>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 4 }}>{colaborador.area} · {colaborador.seniority}</p>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>
+        Estado: <strong style={{ color: enviada ? '#22c55e' : '#f59e0b' }}>{enviada ? '✅ Enviada (no editable)' : '📝 En progreso'}</strong>
+      </p>
+
+      {/* Mostrar autoevaluacion completa si ya fue enviada */}
+      {autoEval?.estado === 'enviado' && <DetalleAutoEvaluacion autoevaluacion={autoEval} />}
+
+      {competencias.map(function(comp) {
+        var autoRating = autoRatings[comp.id];
+        var autoComentario = autoComentarios[comp.id];
+        var gap = autoRating && ratings[comp.id] ? ratings[comp.id] - autoRating : null;
+
+        return (
+          <div key={comp.id} style={s.competenciaCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h5 style={{ margin: 0, color: '#231F20' }}>{comp.nombre}</h5>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0' }}>{comp.descripcion}</p>
+              </div>
+              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>
+                {showInfo[comp.id] ? '🔼 Ocultar info' : '🔽 Ver info'}
+              </button>
+            </div>
+
+            {/* Bloque de autoevaluacion del colaborador */}
+            {autoEval?.estado === 'enviado' && (
+              <div style={{ marginBottom: 12, padding: 12, background: '#D4D2C6', borderRadius: 8, border: '1px solid #cbd5e1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>
+                    📝 Autoevaluacion: <span style={{ fontSize: 16, fontWeight: 700 }}>{autoRating || '-'}</span>
+                  </span>
+                  {gap !== null && (
+                    <span style={{ fontSize: 12, fontWeight: 600, color: gap > 0 ? '#22c55e' : gap < 0 ? '#dc2626' : '#64748b' }}>
+                      {gap > 0 ? '↑' : gap < 0 ? '↓' : '='} Tu eval vs Auto: {gap > 0 ? '+' : ''}{gap}
+                    </span>
+                  )}
+                </div>
+                {autoComentario && (
+                  <div style={{ marginTop: 6, padding: '6px 8px', background: 'white', borderRadius: 4, fontSize: 12, color: '#475569', fontStyle: 'italic' }}>
+                    "{autoComentario}"
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Selector de rating del líder */}
+            <div style={s.ratingRow}>
+              <span style={{ fontSize: 12, color: '#64748b', marginRight: 4 }}>Tu eval:</span>
+              {[1, 2, 3, 4, 5].map(function(r) {
+                return (
+                  <button key={r} onClick={function() { if (!enviada && !soloLectura) setRatings({ ...ratings, [comp.id]: r }); }}
+                    style={{
+                      ...s.ratingBtn,
+                      backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9',
+                      color: ratings[comp.id] === r ? 'white' : '#475569',
+                      border: ratings[comp.id] === r ? '2px solid #231F20' : '2px solid #e2e8f0',
+                      cursor: enviada || soloLectura ? 'not-allowed' : 'pointer',
+                      opacity: enviada || soloLectura ? 0.7 : 1
+                    }}
+                    disabled={enviada || soloLectura}
+                  >
+                    {r}
+                  </button>
+                );
+              })}
+              {ratings[comp.id] && (
+                <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, color: '#231F20' }}>Nivel {ratings[comp.id]}</span>
+              )}
+            </div>
+
+            {/* Ver info de ratings */}
+            {showInfo[comp.id] && (
+              <div style={s.ratingInfoBox}>
+                {[1, 2, 3, 4, 5].map(function(r) {
+                  return (
+                    <div key={r} style={{
+                      ...s.ratingInfoItem,
+                      borderLeft: '4px solid ' + (ratings[comp.id] === r ? '#231F20' : '#e2e8f0'),
+                      backgroundColor: ratings[comp.id] === r ? '#f8fafc' : 'white',
+                      fontWeight: ratings[comp.id] === r ? '600' : '400'
+                    }}>
+                      <strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Comentario del líder */}
+            <textarea
+              value={comentarios[comp.id] || ''}
+              onChange={function(e) { if (!enviada && !soloLectura) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+              placeholder="Tu comentario como líder (obligatorio)"
+              style={{
+                ...s.textareaSmall,
+                borderColor: enviada || soloLectura ? '#D4D2C6' : (comentarios[comp.id]?.trim() ? '#D4D2C6' : '#dc2626'),
+                backgroundColor: enviada || soloLectura ? '#f8fafc' : 'white',
+                cursor: enviada || soloLectura ? 'not-allowed' : 'text'
+              }}
+              readOnly={enviada || soloLectura}
+            />
+          </div>
+        );
+      })}
+
+      <SeccionText 
+        titulo="📝 Comentarios Finales (obligatorio)" 
+        valor={comFin} 
+        onChange={enviada || soloLectura ? function() {} : setComFin} 
+        disabled={enviada || soloLectura} 
+      />
+
+      {prom && (
+        <div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '2px solid ' + clasif.color, textAlign: 'center' }}>
+          <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Resultado Final</p>
+          <p style={{ fontSize: 48, fontWeight: 700, color: clasif.color, margin: '8px 0' }}>{prom}</p>
+          <p style={{ fontSize: 18, fontWeight: 600, color: clasif.color, margin: 0 }}>{clasif.texto}</p>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
+            Basado en {Object.values(ratings).filter(function(r) { return r > 0; }).length} de {competencias.length} competencias evaluadas
+          </p>
+        </div>
+      )}
+
+      {msg && <div style={s.mensajeToast}>{msg}</div>}
+
+      {!enviada && !soloLectura && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 20, marginBottom: 40 }}>
+          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar Borrador</button>
+          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar Evaluacion</button>
+        </div>
+      )}
+
+      {enviada && (
+        <div style={{ ...s.bannerEnviado, marginTop: 20 }}>✅ Tu evaluacion como lider ha sido enviada y no puede modificarse.</div>
+      )}
+    </div>
+  );
 }
 
 function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
