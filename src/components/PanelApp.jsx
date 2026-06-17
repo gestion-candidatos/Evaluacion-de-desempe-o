@@ -95,7 +95,7 @@ function PanelAdminObjetivos({ profile }) {
 
   function exportarExcel() {
     var datos = objetivosFiltrados.map(function(obj, i) { return { 'N°': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance': obj.alcance_completado || obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
-    var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+    var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).split('').join('_')+ '"'; }).join(','); }).join('\n');
     var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     var link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'Objetivos_' + new Date().toISOString().slice(0,10) + '.csv'; link.click();
   }
