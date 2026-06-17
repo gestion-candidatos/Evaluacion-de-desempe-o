@@ -1269,7 +1269,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
             <div style={{ display: 'flex', gap: 12 }}><button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button><button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
           </div>
         </div>
-      );
+      )}
       
       {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p> : (
         <div style={{ overflowX: 'auto' }}>
