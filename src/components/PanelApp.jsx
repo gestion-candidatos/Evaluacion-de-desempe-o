@@ -305,27 +305,27 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
 
   async function generarPDFCompleto(d) {
-    // Traer puntuaciones frescas con nombre de competencia
-    var autoId = d.autoevaluacion?.id;
-    var liderId = d.evaluacionLider?.id;
+    // Queries frescos para traer puntuaciones completas con nombres
     var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsInfo = {};
-    var autoComentFin = d.autoevaluacion?.comentarios_finales || '';
-    var liderComentFin = d.evaluacionLider?.comentarios_finales || '';
+    var autoComentFin = '', liderComentFin = '', promAuto = null, promLider = null;
 
-    if (autoId) {
-      var { data: apunts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', autoId);
-      (apunts || []).forEach(function(p) {
+    if (d.autoevaluacion?.id) {
+      var { data: ap } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', d.autoevaluacion.id);
+      var { data: aev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.autoevaluacion.id).single();
+      autoComentFin = aev?.comentarios_finales || '';
+      promAuto = aev?.rating_promedio || null;
+      (ap || []).forEach(function(p) {
         autoPunts[p.competencia_id] = p.rating;
         autoComs[p.competencia_id] = p.comentario || '';
         if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
       });
     }
-    if (liderId) {
-      var { data: lpunts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', liderId);
-      // traer comentarios_finales del lider también
-      var { data: liderEvFull } = await supabase.from('evaluaciones').select('comentarios_finales').eq('id', liderId).single();
-      liderComentFin = liderEvFull?.comentarios_finales || '';
-      (lpunts || []).forEach(function(p) {
+    if (d.evaluacionLider?.id) {
+      var { data: lp } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', d.evaluacionLider.id);
+      var { data: lev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.evaluacionLider.id).single();
+      liderComentFin = lev?.comentarios_finales || '';
+      promLider = lev?.rating_promedio || null;
+      (lp || []).forEach(function(p) {
         liderPunts[p.competencia_id] = p.rating;
         liderComs[p.competencia_id] = p.comentario || '';
         if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
@@ -333,122 +333,202 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     }
 
     var pdf = new jsPDF();
-    var NEGRO = '#231F20'; var BEIGE = '#D4D2C6'; var pageWidth = 210; var marginX = 15; var y = 28;
+    var pageWidth = 210; var marginX = 15; var y = 28;
 
     function agregarCabecera() {
       try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {}
-      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.5); pdf.line(marginX, 26, pageWidth - marginX, 26);
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.5);
+      pdf.line(marginX, 26, pageWidth - marginX, 26);
     }
     function agregarPie() {
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
       pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
     }
-    function nuevaPagina() { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; }
-    function checkPagina(alto) { if (y + alto > 275) nuevaPagina(); }
+    function checkPag(h) { if (y + h > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } }
 
     agregarCabecera();
 
-    // --- ENCABEZADO COLABORADOR ---
+    // --- ENCABEZADO ---
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(35, 31, 32);
     pdf.text('EVALUACION DE DESEMPENO', marginX, y); y += 8;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
     pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), marginX, y); y += 5;
     pdf.text('Email: ' + d.colaborador.email, marginX, y); y += 5;
     pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y); y += 10;
 
-    var todasComps = Object.keys(autoPunts).concat(Object.keys(liderPunts)).filter(function(v, i, a) { return a.indexOf(v) === i; });
+    var todasComps = Object.keys({ ...autoPunts, ...liderPunts });
 
-    if (todasComps.length > 0) {
-      // --- TABLA COMPARATIVA ---
-      checkPagina(20);
-      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 8, 'F');
-      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
-      var c1 = marginX + 1, c2 = 72, c3 = 83, c4 = 130, c5 = 141;
-      pdf.text('Competencia', c1, y + 5.5);
-      pdf.text('Auto', c2, y + 5.5);
-      pdf.text('Comentario Autoevaluacion', c3, y + 5.5);
-      pdf.text('Lider', c4, y + 5.5);
-      pdf.text('Comentario Lider', c5, y + 5.5);
-      y += 10; pdf.setTextColor(35, 31, 32);
+    // =====================
+    // SECCION 1 — AUTOEVALUACION
+    // =====================
+    if (todasComps.length > 0 || autoComentFin) {
+      checkPag(14);
+      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+      pdf.text('SECCION 1 - AUTOEVALUACION', marginX + 3, y + 6); y += 13;
 
-      todasComps.forEach(function(compId, index) {
-        var nombre = (compsInfo[compId] || 'Competencia').substring(0, 22);
-        var autoR = String(autoPunts[compId] || '-');
-        var liderR = String(liderPunts[compId] || '-');
-        var autoC = autoComs[compId] || '-';
-        var liderC = liderComs[compId] || '-';
-        var lineasAuto = pdf.splitTextToSize(autoC, 42);
-        var lineasLider = pdf.splitTextToSize(liderC, 55);
-        var altura = Math.max(8, Math.max(lineasAuto.length, lineasLider.length) * 3.8 + 2);
-        checkPagina(altura);
-        if (index % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, altura, 'F'); }
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
-        pdf.text(nombre, c1, y + 4);
-        pdf.setFont('helvetica', 'normal');
-        // círculo auto
-        pdf.setFillColor(212, 210, 198); pdf.circle(c2 + 3, y + 3, 3.5, 'F');
-        pdf.setTextColor(35, 31, 32); pdf.setFontSize(7); pdf.text(autoR, c2 + 1.5, y + 4.5);
-        // texto auto
-        pdf.setFontSize(6); pdf.setTextColor(71, 85, 105);
-        lineasAuto.forEach(function(l, i) { pdf.text(l, c3, y + 3 + i * 3.5); });
-        // círculo lider
-        pdf.setFillColor(35, 31, 32); pdf.circle(c4 + 3, y + 3, 3.5, 'F');
-        pdf.setTextColor(255, 255, 255); pdf.setFontSize(7); pdf.text(liderR, c4 + 1.5, y + 4.5);
-        // texto lider
-        pdf.setFontSize(6); pdf.setTextColor(71, 85, 105);
-        lineasLider.forEach(function(l, i) { pdf.text(l, c5, y + 3 + i * 3.5); });
-        y += altura;
-        pdf.setDrawColor(225, 225, 225); pdf.setLineWidth(0.1);
-        pdf.line(marginX, y, pageWidth - marginX, y);
-        pdf.setLineWidth(0.5);
-      });
-      y += 6;
+      if (todasComps.length > 0) {
+        // cabecera tabla auto
+        checkPag(10);
+        pdf.setFillColor(212, 210, 198); pdf.rect(marginX, y, pageWidth - marginX * 2, 7, 'F');
+        pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
+        pdf.text('Competencia', marginX + 2, y + 5);
+        pdf.text('Puntaje', 120, y + 5);
+        pdf.text('Comentario del colaborador', 135, y + 5);
+        y += 9; pdf.setFont('helvetica', 'normal'); pdf.setTextColor(35, 31, 32);
+
+        todasComps.forEach(function(compId, idx) {
+          var nombre = (compsInfo[compId] || 'Competencia').substring(0, 30);
+          var punt = autoPunts[compId] ? String(autoPunts[compId]) : '-';
+          var com = autoComs[compId] || '-';
+          var lineas = pdf.splitTextToSize(com, 58);
+          var alto = Math.max(8, lineas.length * 4 + 2);
+          checkPag(alto);
+          if (idx % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, alto, 'F'); }
+          pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+          pdf.text(nombre, marginX + 2, y + 4);
+          // circulo puntaje
+          pdf.setFillColor(35, 31, 32); pdf.circle(124, y + 2.5, 3.5, 'F');
+          pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5); pdf.text(punt, punt.length === 1 ? 122.5 : 121.5, y + 4);
+          // comentario
+          pdf.setTextColor(71, 85, 105); pdf.setFontSize(6.5);
+          lineas.forEach(function(l, i) { pdf.text(l, 135, y + 3 + i * 4); });
+          y += alto;
+          pdf.setDrawColor(220,220,220); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
+        });
+        y += 4;
+      }
+
+      if (autoComentFin) {
+        checkPag(14);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
+        pdf.text('Comentarios finales del colaborador:', marginX, y); y += 5;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
+        var lAuto = pdf.splitTextToSize(autoComentFin, pageWidth - marginX * 2);
+        checkPag(lAuto.length * 4 + 3);
+        lAuto.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+        y += 4;
+      }
+
+      // Rating autoevaluacion
+      if (promAuto) {
+        var clAuto = clasificarRating(parseFloat(promAuto));
+        checkPag(16);
+        pdf.setFillColor(clAuto ? parseInt(clAuto.bg.slice(1,3),16) : 212, clAuto ? parseInt(clAuto.bg.slice(3,5),16) : 210, clAuto ? parseInt(clAuto.bg.slice(5,7),16) : 198);
+        pdf.rect(marginX, y, pageWidth - marginX * 2, 13, 'F');
+        pdf.setTextColor(clAuto ? parseInt(clAuto.color.slice(1,3),16) : 35, clAuto ? parseInt(clAuto.color.slice(3,5),16) : 31, clAuto ? parseInt(clAuto.color.slice(5,7),16) : 32);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+        pdf.text('Rating Autoevaluacion: ' + promAuto + (clAuto ? '   ' + clAuto.label : ''), marginX + 4, y + 9);
+        y += 17;
+      }
     }
 
-    // --- COMENTARIOS AUTOEVALUACION ---
-    if (autoComentFin) {
-      checkPagina(20);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-      pdf.text('Comentarios Finales - Colaborador:', marginX, y); y += 5;
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
-      var lineasComentAuto = pdf.splitTextToSize(autoComentFin, pageWidth - marginX * 2);
-      checkPagina(lineasComentAuto.length * 4 + 4);
-      lineasComentAuto.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
-      y += 4;
+    // =====================
+    // SECCION 2 — EVALUACION DEL LIDER
+    // =====================
+    if (todasComps.length > 0 || liderComentFin) {
+      checkPag(14);
+      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+      pdf.text('SECCION 2 - EVALUACION DEL LIDER', marginX + 3, y + 6); y += 13;
+
+      if (todasComps.length > 0) {
+        checkPag(10);
+        pdf.setFillColor(212, 210, 198); pdf.rect(marginX, y, pageWidth - marginX * 2, 7, 'F');
+        pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
+        pdf.text('Competencia', marginX + 2, y + 5);
+        pdf.text('Puntaje', 120, y + 5);
+        pdf.text('Comentario del lider', 135, y + 5);
+        y += 9; pdf.setFont('helvetica', 'normal'); pdf.setTextColor(35, 31, 32);
+
+        todasComps.forEach(function(compId, idx) {
+          var nombre = (compsInfo[compId] || 'Competencia').substring(0, 30);
+          var punt = liderPunts[compId] ? String(liderPunts[compId]) : '-';
+          var com = liderComs[compId] || '-';
+          var lineas = pdf.splitTextToSize(com, 58);
+          var alto = Math.max(8, lineas.length * 4 + 2);
+          checkPag(alto);
+          if (idx % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, alto, 'F'); }
+          pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+          pdf.text(nombre, marginX + 2, y + 4);
+          pdf.setFillColor(35, 31, 32); pdf.circle(124, y + 2.5, 3.5, 'F');
+          pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5); pdf.text(punt, punt.length === 1 ? 122.5 : 121.5, y + 4);
+          pdf.setTextColor(71, 85, 105); pdf.setFontSize(6.5);
+          lineas.forEach(function(l, i) { pdf.text(l, 135, y + 3 + i * 4); });
+          y += alto;
+          pdf.setDrawColor(220,220,220); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
+        });
+        y += 4;
+      }
+
+      if (liderComentFin) {
+        checkPag(14);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
+        pdf.text('Comentarios finales del lider:', marginX, y); y += 5;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
+        var lLider = pdf.splitTextToSize(liderComentFin, pageWidth - marginX * 2);
+        checkPag(lLider.length * 4 + 3);
+        lLider.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+        y += 4;
+      }
+
+      // Rating lider
+      if (promLider) {
+        var clLider = clasificarRating(parseFloat(promLider));
+        checkPag(16);
+        pdf.setFillColor(clLider ? parseInt(clLider.bg.slice(1,3),16) : 212, clLider ? parseInt(clLider.bg.slice(3,5),16) : 210, clLider ? parseInt(clLider.bg.slice(5,7),16) : 198);
+        pdf.rect(marginX, y, pageWidth - marginX * 2, 13, 'F');
+        pdf.setTextColor(clLider ? parseInt(clLider.color.slice(1,3),16) : 35, clLider ? parseInt(clLider.color.slice(3,5),16) : 31, clLider ? parseInt(clLider.color.slice(5,7),16) : 32);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+        pdf.text('Rating Lider: ' + promLider + (clLider ? '   ' + clLider.label : ''), marginX + 4, y + 9);
+        y += 17;
+      }
     }
 
-    // --- COMENTARIOS LIDER ---
-    if (liderComentFin) {
-      checkPagina(20);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-      pdf.text('Comentarios Finales - Lider:', marginX, y); y += 5;
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
-      var lineasComentLider = pdf.splitTextToSize(liderComentFin, pageWidth - marginX * 2);
-      checkPagina(lineasComentLider.length * 4 + 4);
-      lineasComentLider.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
-      y += 4;
+    // =====================
+    // SECCION 3 — CALIBRACION (grande, destacada)
+    // =====================
+    var rf = d.ratingFinal;
+    checkPag(42);
+    pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
+    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+    pdf.text('SECCION 3 - RESULTADO CALIBRADO', marginX + 3, y + 6); y += 13;
+
+    // Comparativa pequeña
+    if (promAuto || promLider) {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
+      if (promAuto) pdf.text('Rating Autoevaluacion: ' + promAuto, marginX, y);
+      if (promLider) pdf.text('Rating Lider: ' + promLider, marginX + 90, y);
+      y += 8;
     }
 
-    // --- RESULTADO FINAL CALIBRADO ---
-    var rf = d.ratingFinal || '-';
-    var clasif = clasificarRating(parseFloat(rf));
-    checkPagina(32);
-    y += 4;
-    pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 28, 'F');
-    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10); pdf.text('RESULTADO FINAL CALIBRADO', marginX + 4, y + 8);
-    pdf.setFontSize(20); pdf.text(String(rf), marginX + 4, y + 22);
-    if (clasif) { pdf.setFontSize(9); pdf.text(clasif.label, marginX + 22, y + 22); }
-    y += 34;
+    // Rating calibrado — grande
+    if (rf) {
+      var clasifCal = clasificarRating(parseFloat(rf));
+      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 36, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8); pdf.text('RATING FINAL CALIBRADO', marginX + 4, y + 8);
+      pdf.setFontSize(32); pdf.text(String(rf), marginX + 4, y + 28);
+      if (clasifCal) {
+        pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
+        pdf.text(clasifCal.label, marginX + 28, y + 28);
+      }
+      y += 40;
+    } else {
+      pdf.setFontSize(9); pdf.setTextColor(148,163,184);
+      pdf.text('Rating calibrado pendiente', marginX, y); y += 10;
+    }
+
     if (d.comentarioCalibracion) {
       pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
-      var lineasJust = pdf.splitTextToSize('Justificacion: ' + d.comentarioCalibracion, pageWidth - marginX * 2);
-      lineasJust.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+      var lJust = pdf.splitTextToSize('Justificacion de calibracion: ' + d.comentarioCalibracion, pageWidth - marginX * 2);
+      checkPag(lJust.length * 4 + 3);
+      lJust.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
     }
+
     agregarPie();
     return pdf;
   }
-
   async function verPDF(d) { var pdf = await generarPDFCompleto(d); pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
 
   var areas = useMemo(function() { return ['Todas'].concat([...new Set(datos.map(function(d) { return d.colaborador.area; }).filter(Boolean))]); }, [datos]);
@@ -534,93 +614,281 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
 function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert('✅ Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>💬 Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>✅ Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>💾 Guardar</button></div>; }
 
 // =============================================
-// EVALUACIÓN LÍDER — con Rating en tiempo real (Punto 7)
+// EVALUACIÓN LÍDER — con bloqueo post-envío
 // =============================================
 function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
-  var [competencias, setComp] = useState([]); var [ratings, setRatings] = useState({}); var [comentarios, setComent] = useState({}); var [comFin, setComFin] = useState(''); var [msg, setMsg] = useState(''); var [carg, setCarg] = useState(true); var [autoEval, setAutoEval] = useState(null); var [evalData, setEvalData] = useState(null); var [showInfo, setShowInfo] = useState({});
-  useEffect(function() { (async function() { var [{ data: comps }, { data: { session } }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'), supabase.auth.getSession()]); setComp(comps || []); var { data: ae } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(); if (ae) { var { data: p } = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', ae.id); setAutoEval({ ...ae, puntuaciones: p || [] }); } var { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(); if (liderEval) { setEvalData(liderEval); setComFin(liderEval.comentarios_finales || ''); var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', liderEval.id); var rm = {}; var cm = {}; (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComent(cm); } else if (!soloLectura) { await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }); } setCarg(false); })(); }, []);
+  var [competencias, setComp] = useState([]);
+  var [ratings, setRatings] = useState({});
+  var [comentarios, setComent] = useState({});
+  var [comFin, setComFin] = useState('');
+  var [msg, setMsg] = useState('');
+  var [carg, setCarg] = useState(true);
+  var [autoEval, setAutoEval] = useState(null);
+  var [evalData, setEvalData] = useState(null);
+  var [showInfo, setShowInfo] = useState({});
+
+  useEffect(function() {
+    (async function() {
+      var [{ data: comps }, { data: { session } }] = await Promise.all([
+        supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'),
+        supabase.auth.getSession()
+      ]);
+      setComp(comps || []);
+      var { data: ae } = await supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle();
+      if (ae) {
+        var { data: ap } = await supabase.from('puntuaciones').select('id, rating, comentario, competencia_id, competencias!inner(nombre)').eq('evaluacion_id', ae.id);
+        setAutoEval({ ...ae, puntuaciones: ap || [] });
+      }
+      var { data: liderEval } = await supabase.from('evaluaciones').select('id, estado, comentarios_finales, rating_promedio').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+      if (liderEval) {
+        setEvalData(liderEval);
+        setComFin(liderEval.comentarios_finales || '');
+        var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', liderEval.id);
+        var rm = {}; var cm = {};
+        (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
+        setRatings(rm); setComent(cm);
+      } else if (!soloLectura) {
+        var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
+        if (nuevo) setEvalData(nuevo);
+      }
+      setCarg(false);
+    })();
+  }, []);
+
+  var yaEnviada = evalData?.estado === 'enviado';
+  var bloqueado = soloLectura || yaEnviada;
+
   async function obtenerOCrearEvalId() {
-    // Primero intentar desde estado local
     if (evalData?.id) return evalData.id;
-    // Si no, buscar en DB
     var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', colaborador.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
     if (ev?.id) { setEvalData(ev); return ev.id; }
-    // Si no existe, crear
     var { data: { session } } = await supabase.auth.getSession();
     var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
     if (nuevo?.id) { setEvalData(nuevo); return nuevo.id; }
     return null;
   }
+
   async function guardar() {
-    if (soloLectura) return;
+    if (bloqueado) return;
     var evId = await obtenerOCrearEvalId();
-    if (!evId) { setMsg('❌ Error al guardar'); return; }
+    if (!evId) { setMsg('Error al guardar'); return; }
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
     for (var [cid, r] of Object.entries(ratings)) {
       await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
     }
-    setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500);
+    setMsg('Guardado'); setTimeout(function() { setMsg(''); }, 2500);
   }
+
   async function enviar() {
-    if (soloLectura) return;
+    if (bloqueado) return;
     var evId = await obtenerOCrearEvalId();
-    if (!evId) { setMsg('❌ Error al enviar'); return; }
+    if (!evId) { setMsg('Error al enviar'); return; }
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
     for (var [cid, r] of Object.entries(ratings)) {
       await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
     }
     await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
-    setMsg('🎉 Evaluacion enviada correctamente');
+    setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+    setMsg('Evaluacion enviada correctamente');
   }
+
   if (carg) return <p>Cargando...</p>;
+
   return (
     <div style={{ maxWidth: 900 }}>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
-      <h3>📝 Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p>{colaborador.area} · {colaborador.seniority}</p>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
+      <h3>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <p>{colaborador.area} - {colaborador.seniority}</p>
+      {yaEnviada && (
+        <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
+          <strong style={{ color: '#166534', fontSize: 15 }}>Evaluacion enviada. No se puede modificar.</strong>
+        </div>
+      )}
       {autoEval?.estado === 'enviado' && <DetalleAutoEvaluacion autoevaluacion={autoEval} />}
-      {competencias.map(function(comp) { return (<div key={comp.id} style={s.competenciaCard}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? '🔼' : '🔽'}</button></div>{showInfo[comp.id] && <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>{[1, 2, 3, 4, 5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}</div>}<div style={s.ratingRow}>{[1, 2, 3, 4, 5].map(function(r) { return <button key={r} onClick={function() { if (!soloLectura) setRatings({ ...ratings, [comp.id]: r }); }} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: soloLectura ? 'default' : 'pointer' }}>{r}</button>; })}</div><textarea value={comentarios[comp.id] || ''} onChange={function(e) { if (!soloLectura) setComent({ ...comentarios, [comp.id]: e.target.value }); }} placeholder="Comentario" style={s.textareaSmall} readOnly={soloLectura} /></div>); })}
-      {/* Punto 7 — Rating en tiempo real */}
+      {competencias.map(function(comp) {
+        return (
+          <div key={comp.id} style={s.competenciaCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div>
+              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'v' : '>'}</button>
+            </div>
+            {showInfo[comp.id] && (
+              <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>
+                {[1,2,3,4,5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}
+              </div>
+            )}
+            <div style={s.ratingRow}>
+              {[1,2,3,4,5].map(function(r) {
+                return (
+                  <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                    style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea
+              value={comentarios[comp.id] || ''}
+              onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+              placeholder="Comentario"
+              style={s.textareaSmall}
+              readOnly={bloqueado}
+            />
+          </div>
+        );
+      })}
       <RatingFinalBadge ratings={ratings} />
-      <SeccionText titulo="📝 Comentarios Finales" valor={comFin} onChange={soloLectura ? function() {} : setComFin} disabled={soloLectura} />
+      <SeccionText titulo="Comentarios Finales" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
       {msg && <div style={s.mensajeToast}>{msg}</div>}
-      {!soloLectura && <div style={{ display: 'flex', gap: 12, marginTop: 20 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
+      {!bloqueado && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+          <button onClick={guardar} style={s.btnSecundario}>Guardar</button>
+          <button onClick={enviar} style={s.btnPrimario}>Enviar evaluacion</button>
+        </div>
+      )}
     </div>
   );
 }
 
 // =============================================
-// PANEL COLABORADOR — con Rating en tiempo real (Punto 7)
+// PANEL COLABORADOR — con bloqueo post-envío
 // =============================================
 function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
-  var [competencias, setComp] = useState([]); var [ratings, setRatings] = useState({}); var [comentarios, setComent] = useState({}); var [comFin, setComFin] = useState(''); var [msg, setMsg] = useState(''); var [carg, setCarg] = useState(true); var [evalLider, setEvalLider] = useState(null); var [feedback, setFeedback] = useState(null); var [evalData, setEvalData] = useState(null); var [showInfo, setShowInfo] = useState({});
-  useEffect(function() { (async function() { var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'), supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(), supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(), supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()]); setComp(comps || []); setEvalLider(le); setFeedback(fb); if (ev) { setEvalData(ev); setComFin(ev.comentarios_finales || ''); var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', ev.id); var rm = {}; var cm = {}; (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; }); setRatings(rm); setComent(cm); } else if (!soloLectura) { await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }); } setCarg(false); })(); }, []);
-  async function guardar() { if (soloLectura) return; var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(); if (!ev) return; var prom = calcularRating(ratings); await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', ev.id); for (var [cid, r] of Object.entries(ratings)) { await supabase.from('puntuaciones').upsert({ evaluacion_id: ev.id, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' }); } setMsg('✅ Guardado'); setTimeout(function() { setMsg(''); }, 2500); }
-  async function enviar() { if (soloLectura) return; await guardar(); var { data: ev } = await supabase.from('evaluaciones').select('id').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).single(); if (ev) await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', ev.id); setMsg('🎉 Enviada'); }
+  var [competencias, setComp] = useState([]);
+  var [ratings, setRatings] = useState({});
+  var [comentarios, setComent] = useState({});
+  var [comFin, setComFin] = useState('');
+  var [msg, setMsg] = useState('');
+  var [carg, setCarg] = useState(true);
+  var [evalLider, setEvalLider] = useState(null);
+  var [feedback, setFeedback] = useState(null);
+  var [evalData, setEvalData] = useState(null);
+  var [showInfo, setShowInfo] = useState({});
+
+  useEffect(function() {
+    (async function() {
+      var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
+        supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
+        supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
+        supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
+        supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
+      ]);
+      setComp(comps || []);
+      setEvalLider(le);
+      setFeedback(fb);
+      if (ev) {
+        setEvalData(ev);
+        setComFin(ev.comentarios_finales || '');
+        var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', ev.id);
+        var rm = {}; var cm = {};
+        (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
+        setRatings(rm); setComent(cm);
+      } else if (!soloLectura) {
+        var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
+        if (nuevo) setEvalData(nuevo);
+      }
+      setCarg(false);
+    })();
+  }, []);
+
+  var yaEnviada = evalData?.estado === 'enviado';
+  var bloqueado = soloLectura || yaEnviada;
+
+  async function guardar() {
+    if (bloqueado) return;
+    var evId = evalData?.id;
+    if (!evId) return;
+    var prom = calcularRating(ratings);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+    for (var [cid, r] of Object.entries(ratings)) {
+      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
+    }
+    setMsg('Guardado'); setTimeout(function() { setMsg(''); }, 2500);
+  }
+
+  async function enviar() {
+    if (bloqueado) return;
+    var evId = evalData?.id;
+    if (!evId) return;
+    var prom = calcularRating(ratings);
+    await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+    for (var [cid, r] of Object.entries(ratings)) {
+      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
+    }
+    await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+    setMsg('Autoevaluacion enviada correctamente');
+  }
+
   if (carg) return <p>Cargando...</p>;
 
   var clasifCal = clasificarRating(parseFloat(evalLider?.rating_calibrado));
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <h3>📝 Mi Autoevaluacion</h3>
+      <h3>Mi Autoevaluacion</h3>
       <p>Seniority: <strong>{seniority || 'No definido'}</strong></p>
-      {feedback && <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}><h4>💬 Feedback</h4><p>{feedback.comentario_lider || 'Sin comentarios.'}</p></div>}
+      {yaEnviada && (
+        <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
+          <strong style={{ color: '#166534', fontSize: 15 }}>Autoevaluacion enviada. No se puede modificar.</strong>
+        </div>
+      )}
+      {feedback && (
+        <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
+          <h4>Feedback</h4>
+          <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
+        </div>
+      )}
       {evalLider?.rating_calibrado && (
         <div style={{ padding: 16, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
-          <p style={{ margin: 0, color: clasifCal?.color || '#231F20', fontWeight: 600 }}>🎯 Resultado Final Calibrado</p>
+          <p style={{ margin: 0, color: clasifCal?.color || '#231F20', fontWeight: 600 }}>Resultado Final Calibrado</p>
           <p style={{ fontSize: 40, fontWeight: 700, margin: '8px 0', color: clasifCal?.color || '#231F20' }}>{evalLider.rating_calibrado}</p>
           {clasifCal && <p style={{ margin: 0, fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
         </div>
       )}
-      {competencias.map(function(comp) { return (<div key={comp.id} style={s.competenciaCard}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div><button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? '🔼' : '🔽'}</button></div>{showInfo[comp.id] && <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>{[1, 2, 3, 4, 5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}</div>}<div style={s.ratingRow}>{[1, 2, 3, 4, 5].map(function(r) { return <button key={r} onClick={function() { if (!soloLectura) setRatings({ ...ratings, [comp.id]: r }); }} style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: soloLectura ? 'default' : 'pointer' }}>{r}</button>; })}</div><textarea value={comentarios[comp.id] || ''} onChange={function(e) { if (!soloLectura) setComent({ ...comentarios, [comp.id]: e.target.value }); }} placeholder="Comentario" style={s.textareaSmall} readOnly={soloLectura} /></div>); })}
-      {/* Punto 7 — Rating en tiempo real */}
+      {competencias.map(function(comp) {
+        return (
+          <div key={comp.id} style={s.competenciaCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div>
+              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'v' : '>'}</button>
+            </div>
+            {showInfo[comp.id] && (
+              <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>
+                {[1,2,3,4,5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}
+              </div>
+            )}
+            <div style={s.ratingRow}>
+              {[1,2,3,4,5].map(function(r) {
+                return (
+                  <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                    style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea
+              value={comentarios[comp.id] || ''}
+              onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+              placeholder="Comentario"
+              style={s.textareaSmall}
+              readOnly={bloqueado}
+            />
+          </div>
+        );
+      })}
       <RatingFinalBadge ratings={ratings} />
-      <SeccionText titulo="📝 Comentarios Finales" valor={comFin} onChange={soloLectura ? function() {} : setComFin} disabled={soloLectura} />
+      <SeccionText titulo="Comentarios Finales" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
       {msg && <div style={s.mensajeToast}>{msg}</div>}
-      {!soloLectura && <div style={{ display: 'flex', gap: 12, marginTop: 20 }}><button onClick={guardar} style={s.btnSecundario}>💾 Guardar</button><button onClick={enviar} style={s.btnPrimario}>📤 Enviar</button></div>}
+      {!bloqueado && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+          <button onClick={guardar} style={s.btnSecundario}>Guardar</button>
+          <button onClick={enviar} style={s.btnPrimario}>Enviar autoevaluacion</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -710,186 +978,3 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
             <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Justif.</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Coment.</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
             <tbody>{objetivos.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || '-'}</td>
-                <td style={td}>{obj.justificacion_completado ? obj.justificacion_completado.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>{obj.comentario_lider ? obj.comentario_lider.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>{obj.status === 'completado' && <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>📋 Validar</button>}</td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ObjetivosColaborador({ profile }) {
-  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
-  var [mostrarForm, setMostrarForm] = useState(false); var [editandoId, setEditandoId] = useState(null);
-  var [modalCompletar, setModalCompletar] = useState(null); var [alcanceCompletar, setAlcanceCompletar] = useState(''); var [justificacionCompletar, setJustificacionCompletar] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
-  useEffect(function() { cargarObjetivos(); }, []);
-  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  async function guardarObjetivo() { if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio'); if (editandoId) { await supabase.from('objetivos').update({ objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId); } else { await supabase.from('objetivos').insert({ gerente_id: null, colaborador_id: profile.id, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente', alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null }); } setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); setMostrarForm(false); setEditandoId(null); cargarObjetivos(); }
-  function editarObjetivo(obj) { setNuevoObjetivo({ objetivo: obj.objetivo, corporativo: obj.corporativo || '', ponderacion: obj.ponderacion, alcance_0_descripcion: obj.alcance_0_descripcion || '', alcance_0_fecha: obj.alcance_0_fecha || '', alcance_80_descripcion: obj.alcance_80_descripcion || '', alcance_80_fecha: obj.alcance_80_fecha || '', alcance_100_descripcion: obj.alcance_100_descripcion || '', alcance_100_fecha: obj.alcance_100_fecha || '', alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '' }); setEditandoId(obj.id); setMostrarForm(true); }
-  async function aceptarObjetivo(objId) { await supabase.from('objetivos').update({ status: 'aceptado', confirmado_colaborador: true, fecha_confirmacion: new Date() }).eq('id', objId); cargarObjetivos(); }
-  async function completarObjetivo() { if (!alcanceCompletar) return alert('Selecciona un alcance'); if (!justificacionCompletar.trim()) return alert('La justificacion es obligatoria'); await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcanceCompletar, justificacion_completado: justificacionCompletar }).eq('id', modalCompletar); setModalCompletar(null); setAlcanceCompletar(''); setJustificacionCompletar(''); cargarObjetivos(); }
-  if (cargando) return <p>Cargando objetivos...</p>;
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Mis Objetivos</h2><button onClick={function() { setMostrarForm(!mostrarForm); setEditandoId(null); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); }} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Nuevo Objetivo'}</button></div>
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo principal..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas, Operaciones..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
-          </div>
-          <h5 style={{ margin: '16px 0 8px 0', color: '#231F20' }}>📊 Alcances del Objetivo</h5>
-          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>Define que significa cada nivel de alcance y opcionalmente una fecha limite.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ background: '#fee2e2', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0% - No alcanzado</label><input value={nuevoObjetivo.alcance_0_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_descripcion: e.target.value}); }} placeholder="Ej: No se realizaron aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_0_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#fef3c7', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>80% - Parcialmente alcanzado</label><input value={nuevoObjetivo.alcance_80_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 40 aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_80_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#dcfce7', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>100% - Alcanzado</label><input value={nuevoObjetivo.alcance_100_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 50 aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_100_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#dbeafe', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>120% - Superado</label><input value={nuevoObjetivo.alcance_120_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_descripcion: e.target.value}); }} placeholder="Ej: Se realizaron 60+ aperturas" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_120_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} /></div>
-          </div>
-          <button onClick={guardarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 16 }}>💾 {editandoId ? 'Actualizar' : 'Guardar'} Objetivo</button>
-        </div>
-      )}
-      {modalCompletar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalCompletar(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>✔️ Completar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Alcance Alcanzado *</label><select value={alcanceCompletar} onChange={function(e) { setAlcanceCompletar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}><option value="">Seleccionar alcance</option><option value="0%">0% - No alcanzado</option><option value="80%">80% - Parcialmente alcanzado</option><option value="100%">100% - Alcanzado</option><option value="120%">120% - Superado</option></select></div>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Justificacion *</label><textarea value={justificacionCompletar} onChange={function(e) { setJustificacionCompletar(e.target.value); }} placeholder="Explica el resultado alcanzado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} /></div>
-            <div style={{ display: 'flex', gap: 12 }}><button onClick={completarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>✔️ Confirmar Completado</button><button onClick={function() { setModalCompletar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
-          </div>
-        </div>
-      )}
-      {objetivos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><p style={{ color: '#94a3b8', fontSize: 16 }}>No tienes objetivos cargados aun.</p></div> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
-            <tbody>{objetivos.map(function(obj) { return (
-              <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo} {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b' }}>(editado)</span>}</td>
-                <td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || '-'}</td>
-                <td style={td}>{obj.comentario_lider ? obj.comentario_lider.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>
-                  {(obj.status === 'pendiente' || obj.status === 'aceptado') && <button onClick={function() { editarObjetivo(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 11, padding: '4px 8px', marginRight: 4 }}>✏️</button>}
-                  {obj.status === 'pendiente' && <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#3b82f6', fontSize: 12, padding: '6px 12px' }}>✅ Aceptar</button>}
-                  {obj.status === 'aceptado' && <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>✔️ Completar</button>}
-                </td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PanelAdminObjetivos({ profile }) {
-  var [objetivos, setObjetivos] = useState([]); var [colaboradores, setColaboradores] = useState([]); var [cargando, setCargando] = useState(true);
-  var [filtroArea, setFiltroArea] = useState('Todas'); var [filtroSeniority, setFiltroSeniority] = useState('Todos');
-  var [mostrarForm, setMostrarForm] = useState(false); var [mostrarHistorico, setMostrarHistorico] = useState(false);
-  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
-  var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
-
-  useEffect(function() { cargarDatos(); }, []);
-  async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
-  async function agregarObjetivoAdmin() { if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo'); var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente', alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null }); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos(); }
-  async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
-  function exportarExcel() {
-    var datos = objetivosFiltrados.map(function(obj, i) { return { 'N°': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance': obj.alcance_completado || obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
-    if (datos.length === 0) return alert('No hay datos para exportar');
-    var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
-    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'Objetivos_' + new Date().toISOString().slice(0,10) + '.csv'; link.click();
-  }
-
-  var areas = ['Todas'].concat([...new Set(colaboradores.map(function(c) { return c.area; }).filter(Boolean))]);
-  var seniorities = ['Todos'].concat([...new Set(colaboradores.map(function(c) { return c.seniority; }).filter(Boolean))]);
-  var objetivosFiltrados = objetivos.filter(function(obj) { if (filtroArea !== 'Todas' && obj.colaborador?.area !== filtroArea) return false; if (filtroSeniority !== 'Todos' && obj.colaborador?.seniority !== filtroSeniority) return false; return true; });
-
-  if (cargando) return <p>Cargando panel admin...</p>;
-
-  return (
-    <div>
-      <h2 style={{ color: '#231F20', marginBottom: 20 }}>🔧 Panel Admin - Todos los Objetivos</h2>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las Areas' : a}</option>; })}</select>
-        <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}</select>
-        <button onClick={function() { setMostrarForm(!mostrarForm); setMostrarHistorico(false); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Objetivo</button>
-        <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>📁 Subir Historico</button>
-        <button onClick={exportarExcel} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>📥 Exportar Excel</button>
-      </div>
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>Asignar Objetivo a Cualquier Colaborador</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12 }}>Colaborador *</label><select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">Seleccionar...</option>{colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}</select></div>
-            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
-          </div>
-          <h5 style={{ margin: '12px 0 8px 0' }}>📊 Alcances</h5>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div style={{ background: '#fee2e2', padding: 8, borderRadius: 6 }}><label style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>0%</label><input value={nuevoObjetivo.alcance_0_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 11, marginTop: 2 }} /><input type="date" value={nuevoObjetivo.alcance_0_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_fecha: e.target.value}); }} style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 11, marginTop: 2 }} /></div>
-            <div style={{ background: '#fef3c7', padding: 8, borderRadius: 6 }}><label style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>80%</label><input value={nuevoObjetivo.alcance_80_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 11, marginTop: 2 }} /><input type="date" value={nuevoObjetivo.alcance_80_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_fecha: e.target.value}); }} style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 11, marginTop: 2 }} /></div>
-            <div style={{ background: '#dcfce7', padding: 8, borderRadius: 6 }}><label style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>100%</label><input value={nuevoObjetivo.alcance_100_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #86efac', fontSize: 11, marginTop: 2 }} /><input type="date" value={nuevoObjetivo.alcance_100_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_fecha: e.target.value}); }} style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #86efac', fontSize: 11, marginTop: 2 }} /></div>
-            <div style={{ background: '#dbeafe', padding: 8, borderRadius: 6 }}><label style={{ fontSize: 11, fontWeight: 700, color: '#1e40af' }}>120%</label><input value={nuevoObjetivo.alcance_120_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 11, marginTop: 2 }} /><input type="date" value={nuevoObjetivo.alcance_120_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_fecha: e.target.value}); }} style={{ width: '100%', padding: 4, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 11, marginTop: 2 }} /></div>
-          </div>
-          <button onClick={agregarObjetivoAdmin} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>💾 Guardar</button>
-        </div>
-      )}
-      {mostrarHistorico && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><h4>Subir Objetivo Historico</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12 }}>Colaborador *</label><select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">Seleccionar...</option>{colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}</select></div>
-            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={objetivoHistorico.objetivo} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, objetivo: e.target.value}); }} placeholder="Describir..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Fecha Historica *</label><input type="date" value={objetivoHistorico.fecha_historica} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, fecha_historica: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Alcance</label><select value={objetivoHistorico.alcance} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, alcance: e.target.value}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">-</option><option value="0%">0%</option><option value="80%">80%</option><option value="100%">100%</option><option value="120%">120%</option></select></div>
-            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={objetivoHistorico.ponderacion} onChange={function(e) { setObjetivoHistorico({...objetivoHistorico, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
-          </div>
-          <button onClick={agregarHistorico} style={{ ...s.btnPrimario, background: '#8b5cf6', marginTop: 12 }}>💾 Guardar Historico</button>
-        </div>
-      )}
-      {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: '#D4D2C6' }}>Gerente</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th></tr></thead>
-            <tbody>{objetivosFiltrados.map(function(obj) { return (
-              <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}><strong>{obj.colaborador?.full_name || '-'}</strong></td><td style={td}>{obj.colaborador?.area || '-'}</td><td style={td}>{obj.colaborador?.seniority || '-'}</td>
-                <td style={td}>{obj.gerente?.full_name || '-'}</td><td style={td}>{obj.objetivo}</td><td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || obj.alcance_validado || '-'}</td>
-                <td style={td}>{obj.es_historico ? '📁 Si' : '-'}</td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================
-// HELPERS DE COMPONENTES
-// =============================================
-function RatingDesc({ competenciaId, rating }) { var [desc, setDesc] = useState('...'); useEffect(function() { (async function() { var { data } = await supabase.from('rating_descriptions').select('titulo, descripcion').eq('competencia_id', competenciaId).eq('rating', rating).single(); if (data) setDesc(data.titulo + ': ' + data.descripcion); })(); }, [competenciaId, rating]); return <span>{desc}</span>; }
-function SeccionText({ titulo, valor, onChange, disabled }) { return <div style={{ marginBottom: 24 }}><h4 style={s.seccionTitulo}>{titulo}</h4><textarea value={valor} onChange={function(e) { onChange(e.target.value); }} style={{ ...s.textarea }} disabled={disabled} readOnly={disabled} /></div>; }
-
-// =============================================
-// ESTILOS
-// =============================================
-var th = { textAlign: 'left', padding: '6px 8px', color: '#231F20', fontSize: '11px' };
-var td = { padding: '6px 8px', fontSize: '13px' };
-var sidebarStyle = { aside: { width: '260px', background: '#231F20', minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '20px 0' }, logoContainer: { padding: '0 20px 20px', borderBottom: '1px solid #D4D2C6', marginBottom: 16, textAlign: 'center' }, nav: { display: 'flex', flexDirection: 'column', gap: 4, padding: '0 12px', flex: 1 }, menuItem: { padding: '14px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 14, fontWeight: 500, transition: 'all 0.15s', width: '100%' }, subMenuItem: { padding: '10px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 400, transition: 'all 0.15s', width: '100%' }, footer: { padding: '16px 20px', borderTop: '1px solid #D4D2C6' } };
-var s = { centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20 }, header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', background: '#231F20' }, badge: { padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }, btnSalir: { padding: '8px 16px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 13 }, tarjetaStat: { background: 'white', padding: 20, borderRadius: 12, marginBottom: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }, grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }, seccionTitulo: { fontSize: 15, fontWeight: 600, color: '#231F20', marginBottom: 10, paddingBottom: 8, borderBottom: '2px solid #D4D2C6' }, competenciaCard: { background: '#f8fafc', padding: 18, borderRadius: 10, marginBottom: 14, border: '1px solid #e2e8f0' }, btnInfo: { fontSize: 12, padding: '5px 12px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', cursor: 'pointer', color: '#231F20', fontWeight: 500 }, ratingRow: { display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }, ratingBtn: { width: 42, height: 42, borderRadius: 10, fontSize: 18, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }, ratingInfoBox: { background: 'white', padding: 14, borderRadius: 8, marginBottom: 12, border: '1px solid #e2e8f0' }, ratingInfoItem: { padding: '6px 10px', marginBottom: 3, borderRadius: 4, fontSize: 13, color: '#475569', lineHeight: 1.5 }, textareaSmall: { width: '100%', minHeight: 44, padding: 10, borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }, textarea: { width: '100%', minHeight: 100, padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }, btnPrimario: { padding: '12px 24px', background: '#231F20', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 }, btnSecundario: { padding: '12px 24px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 }, mensajeToast: { padding: '12px 20px', background: '#D4D2C6', borderRadius: 8, marginBottom: 16, color: '#231F20', fontWeight: 500, fontSize: 14, textAlign: 'center' }, bannerEnviado: { padding: 20, background: '#D4D2C6', borderRadius: 10, color: '#231F20', fontWeight: 600, textAlign: 'center', marginTop: 20 } };
