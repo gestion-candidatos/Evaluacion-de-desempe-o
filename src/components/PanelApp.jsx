@@ -305,8 +305,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
 
   async function generarPDFCompleto(d) {
-    // Queries frescos para traer puntuaciones completas con nombres
-    var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsInfo = {};
+    // ---- Queries frescos ----
+    var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsOrden = [];
     var autoComentFin = '', liderComentFin = '', promAuto = null, promLider = null;
 
     if (d.autoevaluacion?.id) {
@@ -317,7 +317,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       (ap || []).forEach(function(p) {
         autoPunts[p.competencia_id] = p.rating;
         autoComs[p.competencia_id] = p.comentario || '';
-        if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
+        if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
+          compsOrden.push({ id: p.competencia_id, nombre: p.competencias?.nombre || 'Competencia' });
       });
     }
     if (d.evaluacionLider?.id) {
@@ -328,205 +329,218 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       (lp || []).forEach(function(p) {
         liderPunts[p.competencia_id] = p.rating;
         liderComs[p.competencia_id] = p.comentario || '';
-        if (p.competencias?.nombre) compsInfo[p.competencia_id] = p.competencias.nombre;
+        if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
+          compsOrden.push({ id: p.competencia_id, nombre: p.competencias?.nombre || 'Competencia' });
       });
     }
 
+    // ---- Setup PDF ----
     var pdf = new jsPDF();
-    var pageWidth = 210; var marginX = 15; var y = 28;
+    var PW = 210; var MX = 12; var y = 28;
+    // columnas: izq = auto, der = lider
+    var MID = PW / 2;         // 105 — línea divisoria
+    var COL_L = MX;           // inicio columna izquierda (auto)
+    var COL_R = MID + 3;      // inicio columna derecha (lider)
+    var COL_W = MID - MX - 3; // ancho de cada columna ~90mm
 
-    function agregarCabecera() {
-      try { pdf.addImage('/logo.jpg', 'JPEG', marginX, 8, 30, 15); } catch(e) {}
-      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.5);
-      pdf.line(marginX, 26, pageWidth - marginX, 26);
+    function cab() {
+      try { pdf.addImage('/logo.jpg', 'JPEG', MX, 8, 28, 14); } catch(e) {}
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.4);
+      pdf.line(MX, 25, PW - MX, 25);
     }
-    function agregarPie() {
+    function pie() {
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
-      pdf.text('Fabric Group - ' + new Date().toLocaleDateString('es-AR'), marginX, 292);
+      pdf.text('Fabric Group  |  ' + new Date().toLocaleDateString('es-AR'), MX, 291);
     }
-    function checkPag(h) { if (y + h > 275) { agregarPie(); pdf.addPage(); agregarCabecera(); y = 30; } }
+    function nuevaPag() { pie(); pdf.addPage(); cab(); y = 30; }
+    function chk(h) { if (y + h > 278) nuevaPag(); }
 
-    agregarCabecera();
+    function puntCirculo(x, yPos, valor, bgR, bgG, bgB, textR, textG, textB) {
+      pdf.setFillColor(bgR, bgG, bgB);
+      pdf.circle(x, yPos, 4.5, 'F');
+      pdf.setTextColor(textR, textG, textB);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+      var txt = String(valor);
+      pdf.text(txt, x - (txt.length > 1 ? 2.5 : 1.5), yPos + 1.2);
+    }
 
-    // --- ENCABEZADO ---
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(35, 31, 32);
-    pdf.text('EVALUACION DE DESEMPENO', marginX, y); y += 8;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
-    pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), marginX, y); y += 5;
-    pdf.text('Email: ' + d.colaborador.email, marginX, y); y += 5;
-    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), marginX, y); y += 10;
+    cab();
 
-    var todasComps = Object.keys({ ...autoPunts, ...liderPunts });
+    // ---- ENCABEZADO ----
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
+    pdf.text('EVALUACION DE DESEMPENO', MX, y); y += 7;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
+    pdf.text('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email), MX, y); y += 5;
+    pdf.text('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR'), MX, y); y += 8;
 
-    // =====================
-    // SECCION 1 — AUTOEVALUACION
-    // =====================
-    if (todasComps.length > 0 || autoComentFin) {
-      checkPag(14);
-      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
-      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
-      pdf.text('SECCION 1 - AUTOEVALUACION', marginX + 3, y + 6); y += 13;
+    // ---- CABECERA DE COLUMNAS ----
+    chk(12);
+    pdf.setFillColor(35, 31, 32);
+    pdf.rect(MX, y, COL_W, 8, 'F');
+    pdf.rect(MID + 2, y, COL_W, 8, 'F');
+    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+    pdf.text('AUTOEVALUACION  (Colaborador)', COL_L + 2, y + 5.5);
+    pdf.text('EVALUACION DEL LIDER', COL_R + 2, y + 5.5);
+    y += 10;
 
-      if (todasComps.length > 0) {
-        // cabecera tabla auto
-        checkPag(10);
-        pdf.setFillColor(212, 210, 198); pdf.rect(marginX, y, pageWidth - marginX * 2, 7, 'F');
-        pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
-        pdf.text('Competencia', marginX + 2, y + 5);
-        pdf.text('Puntaje', 120, y + 5);
-        pdf.text('Comentario del colaborador', 135, y + 5);
-        y += 9; pdf.setFont('helvetica', 'normal'); pdf.setTextColor(35, 31, 32);
+    // ---- COMPETENCIAS — una por una ----
+    compsOrden.forEach(function(comp, idx) {
+      var autoP = autoPunts[comp.id];
+      var liderP = liderPunts[comp.id];
+      var autoC = autoComs[comp.id] || '';
+      var liderC = liderComs[comp.id] || '';
 
-        todasComps.forEach(function(compId, idx) {
-          var nombre = (compsInfo[compId] || 'Competencia').substring(0, 30);
-          var punt = autoPunts[compId] ? String(autoPunts[compId]) : '-';
-          var com = autoComs[compId] || '-';
-          var lineas = pdf.splitTextToSize(com, 58);
-          var alto = Math.max(8, lineas.length * 4 + 2);
-          checkPag(alto);
-          if (idx % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, alto, 'F'); }
-          pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
-          pdf.text(nombre, marginX + 2, y + 4);
-          // circulo puntaje
-          pdf.setFillColor(35, 31, 32); pdf.circle(124, y + 2.5, 3.5, 'F');
-          pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5); pdf.text(punt, punt.length === 1 ? 122.5 : 121.5, y + 4);
-          // comentario
-          pdf.setTextColor(71, 85, 105); pdf.setFontSize(6.5);
-          lineas.forEach(function(l, i) { pdf.text(l, 135, y + 3 + i * 4); });
-          y += alto;
-          pdf.setDrawColor(220,220,220); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
-        });
-        y += 4;
+      // calcular altura necesaria
+      pdf.setFontSize(6.5);
+      var linAuto = autoC ? pdf.splitTextToSize(autoC, COL_W - 14) : [];
+      var linLider = liderC ? pdf.splitTextToSize(liderC, COL_W - 14) : [];
+      var maxLineas = Math.max(linAuto.length, linLider.length, 1);
+      var bloqueH = Math.max(22, maxLineas * 4 + 14);
+
+      chk(bloqueH + 6);
+
+      // fondo del bloque completo (alternado)
+      if (idx % 2 === 0) {
+        pdf.setFillColor(250, 249, 247);
+        pdf.rect(MX, y, PW - MX * 2, bloqueH + 4, 'F');
       }
+
+      // nombre de la competencia — ancho completo
+      pdf.setFillColor(212, 210, 198);
+      pdf.rect(MX, y, PW - MX * 2, 7, 'F');
+      pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+      pdf.text(comp.nombre.toUpperCase(), MX + 2, y + 5);
+      y += 9;
+
+      // línea divisoria vertical
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.3);
+      pdf.line(MID, y - 1, MID, y + bloqueH - 2);
+
+      var yBloque = y;
+
+      // --- columna izquierda: AUTO ---
+      if (autoP) {
+        puntCirculo(COL_L + 5, yBloque + 4.5, autoP, 35, 31, 32, 212, 210, 198);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
+        pdf.text('Puntaje: ' + autoP, COL_L + 11, yBloque + 5.5);
+      } else {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin puntaje', COL_L + 2, yBloque + 5.5);
+      }
+      if (linAuto.length > 0) {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(71, 85, 105);
+        linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yBloque + 12 + i * 4); });
+      } else {
+        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin comentario', COL_L + 2, yBloque + 12);
+      }
+
+      // --- columna derecha: LIDER ---
+      if (liderP) {
+        puntCirculo(COL_R + 5, yBloque + 4.5, liderP, 212, 210, 198, 35, 31, 32);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(35, 31, 32);
+        pdf.text('Puntaje: ' + liderP, COL_R + 11, yBloque + 5.5);
+      } else {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin puntaje', COL_R + 2, yBloque + 5.5);
+      }
+      if (linLider.length > 0) {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(71, 85, 105);
+        linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yBloque + 12 + i * 4); });
+      } else {
+        pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
+        pdf.text('Sin comentario', COL_R + 2, yBloque + 12);
+      }
+
+      y += bloqueH + 4;
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.2);
+      pdf.line(MX, y, PW - MX, y);
+      y += 2;
+    });
+
+    y += 4;
+
+    // ---- COMENTARIOS FINALES ----
+    if (autoComentFin || liderComentFin) {
+      chk(20);
+      pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+      pdf.text('COMENTARIOS FINALES', MX + 2, y + 5); y += 9;
 
       if (autoComentFin) {
-        checkPag(14);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-        pdf.text('Comentarios finales del colaborador:', marginX, y); y += 5;
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
-        var lAuto = pdf.splitTextToSize(autoComentFin, pageWidth - marginX * 2);
-        checkPag(lAuto.length * 4 + 3);
-        lAuto.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
-        y += 4;
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+        pdf.text('Colaborador:', MX, y); y += 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+        var lA = pdf.splitTextToSize(autoComentFin, PW - MX * 2);
+        chk(lA.length * 4 + 3);
+        lA.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
+        y += 3;
       }
-
-      // Rating autoevaluacion
-      if (promAuto) {
-        var clAuto = clasificarRating(parseFloat(promAuto));
-        checkPag(16);
-        pdf.setFillColor(clAuto ? parseInt(clAuto.bg.slice(1,3),16) : 212, clAuto ? parseInt(clAuto.bg.slice(3,5),16) : 210, clAuto ? parseInt(clAuto.bg.slice(5,7),16) : 198);
-        pdf.rect(marginX, y, pageWidth - marginX * 2, 13, 'F');
-        pdf.setTextColor(clAuto ? parseInt(clAuto.color.slice(1,3),16) : 35, clAuto ? parseInt(clAuto.color.slice(3,5),16) : 31, clAuto ? parseInt(clAuto.color.slice(5,7),16) : 32);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
-        pdf.text('Rating Autoevaluacion: ' + promAuto + (clAuto ? '   ' + clAuto.label : ''), marginX + 4, y + 9);
-        y += 17;
-      }
-    }
-
-    // =====================
-    // SECCION 2 — EVALUACION DEL LIDER
-    // =====================
-    if (todasComps.length > 0 || liderComentFin) {
-      checkPag(14);
-      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
-      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
-      pdf.text('SECCION 2 - EVALUACION DEL LIDER', marginX + 3, y + 6); y += 13;
-
-      if (todasComps.length > 0) {
-        checkPag(10);
-        pdf.setFillColor(212, 210, 198); pdf.rect(marginX, y, pageWidth - marginX * 2, 7, 'F');
-        pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
-        pdf.text('Competencia', marginX + 2, y + 5);
-        pdf.text('Puntaje', 120, y + 5);
-        pdf.text('Comentario del lider', 135, y + 5);
-        y += 9; pdf.setFont('helvetica', 'normal'); pdf.setTextColor(35, 31, 32);
-
-        todasComps.forEach(function(compId, idx) {
-          var nombre = (compsInfo[compId] || 'Competencia').substring(0, 30);
-          var punt = liderPunts[compId] ? String(liderPunts[compId]) : '-';
-          var com = liderComs[compId] || '-';
-          var lineas = pdf.splitTextToSize(com, 58);
-          var alto = Math.max(8, lineas.length * 4 + 2);
-          checkPag(alto);
-          if (idx % 2 === 0) { pdf.setFillColor(248, 248, 248); pdf.rect(marginX, y - 1, pageWidth - marginX * 2, alto, 'F'); }
-          pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
-          pdf.text(nombre, marginX + 2, y + 4);
-          pdf.setFillColor(35, 31, 32); pdf.circle(124, y + 2.5, 3.5, 'F');
-          pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5); pdf.text(punt, punt.length === 1 ? 122.5 : 121.5, y + 4);
-          pdf.setTextColor(71, 85, 105); pdf.setFontSize(6.5);
-          lineas.forEach(function(l, i) { pdf.text(l, 135, y + 3 + i * 4); });
-          y += alto;
-          pdf.setDrawColor(220,220,220); pdf.setLineWidth(0.1); pdf.line(marginX, y, pageWidth - marginX, y); pdf.setLineWidth(0.5);
-        });
-        y += 4;
-      }
-
       if (liderComentFin) {
-        checkPag(14);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-        pdf.text('Comentarios finales del lider:', marginX, y); y += 5;
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(71, 85, 105);
-        var lLider = pdf.splitTextToSize(liderComentFin, pageWidth - marginX * 2);
-        checkPag(lLider.length * 4 + 3);
-        lLider.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
-        y += 4;
-      }
-
-      // Rating lider
-      if (promLider) {
-        var clLider = clasificarRating(parseFloat(promLider));
-        checkPag(16);
-        pdf.setFillColor(clLider ? parseInt(clLider.bg.slice(1,3),16) : 212, clLider ? parseInt(clLider.bg.slice(3,5),16) : 210, clLider ? parseInt(clLider.bg.slice(5,7),16) : 198);
-        pdf.rect(marginX, y, pageWidth - marginX * 2, 13, 'F');
-        pdf.setTextColor(clLider ? parseInt(clLider.color.slice(1,3),16) : 35, clLider ? parseInt(clLider.color.slice(3,5),16) : 31, clLider ? parseInt(clLider.color.slice(5,7),16) : 32);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
-        pdf.text('Rating Lider: ' + promLider + (clLider ? '   ' + clLider.label : ''), marginX + 4, y + 9);
-        y += 17;
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+        pdf.text('Lider:', MX, y); y += 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+        var lL = pdf.splitTextToSize(liderComentFin, PW - MX * 2);
+        chk(lL.length * 4 + 3);
+        lL.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
+        y += 3;
       }
     }
 
-    // =====================
-    // SECCION 3 — CALIBRACION (grande, destacada)
-    // =====================
+    // ---- RATINGS RESUMEN + CALIBRADO ----
+    chk(52);
+    y += 4;
+    pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
+    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+    pdf.text('RESULTADO FINAL', MX + 2, y + 5); y += 10;
+
+    // ratings auto y lider lado a lado
+    var clA = clasificarRating(parseFloat(promAuto));
+    var clL = clasificarRating(parseFloat(promLider));
+    var boxW = (PW - MX * 2 - 4) / 2;
+    if (promAuto) {
+      pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, boxW, 14, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+      pdf.text('Autoevaluacion', MX + 2, y + 5);
+      pdf.setFontSize(14); pdf.text(String(promAuto), MX + 2, y + 12);
+      if (clA) { pdf.setFontSize(6); pdf.setTextColor(clA.color.startsWith('#') ? parseInt(clA.color.slice(1,3),16) : 35, clA.color.startsWith('#') ? parseInt(clA.color.slice(3,5),16) : 31, clA.color.startsWith('#') ? parseInt(clA.color.slice(5,7),16) : 32); pdf.text(clA.label, MX + 14, y + 12); }
+    }
+    if (promLider) {
+      pdf.setFillColor(240, 240, 240); pdf.rect(MX + boxW + 4, y, boxW, 14, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+      pdf.text('Evaluacion del Lider', MX + boxW + 6, y + 5);
+      pdf.setFontSize(14); pdf.text(String(promLider), MX + boxW + 6, y + 12);
+      if (clL) { pdf.setFontSize(6); pdf.setTextColor(clL.color.startsWith('#') ? parseInt(clL.color.slice(1,3),16) : 35, clL.color.startsWith('#') ? parseInt(clL.color.slice(3,5),16) : 31, clL.color.startsWith('#') ? parseInt(clL.color.slice(5,7),16) : 32); pdf.text(clL.label, MX + boxW + 20, y + 12); }
+    }
+    y += 18;
+
+    // calibrado — grande y centrado
     var rf = d.ratingFinal;
-    checkPag(42);
-    pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 9, 'F');
-    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
-    pdf.text('SECCION 3 - RESULTADO CALIBRADO', marginX + 3, y + 6); y += 13;
-
-    // Comparativa pequeña
-    if (promAuto || promLider) {
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
-      if (promAuto) pdf.text('Rating Autoevaluacion: ' + promAuto, marginX, y);
-      if (promLider) pdf.text('Rating Lider: ' + promLider, marginX + 90, y);
-      y += 8;
-    }
-
-    // Rating calibrado — grande
     if (rf) {
-      var clasifCal = clasificarRating(parseFloat(rf));
-      pdf.setFillColor(35, 31, 32); pdf.rect(marginX, y, pageWidth - marginX * 2, 36, 'F');
+      var clCal = clasificarRating(parseFloat(rf));
+      pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 28, 'F');
       pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8); pdf.text('RATING FINAL CALIBRADO', marginX + 4, y + 8);
-      pdf.setFontSize(32); pdf.text(String(rf), marginX + 4, y + 28);
-      if (clasifCal) {
-        pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
-        pdf.text(clasifCal.label, marginX + 28, y + 28);
+      pdf.setFontSize(7); pdf.text('RATING CALIBRADO FINAL', MX + 4, y + 6);
+      pdf.setFontSize(28); pdf.text(String(rf), MX + 4, y + 22);
+      if (clCal) {
+        pdf.setFontSize(10); pdf.setTextColor(255, 255, 255);
+        pdf.text(clCal.label, MX + 22, y + 22);
       }
-      y += 40;
+      y += 32;
     } else {
-      pdf.setFontSize(9); pdf.setTextColor(148,163,184);
-      pdf.text('Rating calibrado pendiente', marginX, y); y += 10;
+      pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, PW - MX * 2, 12, 'F');
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8); pdf.setTextColor(148, 163, 184);
+      pdf.text('Rating calibrado pendiente', MX + 4, y + 8); y += 14;
     }
 
     if (d.comentarioCalibracion) {
-      pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
-      var lJust = pdf.splitTextToSize('Justificacion de calibracion: ' + d.comentarioCalibracion, pageWidth - marginX * 2);
-      checkPag(lJust.length * 4 + 3);
-      lJust.forEach(function(l) { pdf.text(l, marginX, y); y += 4; });
+      chk(12);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+      var lJ = pdf.splitTextToSize('Justificacion: ' + d.comentarioCalibracion, PW - MX * 2);
+      lJ.forEach(function(l) { pdf.text(l, MX, y); y += 4; });
     }
 
-    agregarPie();
+    pie();
     return pdf;
   }
   async function verPDF(d) { var pdf = await generarPDFCompleto(d); pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
