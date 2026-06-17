@@ -909,7 +909,6 @@ useEffect(function() {
       setCarg(false);
     }
     cargarDatos();
-  }, [cicloId, colaborador.id]);
       // Cargar autoevaluacion del colaborador con puntuaciones y comentarios
       var { data: ae } = await supabase.from('evaluaciones')
         .select('id, estado, rating_promedio, comentarios_finales')
