@@ -1687,18 +1687,29 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
 
 // Helper: componente reutilizable de formulario de objetivo
 function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCancelar, titulo }) {
-  var obj = valor;
+  var [obj, setObj] = useState(valor || {});
+
+  // Sync si valor cambia desde afuera (al abrir edicion)
+  var prevValorRef = useState(null);
+  if (prevValorRef[0] !== valor) {
+    prevValorRef[1](valor);
+    setObj(valor || {});
+  }
+
+  function actualizar(nuevo) {
+    setObj(nuevo);
+    if (onChange) onChange(nuevo);
+  }
+
   var tipoAlcance = obj.alcance_tipo || 'fecha';
 
-  // Calcular ponderacion ya usada (excluyendo el objetivo que se edita)
-  var usada = objetivos
+  var usada = (objetivos || [])
     .filter(function(o) { return String(o.id) !== String(editandoId) && o.status !== 'rechazado'; })
     .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
   var disponible = 100 - usada;
   var ponderacionOk = parseFloat(obj.ponderacion) <= disponible && parseFloat(obj.ponderacion) > 0;
 
   var ALCANCES = [
-    
     { key: '80', label: '80% — Parcialmente alcanzado', bg: '#fef3c7', border: '#fcd34d', color: '#92400e' },
     { key: '100', label: '100% — Alcanzado', bg: '#dcfce7', border: '#86efac', color: '#166534' },
     { key: '120', label: '120% — Superado', bg: '#dbeafe', border: '#93c5fd', color: '#1e40af' },
@@ -1711,13 +1722,13 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Objetivo *</label>
-          <input value={obj.objetivo || ''} onChange={function(e) { onChange({...obj, objetivo: e.target.value}); }}
+          <input value={obj.objetivo || ''} onChange={function(e) { actualizar({...obj, objetivo: e.target.value}); }}
             placeholder="Describir el objetivo principal..."
             style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', boxSizing: 'border-box' }} />
         </div>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Corporativo</label>
-          <input value={obj.corporativo || ''} onChange={function(e) { onChange({...obj, corporativo: e.target.value}); }}
+          <input value={obj.corporativo || ''} onChange={function(e) { actualizar({...obj, corporativo: e.target.value}); }}
             placeholder="Ej: Ventas, Operaciones..."
             style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', boxSizing: 'border-box' }} />
         </div>
@@ -1726,33 +1737,31 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
           <input
             type="number" min="1" max={Math.min(100, disponible + (parseFloat(obj.ponderacion) || 0))}
             value={obj.ponderacion || ''}
-            onChange={function(e) { onChange({...obj, ponderacion: parseFloat(e.target.value) || 0}); }}
+            onChange={function(e) { actualizar({...obj, ponderacion: parseFloat(e.target.value) || 0}); }}
             style={{ width: '100%', padding: 8, borderRadius: 6, border: '2px solid ' + (ponderacionOk ? '#D4D2C6' : '#dc2626'), boxSizing: 'border-box' }} />
           <p style={{ fontSize: 11, margin: '4px 0 0 0', color: ponderacionOk ? '#64748b' : '#dc2626' }}>
             {ponderacionOk
-              ? 'Disponible: ' + disponible.toFixed(0) + '% — Total usado: ' + (usada + parseFloat(obj.ponderacion || 0)).toFixed(0) + '%'
-              : 'Supera el disponible (' + disponible.toFixed(0) + '%). Ajustá la ponderacion.'}
+              ? 'Disponible: ' + disponible.toFixed(0) + '% — Total: ' + (usada + parseFloat(obj.ponderacion || 0)).toFixed(0) + '%'
+              : 'Disponible: ' + disponible.toFixed(0) + '%'}
           </p>
         </div>
       </div>
 
       {/* Toggle tipo de alcance */}
       <div style={{ margin: '16px 0 12px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>Tipo de medición:</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>Tipo de medicion:</span>
         <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '2px solid #D4D2C6' }}>
-          <button
-            onClick={function() { onChange({...obj, alcance_tipo: 'fecha'}); }}
+          <button onClick={function() { actualizar({...obj, alcance_tipo: 'fecha'}); }}
             style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               background: tipoAlcance === 'fecha' ? '#231F20' : 'white',
               color: tipoAlcance === 'fecha' ? '#D4D2C6' : '#64748b' }}>
-            📅 Fecha
+            Fecha
           </button>
-          <button
-            onClick={function() { onChange({...obj, alcance_tipo: 'cantidad'}); }}
+          <button onClick={function() { actualizar({...obj, alcance_tipo: 'cantidad'}); }}
             style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               background: tipoAlcance === 'cantidad' ? '#231F20' : 'white',
               color: tipoAlcance === 'cantidad' ? '#D4D2C6' : '#64748b' }}>
-            🔢 Cantidad / Descripción
+            Cantidad / Descripcion
           </button>
         </div>
       </div>
@@ -1767,21 +1776,14 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
           return (
             <div key={alc.key} style={{ background: alc.bg, padding: 12, borderRadius: 8 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: alc.color }}>{alc.label}</label>
-              <input
-                value={obj[descKey] || ''}
-                onChange={function(e) { var u = {}; u[descKey] = e.target.value; onChange({...obj, ...u}); }}
+              <input value={obj[descKey] || ''} onChange={function(e) { var u = {}; u[descKey] = e.target.value; actualizar({...obj, ...u}); }}
                 placeholder="Descripcion de este nivel"
                 style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 6, boxSizing: 'border-box' }} />
               {tipoAlcance === 'fecha' ? (
-                <input
-                  type="date"
-                  value={obj[fechaKey] || ''}
-                  onChange={function(e) { var u = {}; u[fechaKey] = e.target.value; onChange({...obj, ...u}); }}
+                <input type="date" value={obj[fechaKey] || ''} onChange={function(e) { var u = {}; u[fechaKey] = e.target.value; actualizar({...obj, ...u}); }}
                   style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 4, boxSizing: 'border-box' }} />
               ) : (
-                <input
-                  value={obj[metaKey] || ''}
-                  onChange={function(e) { var u = {}; u[metaKey] = e.target.value; onChange({...obj, ...u}); }}
+                <input value={obj[metaKey] || ''} onChange={function(e) { var u = {}; u[metaKey] = e.target.value; actualizar({...obj, ...u}); }}
                   placeholder="Ej: 15 unidades, 3 aperturas..."
                   style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 4, boxSizing: 'border-box' }} />
               )}
@@ -1793,20 +1795,22 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
       <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
         <button
           onClick={function() {
-            console.log('GUARDAR clickeado', obj);
-            if (!obj || !obj.objetivo) return alert('El objetivo es obligatorio');
+            if (!obj.objetivo) return alert('El objetivo es obligatorio');
             var pond = parseFloat(obj.ponderacion) || 0;
             if (pond <= 0) return alert('La ponderacion debe ser mayor a 0');
             var total = usada + pond;
             if (total > 100) return alert('La ponderacion supera el 100%. Disponible: ' + disponible.toFixed(0) + '%');
-            onGuardar();
+            onGuardar(obj);
           }}
           style={{ ...s.btnPrimario, background: '#22c55e' }}>
-          💾 Guardar Objetivo
+          Guardar Objetivo
         </button>
         <button onClick={onCancelar} style={s.btnSecundario}>Cancelar</button>
       </div>
     </div>
+  );
+}
+
   );
 }
 
