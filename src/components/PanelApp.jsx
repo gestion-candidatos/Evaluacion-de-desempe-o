@@ -334,6 +334,18 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       });
     }
 
+    // Fallback: si no hay competencias desde puntuaciones, cargar desde tabla
+    if (compsOrden.length === 0) {
+      var senFB = d.colaborador?.seniority || 'Analista';
+      var { data: compsFB } = await supabase.from('competencias').select('id, nombre').eq('aplica_a', senFB);
+      if (!compsFB || compsFB.length === 0) {
+        var { data: compsAll } = await supabase.from('competencias').select('id, nombre');
+        compsFB = compsAll || [];
+      }
+      compsOrden = compsFB.map(function(c) { return { id: c.id, nombre: c.nombre }; });
+    }
+
+
     // ---- Setup PDF ----
     var pdf = new jsPDF();
     var PW = 210; var MX = 12; var y = 28;
@@ -664,7 +676,13 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'),
         supabase.auth.getSession()
       ]);
-      setComp(comps || []);
+      // Si no hay competencias para ese seniority, traer todas
+      if (!comps || comps.length === 0) {
+        var { data: allComps } = await supabase.from('competencias').select('id, nombre, descripcion');
+        setComp(allComps || []);
+      } else {
+        setComp(comps);
+      }
 
       // Siempre cargar autoevaluacion sin importar el estado
       var { data: ae } = await supabase.from('evaluaciones')
