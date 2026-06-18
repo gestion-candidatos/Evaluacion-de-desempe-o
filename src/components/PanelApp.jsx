@@ -717,11 +717,28 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
   useEffect(function() {
     (async function() {
-      // Cargar todas las competencias sin filtrar — el filtro por seniority causaba que no aparecieran
-      var { data: comps, error: compsErr } = await supabase
-        .from('competencias').select('id, nombre, descripcion').order('nombre', { ascending: true });
-      console.log('Competencias:', comps?.length, 'error:', compsErr);
+      // Cargar competencias del seniority del colaborador
+      // Si no trae nada (seniority no coincide exactamente), traer todas y deduplicar
+      var { data: comps } = await supabase
+        .from('competencias')
+        .select('id, nombre, descripcion')
+        .eq('aplica_a', colaborador.seniority)
+        .order('nombre', { ascending: true });
+      console.log('Competencias para seniority', colaborador.seniority, ':', comps?.length);
+      if (!comps || comps.length === 0) {
+        // Fallback: traer todas y deduplicar por nombre
+        var { data: todasComps } = await supabase
+          .from('competencias').select('id, nombre, descripcion').order('nombre', { ascending: true });
+        var vistos = {};
+        comps = (todasComps || []).filter(function(c) {
+          if (vistos[c.nombre]) return false;
+          vistos[c.nombre] = true;
+          return true;
+        });
+        console.log('Fallback — competencias deduplicadas:', comps.length);
+      }
       setComp(comps || []);
+
 
       var { data: { session } } = await supabase.auth.getSession();
 
