@@ -13,11 +13,11 @@ function calcularRating(ratings) {
 
 function clasificarRating(rating) {
   if (!rating) return null;
-  if (rating >= 4.6) return { label: 'Desempeño sobresaliente', color: '#166534', bg: '#dcfce7' };
-  if (rating >= 4.0) return { label: 'Supera las expectativas', color: '#1e40af', bg: '#dbeafe' };
-  if (rating >= 3.0) return { label: 'Cumple las expectativas', color: '#92400e', bg: '#fef3c7' };
-  if (rating >= 2.0) return { label: 'En desarrollo', color: '#c2410c', bg: '#ffedd5' };
-  return { label: 'Por debajo de lo esperado', color: '#dc2626', bg: '#fee2e2' };
+  if (rating >= 4.6) return { label: "Desempeno Distinguido", color: "#166534", bg: "#dcfce7" };
+  if (rating >= 3.6) return { label: "Excede las Expectativas", color: "#1e40af", bg: "#dbeafe" };
+  if (rating >= 2.6) return { label: "Cumple las Expectativas", color: "#92400e", bg: "#fef3c7" };
+  if (rating >= 1.6) return { label: "Por Debajo de lo Esperado", color: "#c2410c", bg: "#ffedd5" };
+  return { label: "No Adecuado", color: "#dc2626", bg: "#fee2e2" };
 }
 
 function RatingFinalBadge({ ratings }) {
