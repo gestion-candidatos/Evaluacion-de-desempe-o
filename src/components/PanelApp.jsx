@@ -2457,6 +2457,11 @@ function GestionUsuarios() {
     setUsuarios(function(prev) { return prev.map(function(u) { return u.id === user.id ? { ...u, activo: !u.activo } : u; }); });
   }
 
+  async function asignarLider(userId, liderId) {
+    await supabase.from("profiles").update({ leader_id: liderId || null }).eq("id", userId);
+    setUsuarios(function(prev) { return prev.map(function(u) { return u.id === userId ? { ...u, leader_id: liderId || null } : u; }); });
+  }
+
   async function crearUsuario() {
     if (!formNuevo.email || !formNuevo.password || !formNuevo.full_name) return alert('Email, nombre y contraseña son obligatorios');
     setGuardando(true);
@@ -2522,7 +2527,7 @@ function GestionUsuarios() {
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
           <thead>
             <tr style={{ background: '#231F20' }}>
-              {['Nombre', 'Email', 'Area', 'Seniority', 'Rol', 'Estado', 'Acciones'].map(function(h) {
+              {['Nombre', 'Email', 'Area', 'Seniority', 'Rol', 'Lider', 'Estado', 'Acciones'].map(function(h) {
                 return <th key={h} style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>{h}</th>;
               })}
             </tr>
@@ -2543,6 +2548,21 @@ function GestionUsuarios() {
                       color: u.role === 'admin_rrhh' ? '#D4D2C6' : u.role === 'lider' ? '#1e40af' : '#64748b' }}>
                       {u.role}
                     </span>
+                  </td>
+                  <td style={{ ...td, padding: "8px 14px", minWidth: 160 }}>
+                    {u.role !== "admin_rrhh" ? (
+                      <select
+                        value={u.leader_id || ""}
+                        onChange={function(e) { var _uid = u.id; asignarLider(_uid, e.target.value); }}
+                        style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D4D2C6", fontSize: 12, background: "white" }}>
+                        <option value="">Sin lider</option>
+                        {usuarios.filter(function(l) { return l.id !== u.id && (l.role === "lider" || l.role === "admin_rrhh"); }).map(function(l) {
+                          return <option key={l.id} value={l.id}>{l.full_name || l.email}</option>;
+                        })}
+                      </select>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#94a3b8" }}>Admin</span>
+                    )}
                   </td>
                   <td style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
                     <button onClick={function() { toggleActivo(u); }} style={{
