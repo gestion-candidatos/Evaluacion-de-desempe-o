@@ -2078,6 +2078,7 @@ function PanelAdminObjetivos({ profile }) {
   }
 
   async function agregarObjetivoAdmin(datosForm) {
+    console.log("agregarObjetivoAdmin datosForm:", datosForm);
     if (!colaboradorSeleccionado) return alert('Selecciona un colaborador');
     if (!datosForm || !datosForm.objetivo) return alert('El objetivo es obligatorio');
     if (!datosForm.ponderacion || parseFloat(datosForm.ponderacion) <= 0) return alert('La ponderacion es obligatoria');
