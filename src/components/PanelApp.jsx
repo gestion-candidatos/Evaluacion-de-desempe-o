@@ -2079,13 +2079,11 @@ function PanelAdminObjetivos({ profile }) {
 
   async function agregarObjetivoAdmin(datosForm) {
     if (!colaboradorSeleccionado) return alert('Selecciona un colaborador');
-    if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio');
-    if (!nuevoObjetivo.ponderacion || nuevoObjetivo.ponderacion <= 0) return alert('La ponderacion es obligatoria');
-    // Validar ponderacion del colaborador seleccionado
+    if (!datosForm || !datosForm.objetivo) return alert('El objetivo es obligatorio');
+    if (!datosForm.ponderacion || parseFloat(datosForm.ponderacion) <= 0) return alert('La ponderacion es obligatoria');
     var objsColab = objetivos.filter(function(o) { return o.colaborador_id === colaboradorSeleccionado && o.status !== 'rechazado'; });
     var usada = objsColab.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
-    if (usada + parseFloat(datosForm.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
-    var { data: { session } } = await supabase.auth.getSession();
+    if (usada + parseFloat(datosForm.ponderacion) > 100) return alert('La ponderacion supera el 100%. Disponible: ' + (100 - usada) + '%');
     var { data: { session } } = await supabase.auth.getSession();
     var { error: insertErr } = await supabase.from('objetivos').insert({
       gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
@@ -2097,8 +2095,8 @@ function PanelAdminObjetivos({ profile }) {
       alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta,
     });
     if (insertErr) { alert('Error al guardar objetivo: ' + insertErr.message); return; }
+    setNuevoObjetivo(null); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos();
   }
-
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
 
   function exportarExcel() {
