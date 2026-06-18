@@ -46,7 +46,8 @@ export default function PanelApp() {
   var [loading, setLoading] = useState(true);
   var [menuActivo, setMenuActivo] = useState('desempeno');
   var [cicloActivo, setCicloActivo] = useState(null);
-  var [vistaComoColaborador, setVistaComoColaborador] = useState(false); // Punto 1
+  var [vistaComoColaborador, setVistaComoColaborador] = useState(false);
+  var [modulosActivos, setModulosActivos] = useState([]);
 
   useEffect(function() { cargarPerfil(); }, []);
 
@@ -55,6 +56,13 @@ export default function PanelApp() {
     if (!session) { window.location.href = '/'; return; }
     var { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').eq('id', session.user.id).single();
     if (perfil && perfil.activo === false) { await supabase.auth.signOut(); alert('Cuenta desactivada.'); window.location.href = '/'; return; }
+    // Admin ve todo siempre
+    if (perfil.role === 'admin_rrhh') {
+      setModulosActivos(['desempeno', 'obj_individual', 'obj_compania']);
+    } else {
+      var { data: mods } = await supabase.from('modulos_usuario').select('modulo').eq('user_id', perfil.id).eq('activo', true);
+      setModulosActivos((mods || []).map(function(m) { return m.modulo; }));
+    }
     setProfile(perfil); setLoading(false);
   }
 
@@ -68,24 +76,39 @@ export default function PanelApp() {
   var esGerente = profile.seniority === 'Gerente';
   var tieneEquipo = profile.role === 'admin_rrhh' || profile.role === 'lider' || esGerente;
 
-  // Punto 1 — si el admin activó "ver como colaborador", tratarlo como colaborador
   var rolEfectivo = (esAdmin && vistaComoColaborador) ? 'colaborador' : profile.role;
   var nombreRol = rolEfectivo === 'admin_rrhh' ? 'Admin RRHH' : rolEfectivo === 'lider' ? 'Lider' : 'Colaborador';
   var emojiRol = rolEfectivo === 'admin_rrhh' ? '🔧' : rolEfectivo === 'lider' ? '👥' : '👤';
   var profileEfectivo = { ...profile, role: rolEfectivo };
+
+  // Módulos visibles — admin ve todo, resto según tabla
+  var modulosVer = esAdmin && !vistaComoColaborador
+    ? ['desempeno', 'obj_individual', 'obj_compania']
+    : modulosActivos;
+
+  var verDesempeno = modulosVer.includes('desempeno');
+  var verObjIndividual = modulosVer.includes('obj_individual');
+  var verObjCompania = modulosVer.includes('obj_compania');
+  var verAlgunObj = verObjIndividual || verObjCompania;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <aside style={sidebarStyle.aside}>
         <div style={sidebarStyle.logoContainer}><img src="/logo.jpg" alt="Fabric Group" style={{ height: '40px' }} /></div>
         <nav style={sidebarStyle.nav}>
-          <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>📊 DESEMPENO</button>
-          <button onClick={function() { setMenuActivo(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj' ? '' : 'objetivos'); }} style={{ ...sidebarStyle.menuItem, background: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#D4D2C6' : 'transparent', color: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#231F20' : '#D4D2C6' }}>🎯 OBJETIVOS {(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '▼' : '▶'}</button>
-          {(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') && (
+          {/* DESEMPEÑO */}
+          {verDesempeno && (
+            <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>📊 DESEMPENO</button>
+          )}
+          {/* OBJETIVOS */}
+          {verAlgunObj && (
+            <button onClick={function() { setMenuActivo(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj' ? '' : 'objetivos'); }} style={{ ...sidebarStyle.menuItem, background: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#D4D2C6' : 'transparent', color: (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '#231F20' : '#D4D2C6' }}>🎯 OBJETIVOS {(menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') ? '▼' : '▶'}</button>
+          )}
+          {verAlgunObj && (menuActivo === 'objetivos' || menuActivo === 'miequipo_obj' || menuActivo === 'misobjetivos' || menuActivo === 'compania_obj' || menuActivo === 'admin_obj') && (
             <div style={{ paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <button onClick={function() { setMenuActivo('misobjetivos'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'misobjetivos' ? '#D4D2C6' : 'transparent', color: menuActivo === 'misobjetivos' ? '#231F20' : '#D4D2C6' }}>🎯 Mis Objetivos</button>
-              {tieneEquipo && <button onClick={function() { setMenuActivo('miequipo_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'miequipo_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'miequipo_obj' ? '#231F20' : '#D4D2C6' }}>👥 Mi Equipo</button>}
-              {(profileEfectivo.role === 'admin_rrhh' || esGerente) && <button onClick={function() { setMenuActivo('compania_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'compania_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'compania_obj' ? '#231F20' : '#D4D2C6' }}>🏢 Compañia</button>}
+              {verObjIndividual && <button onClick={function() { setMenuActivo('misobjetivos'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'misobjetivos' ? '#D4D2C6' : 'transparent', color: menuActivo === 'misobjetivos' ? '#231F20' : '#D4D2C6' }}>🎯 Mis Objetivos</button>}
+              {verObjIndividual && tieneEquipo && <button onClick={function() { setMenuActivo('miequipo_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'miequipo_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'miequipo_obj' ? '#231F20' : '#D4D2C6' }}>👥 Mi Equipo</button>}
+              {verObjCompania && <button onClick={function() { setMenuActivo('compania_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'compania_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'compania_obj' ? '#231F20' : '#D4D2C6' }}>🏢 Compañia</button>}
               {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo('admin_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'admin_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'admin_obj' ? '#231F20' : '#D4D2C6', fontWeight: 600 }}>🔧 Panel Admin</button>}
             </div>
           )}
@@ -97,20 +120,13 @@ export default function PanelApp() {
         <header style={s.header}>
           <h1 style={{ fontSize: 18, fontWeight: 600, color: '#D4D2C6', margin: 0 }}>Fabric Group</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Punto 1 — botón alternar vista admin/colaborador */}
             {esAdmin && !vistaComoColaborador && (
-              <button
-                onClick={function() { setVistaComoColaborador(true); setMenuActivo('desempeno'); setCicloActivo(null); }}
-                style={{ padding: '6px 14px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-              >
+              <button onClick={function() { setVistaComoColaborador(true); setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ padding: '6px 14px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 👤 Ver como Colaborador
               </button>
             )}
             {esAdmin && vistaComoColaborador && (
-              <button
-                onClick={function() { setVistaComoColaborador(false); setMenuActivo('desempeno'); setCicloActivo(null); }}
-                style={{ padding: '6px 14px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
-              >
+              <button onClick={function() { setVistaComoColaborador(false); setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ padding: '6px 14px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
                 🔧 Volver a Admin
               </button>
             )}
@@ -118,25 +134,32 @@ export default function PanelApp() {
           </div>
         </header>
 
-        {/* Punto 1 — banner cuando está en modo colaborador */}
         {vistaComoColaborador && (
           <div style={{ padding: '10px 24px', background: '#fef3c7', borderBottom: '2px solid #f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>👁️ Estás viendo la plataforma como colaborador. Tus datos reales, sin permisos de admin.</span>
+            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>👁️ Estas viendo la plataforma como colaborador.</span>
             <button onClick={function() { setVistaComoColaborador(false); setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ padding: '4px 12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Salir</button>
           </div>
         )}
 
         <main style={{ padding: 24 }}>
-          {menuActivo === 'desempeno' && <DesempenoView profile={profileEfectivo} cicloActivo={cicloActivo} setCicloActivo={setCicloActivo} />}
-          {menuActivo === 'misobjetivos' && <ObjetivosColaborador profile={profile} />}
-          {menuActivo === 'miequipo_obj' && <ObjetivosGerente profile={profile} />}
-          {menuActivo === 'compania_obj' && <ObjetivosCompania />}
-          {menuActivo === 'admin_obj' && !vistaComoColaborador && <PanelAdminObjetivos profile={profile} />}
+          {menuActivo === 'desempeno' && verDesempeno && <DesempenoView profile={profileEfectivo} cicloActivo={cicloActivo} setCicloActivo={setCicloActivo} />}
+          {menuActivo === 'misobjetivos' && verObjIndividual && <ObjetivosColaborador profile={profile} />}
+          {menuActivo === 'miequipo_obj' && verObjIndividual && <ObjetivosGerente profile={profile} />}
+          {menuActivo === 'compania_obj' && verObjCompania && <ObjetivosCompania esAdmin={esAdmin && !vistaComoColaborador} />}
+          {menuActivo === 'admin_obj' && !vistaComoColaborador && esSuperAdmin && <PanelAdminObjetivos profile={profile} />}
+          {!verDesempeno && !verAlgunObj && (
+            <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}>
+              <p style={{ fontSize: 40, marginBottom: 16 }}>🔒</p>
+              <h3 style={{ color: '#231F20' }}>Sin modulos habilitados</h3>
+              <p style={{ color: '#64748b' }}>Tu administrador aun no habilitó ningún módulo para tu perfil.</p>
+            </div>
+          )}
         </main>
       </div>
     </div>
   );
 }
+
 
 // =============================================
 // VISTAS AUXILIARES
@@ -225,6 +248,7 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
         <button onClick={function() { setVista('equipo'); }} style={vista === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>
         {tieneAutoevaluacion && <button onClick={function() { setVista('mievaluacion'); }} style={vista === 'mievaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluacion</button>}
         <button onClick={function() { setVista('colaboradores'); }} style={vista === 'colaboradores' ? s.btnPrimario : s.btnInfo}>👥 Participantes</button>
+        <button onClick={function() { setVista('modulos'); }} style={vista === 'modulos' ? s.btnPrimario : s.btnInfo}>🔧 Modulos</button>
       </div>
       {vista === 'dashboard' && <DashboardView stats={stats} colabs={colabs} />}
       {vista === 'evaluaciones' && <EvaluacionesAdmin cicloId={cicloId} />}
@@ -233,6 +257,7 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
       {vista === 'equipo' && <EquipoLider cicloId={cicloId} profile={profile} soloLectura={false} />}
       {vista === 'mievaluacion' && tieneAutoevaluacion && <PanelColaborador userId={profile.id} seniority={profile.seniority} cicloId={cicloId} soloLectura={false} />}
       {vista === 'colaboradores' && <ParticipantesView colabs={colabs} />}
+      {vista === 'modulos' && <GestionModulos />}
     </div>
   );
 }
@@ -1535,148 +1560,357 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
 }
 
 
-// =============================================
-// OBJETIVOS COMPAÑIA
-// =============================================
-var OBJETIVOS_COMPANIA = [
-  {
-    id: 1,
-    titulo: 'Rentabilidad',
-    icono: '📈',
-    resumen: 'Lograr el 23% de Rentabilidad después de impuestos medido en el P&L acumulado 2026.',
-    detalle: 'Lograr el 23% de Rentabilidad después de impuestos medido en el P&L acumulado enero – diciembre 2026 sumando los locales que operamos pasado los 3 primeros meses de apertura:\n\n• Fabric: todo el año sin Juncal ni Junín\n• Tigre Morado: todo el año solo Palermo\n• Meiji: todo el año solo Palermo\n• Kohi: todo el año\n• Yatai Belgrano: todo el año\n• Yatai Palermo: desde Junio\n• Ada: desde Junio',
-    meta: '23% de Rentabilidad',
-    medicion: 'P&L acumulado enero – diciembre 2026',
-  },
-  {
-    id: 2,
-    titulo: 'Expansión',
-    icono: '🚀',
-    resumen: 'Lograr aperturas a lo largo del 2026 en Argentina y LATAM, propios o franquicias, cumpliendo el plan de 12 a 15 locales.',
-    detalle: 'Lograr tener aperturas a lo largo del 2026 tanto para Argentina como en LATAM, propios o franquicias, cualquier marca, para cumplir en tiempo y forma con el plan de expansión 2026.\n\n• Meta: 12 a 15 locales por año\n• Se considera apertura a local con facturación dentro del calendario enero – diciembre 2026\n• Medición: RTDM o el sistema que utilice la compañía',
-    meta: '12 a 15 locales',
-    medicion: 'RTDM — enero – diciembre 2026',
-  },
-  {
-    id: 3,
-    titulo: 'Tráfico',
-    icono: '🎯',
-    resumen: 'Lograr tickets anuales de un +3% vs año anterior en tiendas comparables.',
-    detalle: 'Lograr tickets anuales de un +3% vs año anterior, medido en tiendas comparables acumulado enero – diciembre con la información provista por RTDM.\n\nMarcas incluidas:\n• Fabric Sushi (completa)\n• Tigre Morado (completa)\n• Meiji Mutsu (completa)\n• Yatai (completa)\n• ADA (completa)',
-    meta: '+3% tickets vs año anterior',
-    medicion: 'RTDM — tiendas comparables enero – diciembre 2026',
-  },
-];
 
-function ObjetivosCompania() {
+// =============================================
+// OBJETIVOS COMPAÑIA — lee de Supabase, editable por admin
+// =============================================
+function ObjetivosCompania({ esAdmin }) {
+  var [objetivos, setObjetivos] = useState([]);
+  var [carg, setCarg] = useState(true);
   var [seleccionado, setSeleccionado] = useState(null);
+  var [editando, setEditando] = useState(null); // id del obj en edición, o 'nuevo'
+  var [form, setForm] = useState({});
+  var [confirmBorrar, setConfirmBorrar] = useState(null);
+
+  useEffect(function() { cargar(); }, []);
+
+  async function cargar() {
+    var { data } = await supabase.from('objetivos_compania').select('*').eq('activo', true).order('orden', { ascending: true });
+    setObjetivos(data || []); setCarg(false);
+  }
+
+  function abrirForm(obj) {
+    setForm(obj ? { ...obj } : { nombre: '', icono: '🎯', resumen: '', descripcion: '', meta: '', medicion: '', orden: (objetivos.length + 1) });
+    setEditando(obj ? obj.id : 'nuevo');
+    setSeleccionado(null);
+  }
+
+  async function guardar() {
+    if (!form.nombre) return alert('El nombre es obligatorio');
+    if (editando === 'nuevo') {
+      await supabase.from('objetivos_compania').insert({ nombre: form.nombre, icono: form.icono || '🎯', resumen: form.resumen, descripcion: form.descripcion, meta: form.meta, medicion: form.medicion, orden: form.orden || 0, activo: true });
+    } else {
+      await supabase.from('objetivos_compania').update({ nombre: form.nombre, icono: form.icono, resumen: form.resumen, descripcion: form.descripcion, meta: form.meta, medicion: form.medicion, orden: form.orden }).eq('id', editando);
+    }
+    setEditando(null); setForm({});
+    cargar();
+  }
+
+  async function borrar(id) {
+    await supabase.from('objetivos_compania').update({ activo: false }).eq('id', id);
+    setConfirmBorrar(null); setSeleccionado(null);
+    cargar();
+  }
+
+  if (carg) return <p>Cargando...</p>;
+
+  var ICONOS = ['📈', '🚀', '🎯', '💡', '🏆', '📊', '🌎', '💰', '🤝', '⭐'];
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <h2 style={{ color: '#231F20', margin: '0 0 6px 0', fontSize: 22, fontWeight: 700 }}>🏢 Objetivos de la Compañía 2026</h2>
-        <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Objetivos estratégicos de Fabric Group para el ejercicio 2026. Hacé clic en una tarjeta para ver el detalle.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
+        <div>
+          <h2 style={{ color: '#231F20', margin: '0 0 6px 0', fontSize: 22, fontWeight: 700 }}>🏢 Objetivos de la Compañía 2026</h2>
+          <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Objetivos estratégicos de Fabric Group. Hacé clic en una tarjeta para ver el detalle.</p>
+        </div>
+        {esAdmin && (
+          <button onClick={function() { abrirForm(null); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 13, padding: '10px 20px' }}>
+            + Nuevo Objetivo
+          </button>
+        )}
       </div>
+
+      {/* Modal formulario */}
+      {editando && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setEditando(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ margin: '0 0 20px 0', color: '#231F20' }}>{editando === 'nuevo' ? '+ Nuevo Objetivo' : 'Editar Objetivo'}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Nombre *</label>
+                  <input value={form.nombre || ''} onChange={function(e) { setForm({...form, nombre: e.target.value}); }} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Ícono</label>
+                  <select value={form.icono || '🎯'} onChange={function(e) { setForm({...form, icono: e.target.value}); }} style={{ padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 20 }}>
+                    {ICONOS.map(function(ic) { return <option key={ic} value={ic}>{ic}</option>; })}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Resumen (se ve en la tarjeta)</label>
+                <textarea value={form.resumen || ''} onChange={function(e) { setForm({...form, resumen: e.target.value}); }} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13, minHeight: 70, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Descripción completa (se ve en el detalle)</label>
+                <textarea value={form.descripcion || ''} onChange={function(e) { setForm({...form, descripcion: e.target.value}); }} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13, minHeight: 120, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Meta</label>
+                  <input value={form.meta || ''} onChange={function(e) { setForm({...form, meta: e.target.value}); }} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Medición</label>
+                  <input value={form.medicion || ''} onChange={function(e) { setForm({...form, medicion: e.target.value}); }} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Orden</label>
+                <input type="number" value={form.orden || 0} onChange={function(e) { setForm({...form, orden: parseInt(e.target.value)}); }} style={{ width: 80, padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13 }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button onClick={guardar} style={{ ...s.btnPrimario, flex: 1 }}>💾 Guardar</button>
+              <button onClick={function() { setEditando(null); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar borrar */}
+      {confirmBorrar && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 400, width: '90%' }}>
+            <h3 style={{ margin: '0 0 12px 0' }}>¿Eliminar objetivo?</h3>
+            <p style={{ color: '#64748b', marginBottom: 24 }}>Esta acción no se puede deshacer.</p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={function() { borrar(confirmBorrar); }} style={{ ...s.btnPrimario, background: '#dc2626', flex: 1 }}>Eliminar</button>
+              <button onClick={function() { setConfirmBorrar(null); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tarjetas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 32 }}>
-        {OBJETIVOS_COMPANIA.map(function(obj) {
+        {objetivos.map(function(obj) {
           var activo = seleccionado === obj.id;
           return (
-            <div
-              key={obj.id}
-              onClick={function() { setSeleccionado(activo ? null : obj.id); }}
-              style={{
-                background: activo ? '#231F20' : '#D4D2C6',
-                borderRadius: 14,
-                padding: '24px 22px',
-                cursor: 'pointer',
-                border: '2px solid ' + (activo ? '#231F20' : '#C8C6BA'),
-                boxShadow: activo ? '0 4px 20px rgba(35,31,32,0.18)' : '0 2px 8px rgba(0,0,0,0.06)',
-                transition: 'all 0.18s ease',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-              {/* Número */}
-              <div style={{
-                position: 'absolute', top: 16, right: 18,
-                fontSize: 42, fontWeight: 900, opacity: 0.08,
-                color: activo ? '#fff' : '#231F20', lineHeight: 1,
-                fontFamily: 'Georgia, serif',
-              }}>0{obj.id}</div>
-
-              <div style={{ fontSize: 28, marginBottom: 10 }}>{obj.icono}</div>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: 18, fontWeight: 700, color: activo ? '#D4D2C6' : '#231F20' }}>
-                {obj.titulo}
-              </h3>
-              <p style={{ margin: '0 0 16px 0', fontSize: 13, color: activo ? '#C8C6BA' : '#475569', lineHeight: 1.55 }}>
-                {obj.resumen}
-              </p>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontSize: 12, fontWeight: 600,
-                color: activo ? '#D4D2C6' : '#231F20',
-                borderTop: '1px solid ' + (activo ? 'rgba(212,210,198,0.3)' : 'rgba(35,31,32,0.12)'),
-                paddingTop: 12, width: '100%',
-              }}>
-                <span>{activo ? '▲ Ocultar detalle' : '▼ Ver detalle'}</span>
+            <div key={obj.id} style={{ position: 'relative' }}>
+              {/* Botones admin */}
+              {esAdmin && (
+                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 10 }}>
+                  <button onClick={function(e) { e.stopPropagation(); abrirForm(obj); }} style={{ background: 'rgba(255,255,255,0.85)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✏️</button>
+                  <button onClick={function(e) { e.stopPropagation(); setConfirmBorrar(obj.id); }} style={{ background: 'rgba(220,38,38,0.85)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, color: 'white', fontWeight: 600 }}>🗑</button>
+                </div>
+              )}
+              <div
+                onClick={function() { setSeleccionado(activo ? null : obj.id); }}
+                style={{
+                  background: activo ? '#231F20' : '#D4D2C6',
+                  borderRadius: 14, padding: '24px 22px', cursor: 'pointer',
+                  border: '2px solid ' + (activo ? '#231F20' : '#C8C6BA'),
+                  boxShadow: activo ? '0 4px 20px rgba(35,31,32,0.18)' : '0 2px 8px rgba(0,0,0,0.06)',
+                  transition: 'all 0.18s ease', position: 'relative', overflow: 'hidden',
+                }}>
+                <div style={{ position: 'absolute', top: 16, right: 18, fontSize: 42, fontWeight: 900, opacity: 0.08, color: activo ? '#fff' : '#231F20', lineHeight: 1, fontFamily: 'Georgia, serif' }}>0{objetivos.indexOf(obj) + 1}</div>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>{obj.icono || '🎯'}</div>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: 18, fontWeight: 700, color: activo ? '#D4D2C6' : '#231F20' }}>{obj.nombre}</h3>
+                <p style={{ margin: '0 0 16px 0', fontSize: 13, color: activo ? '#C8C6BA' : '#475569', lineHeight: 1.55 }}>{obj.resumen}</p>
+                <div style={{ fontSize: 12, fontWeight: 600, color: activo ? '#D4D2C6' : '#231F20', borderTop: '1px solid ' + (activo ? 'rgba(212,210,198,0.3)' : 'rgba(35,31,32,0.12)'), paddingTop: 12 }}>
+                  {activo ? '▲ Ocultar detalle' : '▼ Ver detalle'}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Panel de detalle */}
+      {/* Panel detalle */}
       {seleccionado && (function() {
-        var obj = OBJETIVOS_COMPANIA.find(function(o) { return o.id === seleccionado; });
+        var obj = objetivos.find(function(o) { return o.id === seleccionado; });
         if (!obj) return null;
         return (
-          <div style={{
-            background: 'white',
-            border: '2px solid #231F20',
-            borderRadius: 14,
-            overflow: 'hidden',
-            boxShadow: '0 4px 24px rgba(35,31,32,0.10)',
-          }}>
-            {/* Header del detalle */}
+          <div style={{ background: 'white', border: '2px solid #231F20', borderRadius: 14, overflow: 'hidden', boxShadow: '0 4px 24px rgba(35,31,32,0.10)' }}>
             <div style={{ background: '#231F20', padding: '20px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 28 }}>{obj.icono}</span>
+                <span style={{ fontSize: 28 }}>{obj.icono || '🎯'}</span>
                 <div>
                   <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Objetivo estratégico 2026</p>
-                  <h3 style={{ margin: '2px 0 0 0', fontSize: 20, fontWeight: 700, color: '#D4D2C6' }}>{obj.titulo}</h3>
+                  <h3 style={{ margin: '2px 0 0 0', fontSize: 20, fontWeight: 700, color: '#D4D2C6' }}>{obj.nombre}</h3>
                 </div>
               </div>
-              <button
-                onClick={function() { setSeleccionado(null); }}
-                style={{ background: 'rgba(212,210,198,0.15)', border: '1px solid rgba(212,210,198,0.3)', borderRadius: 8, color: '#D4D2C6', cursor: 'pointer', fontSize: 18, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ✕
-              </button>
+              <button onClick={function() { setSeleccionado(null); }} style={{ background: 'rgba(212,210,198,0.15)', border: '1px solid rgba(212,210,198,0.3)', borderRadius: 8, color: '#D4D2C6', cursor: 'pointer', fontSize: 18, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
-
-            {/* Cuerpo */}
             <div style={{ padding: '24px 28px' }}>
-              {/* Chips de meta y medición */}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-                <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}>
-                  <p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Meta</p>
-                  <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.meta}</p>
-                </div>
-                <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}>
-                  <p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Medición</p>
-                  <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.medicion}</p>
-                </div>
+                {obj.meta && <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}><p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Meta</p><p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.meta}</p></div>}
+                {obj.medicion && <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}><p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Medición</p><p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.medicion}</p></div>}
               </div>
-
-              {/* Detalle */}
-              <div style={{ background: '#fafaf8', border: '1px solid #e8e6e0', borderRadius: 10, padding: '18px 20px' }}>
-                <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Descripción completa</p>
-                <p style={{ margin: 0, fontSize: 14, color: '#231F20', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{obj.detalle}</p>
-              </div>
+              {obj.descripcion && (
+                <div style={{ background: '#fafaf8', border: '1px solid #e8e6e0', borderRadius: 10, padding: '18px 20px' }}>
+                  <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Descripción completa</p>
+                  <p style={{ margin: 0, fontSize: 14, color: '#231F20', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{obj.descripcion}</p>
+                </div>
+              )}
             </div>
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// =============================================
+// GESTIÓN DE MÓDULOS POR USUARIO (solo superadmin)
+// =============================================
+function GestionModulos() {
+  var [usuarios, setUsuarios] = useState([]);
+  var [modulos, setModulos] = useState({});
+  var [carg, setCarg] = useState(true);
+  var [guardando, setGuardando] = useState(null);
+  var [busqueda, setBusqueda] = useState('');
+
+  var MODULOS_DISPONIBLES = [
+    { id: 'desempeno', label: '📊 Desempeño', desc: 'Evaluaciones y ciclos' },
+    { id: 'obj_individual', label: '🎯 Objetivos Individuales', desc: 'Mis objetivos y equipo' },
+    { id: 'obj_compania', label: '🏢 Objetivos Compañía', desc: 'Objetivos estratégicos' },
+  ];
+
+  useEffect(function() { cargar(); }, []);
+
+  async function cargar() {
+    var [{ data: users }, { data: mods }] = await Promise.all([
+      supabase.from('profiles').select('id, email, full_name, area, seniority, role').neq('role', 'admin_rrhh').eq('activo', true).order('full_name'),
+      supabase.from('modulos_usuario').select('user_id, modulo, activo'),
+    ]);
+    // Armar mapa: { user_id: { modulo: true/false } }
+    var mapaModulos = {};
+    (users || []).forEach(function(u) { mapaModulos[u.id] = {}; });
+    (mods || []).forEach(function(m) {
+      if (mapaModulos[m.user_id]) mapaModulos[m.user_id][m.modulo] = m.activo;
+    });
+    setUsuarios(users || []);
+    setModulos(mapaModulos);
+    setCarg(false);
+  }
+
+  async function toggleModulo(userId, moduloId, valorActual) {
+    setGuardando(userId + moduloId);
+    var nuevoValor = !valorActual;
+    await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: moduloId, activo: nuevoValor, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+    setModulos(function(prev) {
+      var nuevo = { ...prev };
+      nuevo[userId] = { ...nuevo[userId], [moduloId]: nuevoValor };
+      return nuevo;
+    });
+    setGuardando(null);
+  }
+
+  async function habilitarTodo(userId) {
+    for (var mod of MODULOS_DISPONIBLES) {
+      await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: true, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+    }
+    setModulos(function(prev) {
+      var nuevo = { ...prev };
+      nuevo[userId] = { desempeno: true, obj_individual: true, obj_compania: true };
+      return nuevo;
+    });
+  }
+
+  async function deshabilitarTodo(userId) {
+    for (var mod of MODULOS_DISPONIBLES) {
+      await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: false, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+    }
+    setModulos(function(prev) {
+      var nuevo = { ...prev };
+      nuevo[userId] = { desempeno: false, obj_individual: false, obj_compania: false };
+      return nuevo;
+    });
+  }
+
+  if (carg) return <p>Cargando usuarios...</p>;
+
+  var usuariosFiltrados = busqueda
+    ? usuarios.filter(function(u) { return (u.full_name || u.email).toLowerCase().includes(busqueda.toLowerCase()) || (u.area || '').toLowerCase().includes(busqueda.toLowerCase()); })
+    : usuarios;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: '#231F20', margin: '0 0 6px 0' }}>🔧 Gestión de Módulos por Usuario</h2>
+        <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Habilitá o deshabilitá qué módulos puede ver cada colaborador en el menú.</p>
+      </div>
+
+      {/* Leyenda de módulos */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        {MODULOS_DISPONIBLES.map(function(m) {
+          return (
+            <div key={m.id} style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+              <strong>{m.label}</strong><span style={{ color: '#64748b', marginLeft: 6 }}>{m.desc}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Buscador */}
+      <input
+        value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
+        placeholder="Buscar por nombre o área..."
+        style={{ width: '100%', maxWidth: 360, padding: '10px 14px', borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }}
+      />
+
+      {/* Tabla */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+          <thead>
+            <tr style={{ background: '#231F20' }}>
+              <th style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>Colaborador</th>
+              <th style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>Área</th>
+              <th style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>Seniority</th>
+              {MODULOS_DISPONIBLES.map(function(m) {
+                return <th key={m.id} style={{ ...th, color: '#D4D2C6', padding: '12px 14px', textAlign: 'center', fontSize: 11 }}>{m.label}</th>;
+              })}
+              <th style={{ ...th, color: '#D4D2C6', padding: '12px 14px', textAlign: 'center' }}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuariosFiltrados.map(function(u, idx) {
+              var modsUser = modulos[u.id] || {};
+              return (
+                <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#fafaf8' }}>
+                  <td style={{ ...td, padding: '12px 14px' }}>
+                    <strong style={{ color: '#231F20' }}>{u.full_name || '-'}</strong>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.email}</div>
+                  </td>
+                  <td style={{ ...td, padding: '12px 14px' }}>{u.area || '-'}</td>
+                  <td style={{ ...td, padding: '12px 14px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{u.seniority || '-'}</span>
+                  </td>
+                  {MODULOS_DISPONIBLES.map(function(m) {
+                    var activo = modsUser[m.id] === true;
+                    var cargandoEste = guardando === u.id + m.id;
+                    return (
+                      <td key={m.id} style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
+                        <button
+                          onClick={function() { toggleModulo(u.id, m.id, activo); }}
+                          disabled={cargandoEste}
+                          style={{
+                            width: 36, height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 16,
+                            background: activo ? '#231F20' : '#f1f5f9',
+                            color: activo ? '#D4D2C6' : '#94a3b8',
+                            opacity: cargandoEste ? 0.5 : 1,
+                            transition: 'all 0.15s',
+                          }}>
+                          {cargandoEste ? '...' : activo ? '✓' : '○'}
+                        </button>
+                      </td>
+                    );
+                  })}
+                  <td style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button onClick={function() { habilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>Todo ✓</button>
+                      <button onClick={function() { deshabilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Todo ✗</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
