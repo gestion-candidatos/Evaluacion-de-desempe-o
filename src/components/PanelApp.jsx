@@ -1793,10 +1793,11 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
       <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
         <button
           onClick={function() {
-            if (!obj.objetivo) return alert('El objetivo es obligatorio');
-            var total = usada + parseFloat(obj.ponderacion || 0);
-            if (total > 100) return alert('La ponderacion total supera el 100%. Disponible: ' + disponible.toFixed(0) + '%');
-            if (!obj.ponderacion || obj.ponderacion <= 0) return alert('La ponderacion debe ser mayor a 0');
+            if (!obj.objetivo) return alert("El objetivo es obligatorio");
+            var pond = parseFloat(obj.ponderacion) || 0;
+            if (pond <= 0) return alert("La ponderacion debe ser mayor a 0");
+            var total = usada + pond;
+            if (total > 100) return alert("La ponderacion total supera el 100%. Disponible: " + disponible.toFixed(0) + "%");
             onGuardar();
           }}
           style={{ ...s.btnPrimario, background: '#22c55e' }}>
