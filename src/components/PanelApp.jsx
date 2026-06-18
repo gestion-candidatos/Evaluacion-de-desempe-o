@@ -1515,15 +1515,15 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
     cargarObjetivos();
   }
 
-  async function guardarNuevoObjetivo() {
+  async function guardarNuevoObjetivo(datosForm) {
     var { data: { session } } = await supabase.auth.getSession();
     var datos = {
-      objetivo: formObj.objetivo, corporativo: formObj.corporativo,
-      ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
+      objetivo: datosForm.objetivo, corporativo: datosForm.corporativo,
+      ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
       
-      alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
-      alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
-      alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
+      alcance_80_descripcion: datosForm.alcance_80_descripcion, alcance_80_fecha: datosForm.alcance_80_fecha || null, alcance_80_meta: datosForm.alcance_80_meta,
+      alcance_100_descripcion: datosForm.alcance_100_descripcion, alcance_100_fecha: datosForm.alcance_100_fecha || null, alcance_100_meta: datosForm.alcance_100_meta,
+      alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta,
       colaborador_id: colaborador.id, gerente_id: session.user.id, status: "pendiente", leader_id: colaborador.leader_id || null,
     };
     await supabase.from('objetivos').insert(datos);
@@ -1853,19 +1853,20 @@ function ObjetivosColaborador({ profile }) {
     setEditandoId(obj.id); setMostrarForm(true);
   }
 
-  async function guardarObjetivo() {
+  async function guardarObjetivo(datosForm) {
     var datos = {
-      objetivo: formObj.objetivo, corporativo: formObj.corporativo,
-      ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
+      objetivo: datosForm.objetivo, corporativo: datosForm.corporativo,
+      ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
       
-      alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
-      alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
-      alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
+      alcance_80_descripcion: datosForm.alcance_80_descripcion, alcance_80_fecha: datosForm.alcance_80_fecha || null, alcance_80_meta: datosForm.alcance_80_meta,
+      alcance_100_descripcion: datosForm.alcance_100_descripcion, alcance_100_fecha: datosForm.alcance_100_fecha || null, alcance_100_meta: datosForm.alcance_100_meta,
+      alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta,
     };
     if (editandoId) {
       await supabase.from('objetivos').update({ ...datos, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
     } else {
-      await supabase.from('objetivos').insert({ ...datos, colaborador_id: profile.id, status: 'pendiente' });
+      var { error: insErr } = await supabase.from("objetivos").insert({ ...datos, colaborador_id: profile.id, status: "pendiente" });
+      if (insErr) { alert("Error al guardar: " + insErr.message); return; }
     }
     setMostrarForm(false); setFormObj(null); setEditandoId(null); cargarObjetivos();
   }
@@ -2076,23 +2077,24 @@ function PanelAdminObjetivos({ profile }) {
     setMostrarForm(true); setMostrarHistorico(false);
   }
 
-  async function agregarObjetivoAdmin() {
+  async function agregarObjetivoAdmin(datosForm) {
     if (!colaboradorSeleccionado) return alert('Selecciona un colaborador');
     if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio');
     if (!nuevoObjetivo.ponderacion || nuevoObjetivo.ponderacion <= 0) return alert('La ponderacion es obligatoria');
     // Validar ponderacion del colaborador seleccionado
     var objsColab = objetivos.filter(function(o) { return o.colaborador_id === colaboradorSeleccionado && o.status !== 'rechazado'; });
     var usada = objsColab.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
-    if (usada + parseFloat(nuevoObjetivo.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
+    if (usada + parseFloat(datosForm.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
+    var { data: { session } } = await supabase.auth.getSession();
     var { data: { session } } = await supabase.auth.getSession();
     var { error: insertErr } = await supabase.from('objetivos').insert({
       gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
       leader_id: (colaboradores.find(function(c) { return c.id === colaboradorSeleccionado; }) || {}).leader_id || null,
-      objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo,
-      ponderacion: parseFloat(nuevoObjetivo.ponderacion), alcance_tipo: nuevoObjetivo.alcance_tipo,
-      alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_80_meta: nuevoObjetivo.alcance_80_meta,
-      alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_100_meta: nuevoObjetivo.alcance_100_meta,
-      alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null, alcance_120_meta: nuevoObjetivo.alcance_120_meta,
+      objetivo: datosForm.objetivo, corporativo: datosForm.corporativo,
+      ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
+      alcance_80_descripcion: datosForm.alcance_80_descripcion, alcance_80_fecha: datosForm.alcance_80_fecha || null, alcance_80_meta: datosForm.alcance_80_meta,
+      alcance_100_descripcion: datosForm.alcance_100_descripcion, alcance_100_fecha: datosForm.alcance_100_fecha || null, alcance_100_meta: datosForm.alcance_100_meta,
+      alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta,
     });
     if (insertErr) { alert('Error al guardar objetivo: ' + insertErr.message); return; }
   }
