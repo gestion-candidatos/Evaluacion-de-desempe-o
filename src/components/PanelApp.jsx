@@ -1524,7 +1524,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
       alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
       alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
       alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
-      colaborador_id: colaborador.id, gerente_id: session.user.id, status: 'pendiente',
+      colaborador_id: colaborador.id, gerente_id: session.user.id, status: "pendiente", leader_id: colaborador.leader_id || null,
     };
     await supabase.from('objetivos').insert(datos);
     setMostrarFormNuevo(false); setFormObj(null); cargarObjetivos();
@@ -2083,7 +2083,8 @@ function PanelAdminObjetivos({ profile }) {
     if (usada + parseFloat(nuevoObjetivo.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
     var { data: { session } } = await supabase.auth.getSession();
     await supabase.from('objetivos').insert({
-      gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
+      gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: "pendiente",
+      leader_id: (colaboradores.find(function(c) { return c.id === colaboradorSeleccionado; }) || {}).leader_id || null,
       objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo,
       ponderacion: parseFloat(nuevoObjetivo.ponderacion), alcance_tipo: nuevoObjetivo.alcance_tipo,
       alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_80_meta: nuevoObjetivo.alcance_80_meta,
