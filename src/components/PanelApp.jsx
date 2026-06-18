@@ -730,12 +730,13 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
       }
 
       // Siempre cargar autoevaluacion sin importar el estado
-      var { data: ae } = await supabase.from('evaluaciones')
+      var { data: ae, error: aeErr } = await supabase.from('evaluaciones')
         .select('id, estado, rating_promedio, comentarios_finales')
         .eq('colaborador_id', colaborador.id)
         .eq('tipo_evaluacion', 'autoevaluacion')
         .eq('ciclo_id', cicloId)
         .maybeSingle();
+      console.log("Query autoevaluacion - ae:", ae, "error:", aeErr);
       if (ae) {
         // Query sin join para máxima compatibilidad
         var { data: ap, error: apErr } = await supabase.from('puntuaciones')
@@ -789,15 +790,30 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     return null;
   }
 
+  async function guardarPuntuacionesLider(evId) {
+    for (var cid of Object.keys(ratings)) {
+      var r = ratings[cid];
+      if (!r) continue;
+      var { data: ex } = await supabase.from('puntuaciones')
+        .select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
+      if (ex?.id) {
+        await supabase.from('puntuaciones')
+          .update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id);
+      } else {
+        await supabase.from('puntuaciones')
+          .insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' });
+      }
+    }
+  }
+
   async function guardar() {
     if (bloqueado) return;
     var evId = await obtenerOCrearEvalId();
     if (!evId) { setMsg('Error al guardar'); return; }
+    setMsg('Guardando...');
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
-    for (var [cid, r] of Object.entries(ratings)) {
-      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
-    }
+    await guardarPuntuacionesLider(evId);
     setMsg('Guardado'); setTimeout(function() { setMsg(''); }, 2500);
   }
 
@@ -805,17 +821,16 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     if (bloqueado) return;
     var evId = await obtenerOCrearEvalId();
     if (!evId) { setMsg('Error al enviar'); return; }
+    setMsg('Enviando...');
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
-    for (var [cid, r] of Object.entries(ratings)) {
-      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
-    }
-    await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    await guardarPuntuacionesLider(evId);
+    var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
     setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
     setMsg('Evaluacion enviada correctamente');
   }
 
-  if (carg) return <p>Cargando...</p>;
 
 
   return (
@@ -1032,31 +1047,49 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
   var yaEnviada = evalData?.estado === 'enviado';
   var bloqueado = soloLectura || yaEnviada;
 
+  async function guardarPuntuaciones(evId) {
+    for (var cid of Object.keys(ratings)) {
+      var r = ratings[cid];
+      if (!r) continue;
+      var { data: ex } = await supabase.from('puntuaciones')
+        .select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
+      if (ex?.id) {
+        await supabase.from('puntuaciones')
+          .update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id);
+      } else {
+        await supabase.from('puntuaciones')
+          .insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' });
+      }
+    }
+  }
+
   async function guardar() {
     if (bloqueado) return;
     var evId = evalData?.id;
-    if (!evId) return;
+    if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
+    if (Object.keys(ratings).length === 0) { setMsg('Selecciona al menos un puntaje'); setTimeout(function() { setMsg(''); }, 2500); return; }
+    setMsg('Guardando...');
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
-    for (var [cid, r] of Object.entries(ratings)) {
-      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
-    }
-    setMsg('Guardado'); setTimeout(function() { setMsg(''); }, 2500);
+    await guardarPuntuaciones(evId);
+    setMsg('Guardado correctamente'); setTimeout(function() { setMsg(''); }, 2500);
   }
 
   async function enviar() {
     if (bloqueado) return;
     var evId = evalData?.id;
-    if (!evId) return;
+    if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
+    if (Object.keys(ratings).length === 0) { setMsg('Completa al menos una competencia antes de enviar'); return; }
+    setMsg('Enviando...');
     var prom = calcularRating(ratings);
     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
-    for (var [cid, r] of Object.entries(ratings)) {
-      await supabase.from('puntuaciones').upsert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }, { onConflict: 'evaluacion_id, competencia_id' });
-    }
-    await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    await guardarPuntuaciones(evId);
+    var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+    if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
     setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
     setMsg('Autoevaluacion enviada correctamente');
   }
+
 
   if (carg) return <p>Cargando...</p>;
 
