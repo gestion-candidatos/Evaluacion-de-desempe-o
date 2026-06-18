@@ -920,18 +920,18 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
               )}
             </div>
 
-            {/* Dos columnas: auto izq, lider der */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
 
-              {/* Columna izquierda: autoevaluacion del colaborador */}
-              <div style={{ padding: 16, borderRight: '2px solid #e2e8f0', background: '#fafaf9' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {/* Layout: auto arriba (readonly), lider abajo (editable) */}
+            <div style={{ padding: 16 }}>
+
+              {/* Autoevaluacion del colaborador — solo lectura */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Autoevaluacion del colaborador
                 </p>
                 {autoData ? (
                   <div>
-                    {/* Puntaje seleccionado */}
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                       {[1,2,3,4,5].map(function(r) {
                         return (
                           <div key={r} style={{
@@ -939,39 +939,37 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 16, fontWeight: 700,
                             background: autoData.rating === r ? '#231F20' : '#e2e8f0',
-                            color: autoData.rating === r ? '#D4D2C6' : '#94a3b8',
-                            border: autoData.rating === r ? '2px solid #231F20' : '2px solid transparent'
+                            color: autoData.rating === r ? '#D4D2C6' : '#94a3b8'
                           }}>{r}</div>
                         );
                       })}
                     </div>
-                    {/* Comentario del colaborador */}
-                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 13, color: '#475569', minHeight: 40, fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
+                    <div style={{ fontSize: 13, color: '#475569', fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
                       {autoData.comentario || 'Sin comentario'}
                     </div>
                   </div>
                 ) : (
-                  <div style={{ padding: 12, background: '#fff3cd', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
-                    ⚠️ El colaborador aun no completo esta competencia
-                  </div>
+                  <p style={{ fontSize: 13, color: '#92400e', fontStyle: 'italic', margin: 0 }}>
+                    El colaborador aun no completo esta competencia
+                  </p>
                 )}
               </div>
 
-              {/* Columna derecha: evaluacion del lider */}
-              <div style={{ padding: 16 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#231F20', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Evaluacion del lider
+              {/* Evaluacion del lider — editable */}
+              <div style={{ background: '#fff', border: '2px solid #D4D2C6', borderRadius: 10, padding: 14 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#231F20', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Tu evaluacion
                 </p>
-                {/* Puntaje lider */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                   {[1,2,3,4,5].map(function(r) {
                     return (
                       <button key={r}
-                        onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                        onClick={function() { setRatings({ ...ratings, [comp.id]: r }); }}
                         style={{
-                          width: 38, height: 38, borderRadius: 8, border: 'none',
-                          fontSize: 16, fontWeight: 700, cursor: bloqueado ? 'default' : 'pointer',
-                          background: ratings[comp.id] === r ? '#231F20' : '#f1f5f9',
+                          width: 42, height: 42, borderRadius: 8, border: '2px solid',
+                          borderColor: ratings[comp.id] === r ? '#231F20' : '#e2e8f0',
+                          fontSize: 18, fontWeight: 700, cursor: 'pointer',
+                          background: ratings[comp.id] === r ? '#231F20' : '#f8fafc',
                           color: ratings[comp.id] === r ? 'white' : '#475569'
                         }}>
                         {r}
@@ -979,19 +977,19 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
                     );
                   })}
                 </div>
-                {/* Comentario lider */}
                 <textarea
                   value={comentarios[comp.id] || ''}
-                  onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+                  onChange={function(e) { setComent({ ...comentarios, [comp.id]: e.target.value }); }}
                   placeholder="Escribe tu comentario sobre esta competencia..."
-                  style={{ ...s.textareaSmall, minHeight: 60 }}
-                  readOnly={bloqueado}
+                  style={{ ...s.textareaSmall, minHeight: 70, background: '#fff' }}
                 />
               </div>
+
             </div>
           </div>
         );
       })}
+
 
       {/* Rating en tiempo real */}
       <RatingFinalBadge ratings={ratings} />
