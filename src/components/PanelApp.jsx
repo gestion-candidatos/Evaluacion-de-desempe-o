@@ -305,36 +305,62 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
 
   async function generarPDFCompleto(d) {
-    // ---- Queries frescos ----
+    // Usar puntuaciones que ya vienen en d (cargadas por PanelCalibracion)
+    // Si vienen vacías, hacer query fresco
     var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsOrden = [];
-    var autoComentFin = '', liderComentFin = '', promAuto = null, promLider = null;
+    var autoComentFin = d.autoevaluacion?.comentarios_finales || '';
+    var liderComentFin = d.evaluacionLider?.comentarios_finales || '';
+    var promAuto = d.promAuto || d.autoevaluacion?.rating_promedio || null;
+    var promLider = d.promLider || d.evaluacionLider?.rating_promedio || null;
 
-    if (d.autoevaluacion?.id) {
-      var { data: ap } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', d.autoevaluacion.id);
-      var { data: aev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.autoevaluacion.id).single();
+    // Intentar usar puntuaciones embebidas primero
+    var puntsAuto = d.autoevaluacion?.puntuaciones || [];
+    var puntsLider = d.evaluacionLider?.puntuaciones || [];
+
+    // Si vienen vacías, hacer query fresco
+    if (puntsAuto.length === 0 && d.autoevaluacion?.id) {
+      var { data: ap } = await supabase.from('puntuaciones')
+        .select('rating, competencia_id, comentario, competencias(id, nombre)')
+        .eq('evaluacion_id', d.autoevaluacion.id);
+      puntsAuto = ap || [];
+    }
+    if (puntsLider.length === 0 && d.evaluacionLider?.id) {
+      var { data: lp } = await supabase.from('puntuaciones')
+        .select('rating, competencia_id, comentario, competencias(id, nombre)')
+        .eq('evaluacion_id', d.evaluacionLider.id);
+      puntsLider = lp || [];
+      // También traer comentarios_finales frescos si no vienen
+      if (!liderComentFin && d.evaluacionLider?.id) {
+        var { data: lev } = await supabase.from('evaluaciones')
+          .select('comentarios_finales, rating_promedio').eq('id', d.evaluacionLider.id).single();
+        liderComentFin = lev?.comentarios_finales || '';
+        if (!promLider) promLider = lev?.rating_promedio || null;
+      }
+    }
+    if (!autoComentFin && d.autoevaluacion?.id) {
+      var { data: aev } = await supabase.from('evaluaciones')
+        .select('comentarios_finales, rating_promedio').eq('id', d.autoevaluacion.id).single();
       autoComentFin = aev?.comentarios_finales || '';
-      promAuto = aev?.rating_promedio || null;
-      (ap || []).forEach(function(p) {
-        autoPunts[p.competencia_id] = p.rating;
-        autoComs[p.competencia_id] = p.comentario || '';
-        if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
-          compsOrden.push({ id: p.competencia_id, nombre: p.competencias?.nombre || 'Competencia' });
-      });
-    }
-    if (d.evaluacionLider?.id) {
-      var { data: lp } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario, competencias(nombre)').eq('evaluacion_id', d.evaluacionLider.id);
-      var { data: lev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.evaluacionLider.id).single();
-      liderComentFin = lev?.comentarios_finales || '';
-      promLider = lev?.rating_promedio || null;
-      (lp || []).forEach(function(p) {
-        liderPunts[p.competencia_id] = p.rating;
-        liderComs[p.competencia_id] = p.comentario || '';
-        if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
-          compsOrden.push({ id: p.competencia_id, nombre: p.competencias?.nombre || 'Competencia' });
-      });
+      if (!promAuto) promAuto = aev?.rating_promedio || null;
     }
 
-    // Fallback: si no hay competencias desde puntuaciones, cargar desde tabla
+    // Construir mapas y orden de competencias
+    puntsAuto.forEach(function(p) {
+      autoPunts[p.competencia_id] = p.rating;
+      autoComs[p.competencia_id] = p.comentario || '';
+      var nombre = p.competencias?.nombre || ('Comp ' + p.competencia_id);
+      if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
+        compsOrden.push({ id: p.competencia_id, nombre: nombre });
+    });
+    puntsLider.forEach(function(p) {
+      liderPunts[p.competencia_id] = p.rating;
+      liderComs[p.competencia_id] = p.comentario || '';
+      var nombre = p.competencias?.nombre || ('Comp ' + p.competencia_id);
+      if (!compsOrden.find(function(c) { return c.id === p.competencia_id; }))
+        compsOrden.push({ id: p.competencia_id, nombre: nombre });
+    });
+
+    // Fallback final: si aún no hay competencias, cargar desde tabla
     if (compsOrden.length === 0) {
       var senFB = d.colaborador?.seniority || 'Analista';
       var { data: compsFB } = await supabase.from('competencias').select('id, nombre').eq('aplica_a', senFB);
@@ -342,9 +368,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
         var { data: compsAll } = await supabase.from('competencias').select('id, nombre');
         compsFB = compsAll || [];
       }
-      compsOrden = compsFB.map(function(c) { return { id: c.id, nombre: c.nombre }; });
+      compsOrden = (compsFB || []).map(function(c) { return { id: c.id, nombre: c.nombre }; });
     }
-
 
     // ---- Setup PDF ----
     var pdf = new jsPDF();
@@ -692,13 +717,17 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         .eq('ciclo_id', cicloId)
         .maybeSingle();
       if (ae) {
-        var { data: ap } = await supabase.from('puntuaciones')
-          .select('id, rating, comentario, competencia_id, competencias!inner(nombre)')
+        // Query sin join para máxima compatibilidad
+        var { data: ap, error: apErr } = await supabase.from('puntuaciones')
+          .select('id, rating, comentario, competencia_id')
           .eq('evaluacion_id', ae.id);
+        console.log('Autoevaluacion ID:', ae.id, 'Puntuaciones:', ap, 'Error:', apErr);
         setAutoEval({ ...ae, puntuaciones: ap || [] });
-        // mapa rápido: competencia_id -> { rating, comentario }
         var mapa = {};
-        (ap || []).forEach(function(p) { mapa[p.competencia_id] = { rating: p.rating, comentario: p.comentario || '' }; });
+        (ap || []).forEach(function(p) {
+          mapa[p.competencia_id] = { rating: p.rating, comentario: p.comentario || '' };
+        });
+        console.log('autoPuntsMap:', mapa);
         setAutoPuntsMap(mapa);
       }
 
@@ -806,7 +835,9 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
       {/* Competencias con autoevaluacion visible al lado */}
       {competencias.map(function(comp) {
-        var autoData = autoPuntsMap[comp.id];
+        var autoData = autoPuntsMap[comp.id] || autoPuntsMap[String(comp.id)] || null;
+        // Debug en consola
+        if (Object.keys(autoPuntsMap).length > 0) console.log("comp.id:", comp.id, "autoData:", autoData, "keys:", Object.keys(autoPuntsMap));
         return (
           <div key={comp.id} style={{ ...s.competenciaCard, padding: 0, overflow: 'hidden' }}>
             {/* Cabecera competencia */}
