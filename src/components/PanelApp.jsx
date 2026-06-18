@@ -1311,126 +1311,599 @@ function ObjetivosGerente({ profile }) {
 }
 
 function GestionObjetivosLider({ colaborador, profile, onVolver }) {
-  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
-  var [modalValidar, setModalValidar] = useState(null); var [accionValidar, setAccionValidar] = useState(''); var [comentarioLider, setComentarioLider] = useState('');
+  var [objetivos, setObjetivos] = useState([]);
+  var [cargando, setCargando] = useState(true);
+  var [modalValidarObj, setModalValidarObj] = useState(null); // obj completo
+  var [modalValidarAlcance, setModalValidarAlcance] = useState(null); // obj completo
+  var [accion, setAccion] = useState('');
+  var [comentario, setComentario] = useState('');
+  var [alcanceLider, setAlcanceLider] = useState('');
+  var [comentValidacion, setComentValidacion] = useState('');
+  var [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
+  var [formObj, setFormObj] = useState(null);
+
+  var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
+    alcance_0_descripcion: '', alcance_0_fecha: '', alcance_0_meta: '',
+    alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
+    alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
+    alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
+
   useEffect(function() { cargarObjetivos(); }, []);
-  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  async function ejecutarValidacion() { if (!accionValidar) return alert('Selecciona una accion'); if (!comentarioLider.trim()) return alert('El comentario es obligatorio'); var nuevoStatus = accionValidar === 'aprobar' ? 'validado' : 'pendiente'; await supabase.from('objetivos').update({ status: nuevoStatus, validado_por_gerente: accionValidar === 'aprobar', comentario_lider: comentarioLider, fecha_validacion: new Date() }).eq('id', modalValidar); setModalValidar(null); setAccionValidar(''); setComentarioLider(''); cargarObjetivos(); }
-  if (cargando) return <p>Cargando objetivos...</p>;
+
+  async function cargarObjetivos() {
+    var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false });
+    setObjetivos(data || []); setCargando(false);
+  }
+
+  // Validar objetivo (aprobar definicion o rechazar)
+  async function ejecutarValidacionObj() {
+    if (!accion) return alert('Selecciona una accion');
+    if (!comentario.trim()) return alert('El comentario es obligatorio');
+    var nuevoStatus = accion === 'aprobar' ? 'pendiente' : 'rechazado';
+    await supabase.from('objetivos').update({
+      status: nuevoStatus,
+      validado_por_gerente: accion === 'aprobar',
+      comentario_lider: comentario,
+      comentario_rechazo_lider: accion === 'rechazar' ? comentario : null,
+      fecha_validacion: new Date()
+    }).eq('id', modalValidarObj.id);
+    setModalValidarObj(null); setAccion(''); setComentario('');
+    cargarObjetivos();
+  }
+
+  // Validar alcance reportado por el colaborador
+  async function ejecutarValidacionAlcance() {
+    if (!alcanceLider) return alert('Selecciona el alcance validado');
+    if (!comentValidacion.trim()) return alert('El comentario es obligatorio');
+    var pond = parseFloat(modalValidarAlcance.ponderacion) || 0;
+    await supabase.from('objetivos').update({
+      status: 'validado',
+      validado_por_gerente: true,
+      alcance_validado: alcanceLider,
+      comentario_validacion_lider: comentValidacion,
+      fecha_validacion_lider: new Date(),
+      ponderacion_final: pond * parseFloat(alcanceLider) / 100
+    }).eq('id', modalValidarAlcance.id);
+    setModalValidarAlcance(null); setAlcanceLider(''); setComentValidacion('');
+    cargarObjetivos();
+  }
+
+  async function guardarNuevoObjetivo() {
+    var { data: { session } } = await supabase.auth.getSession();
+    var datos = {
+      objetivo: formObj.objetivo, corporativo: formObj.corporativo,
+      ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
+      alcance_0_descripcion: formObj.alcance_0_descripcion, alcance_0_fecha: formObj.alcance_0_fecha || null, alcance_0_meta: formObj.alcance_0_meta,
+      alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
+      alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
+      alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
+      colaborador_id: colaborador.id, gerente_id: session.user.id, status: 'pendiente',
+    };
+    await supabase.from('objetivos').insert(datos);
+    setMostrarFormNuevo(false); setFormObj(null); cargarObjetivos();
+  }
+
+  // Calcular alcance total ponderado
+  var objValidados = objetivos.filter(function(o) { return o.status === 'validado' && o.alcance_validado; });
+  var alcanceTotal = null;
+  if (objValidados.length > 0) {
+    var sumaPond = objValidados.reduce(function(s, o) { return s + parseFloat(o.ponderacion); }, 0);
+    var sumaAlc = objValidados.reduce(function(s, o) { return s + parseFloat(o.alcance_validado) * parseFloat(o.ponderacion); }, 0);
+    alcanceTotal = sumaPond > 0 ? (sumaAlc / sumaPond).toFixed(1) : null;
+  }
+  var totalPond = objetivos.filter(function(o) { return o.status !== 'rechazado'; })
+    .reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
+
+  if (cargando) return <p>Cargando...</p>;
+
+  var ALCANCES_VALIDAR = [
+    { valor: '80', label: '80%', color: '#92400e', bg: '#fef3c7' },
+    { valor: '100', label: '100%', color: '#166534', bg: '#dcfce7' },
+    { valor: '120', label: '120%', color: '#1e40af', bg: '#dbeafe' },
+  ];
+
   return (
     <div>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver al equipo</button>
-      <div style={{ marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>🎯 Objetivos de {colaborador.full_name || colaborador.email}</h2><p style={{ color: '#64748b', margin: '4px 0' }}>{colaborador.area} · {colaborador.seniority}</p></div>
-      {modalValidar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidar(null); }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Objetivos — {colaborador.full_name || colaborador.email}</h2>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: totalPond === 100 ? '#166534' : '#64748b', fontWeight: 600 }}>
+              Ponderacion total: {totalPond.toFixed(0)}% {totalPond === 100 ? '✅' : ''}
+            </span>
+            {alcanceTotal && (
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', background: '#dbeafe', padding: '4px 12px', borderRadius: 8 }}>
+                Alcance anual: {alcanceTotal}%
+              </span>
+            )}
+          </div>
+        </div>
+        <button onClick={function() { setFormObj({ ...FORM_VACIO, ponderacion: Math.max(0, 100 - totalPond) }); setMostrarFormNuevo(true); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 13 }}>
+          + Agregar objetivo
+        </button>
+      </div>
+
+      {mostrarFormNuevo && formObj && (
+        <FormObjetivo valor={formObj} onChange={setFormObj} objetivos={objetivos} editandoId={null}
+          titulo={'Nuevo objetivo para ' + (colaborador.full_name || colaborador.email)}
+          onGuardar={guardarNuevoObjetivo}
+          onCancelar={function() { setMostrarFormNuevo(false); setFormObj(null); }} />
+      )}
+
+      {/* Modal validar definicion de objetivo */}
+      {modalValidarObj && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidarObj(null); }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>📋 Validar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label><select value={accionValidar} onChange={function(e) { setAccionValidar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}><option value="">Seleccionar...</option><option value="aprobar">✅ Aprobar</option><option value="rechazar">❌ Rechazar (devuelve a pendiente)</option></select></div>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label><textarea value={comentarioLider} onChange={function(e) { setComentarioLider(e.target.value); }} placeholder="Explica tu decision..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} /></div>
-            <div style={{ display: 'flex', gap: 12 }}><button onClick={ejecutarValidacion} style={{ ...s.btnPrimario, background: accionValidar === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button><button onClick={function() { setModalValidar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
+            <h3 style={{ marginTop: 0 }}>Validar definicion de objetivo</h3>
+            <p style={{ color: '#64748b', fontSize: 14 }}><strong>{modalValidarObj.objetivo}</strong></p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={function() { setAccion('aprobar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'aprobar' ? '#166534' : '#e2e8f0', background: accion === 'aprobar' ? '#dcfce7' : 'white', cursor: 'pointer', fontWeight: 600, color: '#166534' }}>✅ Aprobar</button>
+                <button onClick={function() { setAccion('rechazar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'rechazar' ? '#dc2626' : '#e2e8f0', background: accion === 'rechazar' ? '#fee2e2' : 'white', cursor: 'pointer', fontWeight: 600, color: '#dc2626' }}>❌ Rechazar</button>
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Comentario *</label>
+              <textarea value={comentario} onChange={function(e) { setComentario(e.target.value); }} placeholder="Explicá tu decisión..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={ejecutarValidacionObj} style={{ ...s.btnPrimario, background: accion === 'aprobar' ? '#22c55e' : '#dc2626', flex: 1 }}>Confirmar</button>
+              <button onClick={function() { setModalValidarObj(null); setAccion(''); setComentario(''); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
-      {objetivos.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Justif.</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Coment.</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
-            <tbody>{objetivos.map(function(obj) { return (
-              <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo}</td><td style={td}>{obj.corporativo || '-'}</td><td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || '-'}</td>
-                <td style={td}>{obj.justificacion_completado ? obj.justificacion_completado.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>{obj.comentario_lider ? obj.comentario_lider.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>{obj.status === 'completado' && <button onClick={function() { setModalValidar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>Validar</button>}</td>
-              </tr>
-            ); })}</tbody>
-          </table>
+
+      {/* Modal validar alcance reportado */}
+      {modalValidarAlcance && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidarAlcance(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 520, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>Validar alcance reportado</h3>
+            <p style={{ fontSize: 14, color: '#231F20' }}><strong>{modalValidarAlcance.objetivo}</strong></p>
+            <div style={{ background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 13 }}><strong>Colaborador reportó:</strong> {modalValidarAlcance.alcance_completado}%</p>
+              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#475569' }}>{modalValidarAlcance.justificacion_completado}</p>
+            </div>
+            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>¿Qué alcance validás?</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+              {ALCANCES_VALIDAR.map(function(a) {
+                var sel = alcanceLider === a.valor;
+                return (
+                  <button key={a.valor} onClick={function() { setAlcanceLider(a.valor); }}
+                    style={{ padding: '14px 8px', borderRadius: 10, cursor: 'pointer', border: '2px solid', borderColor: sel ? a.color : '#e2e8f0', background: sel ? a.bg : 'white', fontWeight: 700, fontSize: 18, color: a.color }}>
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Comentario de validación *</label>
+              <textarea value={comentValidacion} onChange={function(e) { setComentValidacion(e.target.value); }} placeholder="Justificá el alcance validado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={ejecutarValidacionAlcance} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>Confirmar validacion</button>
+              <button onClick={function() { setModalValidarAlcance(null); setAlcanceLider(''); setComentValidacion(''); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {objetivos.length === 0 ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {objetivos.map(function(obj) {
+            var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#92400e', rechazado: '#dc2626', pendiente: '#64748b' };
+            var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#fef3c7', rechazado: '#fee2e2', pendiente: '#f1f5f9' };
+            return (
+              <div key={obj.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 15 }}>{obj.objetivo}</strong>
+                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#64748b' }}>{obj.status}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{obj.ponderacion}%</span>
+                    </div>
+                    {obj.corporativo && <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Corporativo: {obj.corporativo}</p>}
+                    {obj.comentario_lider && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>Tu comentario: {obj.comentario_lider}</p>}
+                    {obj.alcance_completado && (
+                      <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8 }}>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#0369a1' }}>Colaborador reportó: {obj.alcance_completado}%</p>
+                        <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#475569' }}>{obj.justificacion_completado}</p>
+                      </div>
+                    )}
+                    {obj.alcance_validado && <p style={{ margin: '4px 0 0 0', fontSize: 12, fontWeight: 700, color: '#166534' }}>✅ Alcance validado: {obj.alcance_validado}%</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {obj.status === 'pendiente' && !obj.validado_por_gerente && (
+                      <button onClick={function() { setModalValidarObj(obj); setAccion(''); setComentario(''); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '8px 14px' }}>
+                        Revisar objetivo
+                      </button>
+                    )}
+                    {obj.status === 'completado' && (
+                      <button onClick={function() { setModalValidarAlcance(obj); setAlcanceLider(''); setComentValidacion(''); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '8px 14px' }}>
+                        Validar alcance
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
+// Helper: componente reutilizable de formulario de objetivo
+function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCancelar, titulo }) {
+  var obj = valor;
+  var tipoAlcance = obj.alcance_tipo || 'fecha';
+
+  // Calcular ponderacion ya usada (excluyendo el objetivo que se edita)
+  var usada = objetivos
+    .filter(function(o) { return String(o.id) !== String(editandoId) && o.status !== 'rechazado'; })
+    .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
+  var disponible = 100 - usada;
+  var ponderacionOk = parseFloat(obj.ponderacion) <= disponible && parseFloat(obj.ponderacion) > 0;
+
+  var ALCANCES = [
+    { key: '0', label: '0% — No alcanzado', bg: '#fee2e2', border: '#fca5a5', color: '#dc2626' },
+    { key: '80', label: '80% — Parcialmente alcanzado', bg: '#fef3c7', border: '#fcd34d', color: '#92400e' },
+    { key: '100', label: '100% — Alcanzado', bg: '#dcfce7', border: '#86efac', color: '#166534' },
+    { key: '120', label: '120% — Superado', bg: '#dbeafe', border: '#93c5fd', color: '#1e40af' },
+  ];
+
+  return (
+    <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
+      <h4 style={{ marginTop: 0 }}>{titulo || 'Nuevo Objetivo'}</h4>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Objetivo *</label>
+          <input value={obj.objetivo || ''} onChange={function(e) { onChange({...obj, objetivo: e.target.value}); }}
+            placeholder="Describir el objetivo principal..."
+            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', boxSizing: 'border-box' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Corporativo</label>
+          <input value={obj.corporativo || ''} onChange={function(e) { onChange({...obj, corporativo: e.target.value}); }}
+            placeholder="Ej: Ventas, Operaciones..."
+            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', boxSizing: 'border-box' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Ponderacion (%)</label>
+          <input
+            type="number" min="1" max={disponible + (parseFloat(obj.ponderacion) || 0)}
+            value={obj.ponderacion || ''}
+            onChange={function(e) { onChange({...obj, ponderacion: parseFloat(e.target.value) || 0}); }}
+            style={{ width: '100%', padding: 8, borderRadius: 6, border: '2px solid ' + (ponderacionOk ? '#D4D2C6' : '#dc2626'), boxSizing: 'border-box' }} />
+          <p style={{ fontSize: 11, margin: '4px 0 0 0', color: ponderacionOk ? '#64748b' : '#dc2626' }}>
+            {ponderacionOk
+              ? 'Disponible: ' + disponible.toFixed(0) + '% — Total usado: ' + (usada + parseFloat(obj.ponderacion || 0)).toFixed(0) + '%'
+              : 'Supera el disponible (' + disponible.toFixed(0) + '%). Ajustá la ponderacion.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Toggle tipo de alcance */}
+      <div style={{ margin: '16px 0 12px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>Tipo de medición:</span>
+        <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '2px solid #D4D2C6' }}>
+          <button
+            onClick={function() { onChange({...obj, alcance_tipo: 'fecha'}); }}
+            style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: tipoAlcance === 'fecha' ? '#231F20' : 'white',
+              color: tipoAlcance === 'fecha' ? '#D4D2C6' : '#64748b' }}>
+            📅 Fecha
+          </button>
+          <button
+            onClick={function() { onChange({...obj, alcance_tipo: 'cantidad'}); }}
+            style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: tipoAlcance === 'cantidad' ? '#231F20' : 'white',
+              color: tipoAlcance === 'cantidad' ? '#D4D2C6' : '#64748b' }}>
+            🔢 Cantidad / Descripción
+          </button>
+        </div>
+      </div>
+
+      {/* Alcances */}
+      <h5 style={{ margin: '12px 0 8px 0', color: '#231F20' }}>Definicion de alcances</h5>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {ALCANCES.map(function(alc) {
+          var descKey = 'alcance_' + alc.key + '_descripcion';
+          var metaKey = 'alcance_' + alc.key + '_meta';
+          var fechaKey = 'alcance_' + alc.key + '_fecha';
+          return (
+            <div key={alc.key} style={{ background: alc.bg, padding: 12, borderRadius: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: alc.color }}>{alc.label}</label>
+              <input
+                value={obj[descKey] || ''}
+                onChange={function(e) { var u = {}; u[descKey] = e.target.value; onChange({...obj, ...u}); }}
+                placeholder="Descripcion de este nivel"
+                style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 6, boxSizing: 'border-box' }} />
+              {tipoAlcance === 'fecha' ? (
+                <input
+                  type="date"
+                  value={obj[fechaKey] || ''}
+                  onChange={function(e) { var u = {}; u[fechaKey] = e.target.value; onChange({...obj, ...u}); }}
+                  style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 4, boxSizing: 'border-box' }} />
+              ) : (
+                <input
+                  value={obj[metaKey] || ''}
+                  onChange={function(e) { var u = {}; u[metaKey] = e.target.value; onChange({...obj, ...u}); }}
+                  placeholder="Ej: 15 unidades, 3 aperturas..."
+                  style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid ' + alc.border, fontSize: 12, marginTop: 4, boxSizing: 'border-box' }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+        <button
+          onClick={function() {
+            if (!obj.objetivo) return alert('El objetivo es obligatorio');
+            var total = usada + parseFloat(obj.ponderacion || 0);
+            if (total > 100) return alert('La ponderacion total supera el 100%. Disponible: ' + disponible.toFixed(0) + '%');
+            if (!obj.ponderacion || obj.ponderacion <= 0) return alert('La ponderacion debe ser mayor a 0');
+            onGuardar();
+          }}
+          style={{ ...s.btnPrimario, background: '#22c55e' }}>
+          💾 Guardar Objetivo
+        </button>
+        <button onClick={onCancelar} style={s.btnSecundario}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 function ObjetivosColaborador({ profile }) {
-  var [objetivos, setObjetivos] = useState([]); var [cargando, setCargando] = useState(true);
-  var [mostrarForm, setMostrarForm] = useState(false); var [editandoId, setEditandoId] = useState(null);
-  var [modalCompletar, setModalCompletar] = useState(null); var [alcanceCompletar, setAlcanceCompletar] = useState(''); var [justificacionCompletar, setJustificacionCompletar] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
+  var [objetivos, setObjetivos] = useState([]);
+  var [cargando, setCargando] = useState(true);
+  var [mostrarForm, setMostrarForm] = useState(false);
+  var [editandoId, setEditandoId] = useState(null);
+  var [formObj, setFormObj] = useState(null);
+  var [modalCompletar, setModalCompletar] = useState(null);
+
+  var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
+    alcance_0_descripcion: '', alcance_0_fecha: '', alcance_0_meta: '',
+    alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
+    alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
+    alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
+
   useEffect(function() { cargarObjetivos(); }, []);
-  async function cargarObjetivos() { var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false }); setObjetivos(data || []); setCargando(false); }
-  async function guardarObjetivo() {
-    if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio');
-    if (editandoId) {
-      await supabase.from('objetivos').update({ objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
-    } else {
-      await supabase.from('objetivos').insert({ gerente_id: null, colaborador_id: profile.id, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente', alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null });
-    }
-    setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
-    setMostrarForm(false); setEditandoId(null); cargarObjetivos();
+
+  async function cargarObjetivos() {
+    var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false });
+    setObjetivos(data || []); setCargando(false);
   }
-  function editarObjetivo(obj) { setNuevoObjetivo({ objetivo: obj.objetivo, corporativo: obj.corporativo || '', ponderacion: obj.ponderacion, alcance_0_descripcion: obj.alcance_0_descripcion || '', alcance_0_fecha: obj.alcance_0_fecha || '', alcance_80_descripcion: obj.alcance_80_descripcion || '', alcance_80_fecha: obj.alcance_80_fecha || '', alcance_100_descripcion: obj.alcance_100_descripcion || '', alcance_100_fecha: obj.alcance_100_fecha || '', alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '' }); setEditandoId(obj.id); setMostrarForm(true); }
-  async function aceptarObjetivo(objId) { await supabase.from('objetivos').update({ status: 'aceptado', confirmado_colaborador: true, fecha_confirmacion: new Date() }).eq('id', objId); cargarObjetivos(); }
-  async function completarObjetivo() { if (!alcanceCompletar) return alert('Selecciona un alcance'); if (!justificacionCompletar.trim()) return alert('La justificacion es obligatoria'); await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcanceCompletar, justificacion_completado: justificacionCompletar }).eq('id', modalCompletar); setModalCompletar(null); setAlcanceCompletar(''); setJustificacionCompletar(''); cargarObjetivos(); }
+
+  function abrirNuevo() {
+    // Calcular ponderacion disponible
+    var usada = (objetivos || []).filter(function(o) { return o.status !== 'rechazado'; })
+      .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
+    var disponible = Math.max(0, 100 - usada);
+    setFormObj({ ...FORM_VACIO, ponderacion: Math.min(disponible, 25) });
+    setEditandoId(null); setMostrarForm(true);
+  }
+
+  function abrirEditar(obj) {
+    setFormObj({
+      objetivo: obj.objetivo || '', corporativo: obj.corporativo || '',
+      ponderacion: obj.ponderacion || 0, alcance_tipo: obj.alcance_tipo || 'fecha',
+      alcance_0_descripcion: obj.alcance_0_descripcion || '', alcance_0_fecha: obj.alcance_0_fecha || '', alcance_0_meta: obj.alcance_0_meta || '',
+      alcance_80_descripcion: obj.alcance_80_descripcion || '', alcance_80_fecha: obj.alcance_80_fecha || '', alcance_80_meta: obj.alcance_80_meta || '',
+      alcance_100_descripcion: obj.alcance_100_descripcion || '', alcance_100_fecha: obj.alcance_100_fecha || '', alcance_100_meta: obj.alcance_100_meta || '',
+      alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '', alcance_120_meta: obj.alcance_120_meta || '',
+    });
+    setEditandoId(obj.id); setMostrarForm(true);
+  }
+
+  async function guardarObjetivo() {
+    var datos = {
+      objetivo: formObj.objetivo, corporativo: formObj.corporativo,
+      ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
+      alcance_0_descripcion: formObj.alcance_0_descripcion, alcance_0_fecha: formObj.alcance_0_fecha || null, alcance_0_meta: formObj.alcance_0_meta,
+      alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
+      alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
+      alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
+    };
+    if (editandoId) {
+      await supabase.from('objetivos').update({ ...datos, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
+    } else {
+      await supabase.from('objetivos').insert({ ...datos, colaborador_id: profile.id, status: 'pendiente' });
+    }
+    setMostrarForm(false); setFormObj(null); setEditandoId(null); cargarObjetivos();
+  }
+
+  async function aceptarObjetivo(objId) {
+    await supabase.from('objetivos').update({ status: 'aceptado', confirmado_colaborador: true, fecha_confirmacion: new Date() }).eq('id', objId);
+    cargarObjetivos();
+  }
+
+  async function completarObjetivo(objId, alcance, justificacion) {
+    await supabase.from('objetivos').update({
+      status: 'completado', completado_por_colaborador: true,
+      fecha_completado: new Date(), alcance_completado: alcance, justificacion_completado: justificacion
+    }).eq('id', objId);
+    setModalCompletar(null); cargarObjetivos();
+  }
+
+  // Calcular ponderacion total actual
+  var totalPond = objetivos.filter(function(o) { return o.status !== 'rechazado'; })
+    .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
+
+  // Calcular alcance total ponderado (solo objetivos validados)
+  var objValidados = objetivos.filter(function(o) { return o.status === 'validado' && o.alcance_validado; });
+  var alcanceTotal = null;
+  if (objValidados.length > 0) {
+    var sumaPond = objValidados.reduce(function(s, o) { return s + parseFloat(o.ponderacion); }, 0);
+    var sumaAlc = objValidados.reduce(function(s, o) {
+      var val = parseFloat(o.alcance_validado) || 0;
+      return s + val * parseFloat(o.ponderacion);
+    }, 0);
+    alcanceTotal = sumaPond > 0 ? (sumaAlc / sumaPond).toFixed(1) : null;
+  }
+
   if (cargando) return <p>Cargando objetivos...</p>;
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ color: '#231F20', margin: 0 }}>Mis Objetivos</h2>
-        <button onClick={function() { setMostrarForm(!mostrarForm); setEditandoId(null); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); }} style={s.btnPrimario}>{mostrarForm ? 'Cancelar' : '+ Nuevo Objetivo'}</button>
+        <div>
+          <h2 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Mis Objetivos</h2>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: totalPond === 100 ? '#166534' : '#dc2626', fontWeight: 600 }}>
+              Ponderacion total: {totalPond.toFixed(0)}% {totalPond === 100 ? '✅' : totalPond > 100 ? '⚠️ Supera 100%' : '— Falta llegar a 100%'}
+            </span>
+            {alcanceTotal && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', background: '#dbeafe', padding: '3px 10px', borderRadius: 8 }}>
+                Alcance anual: {alcanceTotal}%
+              </span>
+            )}
+          </div>
+        </div>
+        <button onClick={abrirNuevo} style={s.btnPrimario} disabled={totalPond >= 100}>
+          {totalPond >= 100 ? '✅ 100% completo' : '+ Nuevo Objetivo'}
+        </button>
       </div>
-      {mostrarForm && (
-        <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>{editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir el objetivo principal..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas, Operaciones..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
-          </div>
-          <h5 style={{ margin: '16px 0 8px 0', color: '#231F20' }}>Alcances del Objetivo</h5>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ background: '#fee2e2', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0% - No alcanzado</label><input value={nuevoObjetivo.alcance_0_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_0_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_0_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fca5a5', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#fef3c7', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>80% - Parcialmente alcanzado</label><input value={nuevoObjetivo.alcance_80_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_80_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_80_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #fcd34d', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#dcfce7', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>100% - Alcanzado</label><input value={nuevoObjetivo.alcance_100_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_100_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_100_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #86efac', fontSize: 12, marginTop: 4 }} /></div>
-            <div style={{ background: '#dbeafe', padding: 12, borderRadius: 8 }}><label style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>120% - Superado</label><input value={nuevoObjetivo.alcance_120_descripcion || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_descripcion: e.target.value}); }} placeholder="Descripcion" style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} /><input type="date" value={nuevoObjetivo.alcance_120_fecha || ''} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, alcance_120_fecha: e.target.value}); }} style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #93c5fd', fontSize: 12, marginTop: 4 }} /></div>
-          </div>
-          <button onClick={guardarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 16 }}>Guardar Objetivo</button>
-        </div>
+
+      {mostrarForm && formObj && (
+        <FormObjetivo
+          valor={formObj} onChange={setFormObj}
+          objetivos={objetivos} editandoId={editandoId}
+          titulo={editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}
+          onGuardar={guardarObjetivo}
+          onCancelar={function() { setMostrarForm(false); setFormObj(null); setEditandoId(null); }}
+        />
       )}
+
       {modalCompletar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalCompletar(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>Completar Objetivo</h3>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Alcance Alcanzado *</label><select value={alcanceCompletar} onChange={function(e) { setAlcanceCompletar(e.target.value); }} style={{ width: '100%', padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14 }}><option value="">Seleccionar alcance</option><option value="0%">0% - No alcanzado</option><option value="80%">80% - Parcialmente alcanzado</option><option value="100%">100% - Alcanzado</option><option value="120%">120% - Superado</option></select></div>
-            <div style={{ marginBottom: 16 }}><label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Justificacion *</label><textarea value={justificacionCompletar} onChange={function(e) { setJustificacionCompletar(e.target.value); }} placeholder="Explica el resultado alcanzado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} /></div>
-            <div style={{ display: 'flex', gap: 12 }}><button onClick={completarObjetivo} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>Confirmar Completado</button><button onClick={function() { setModalCompletar(null); }} style={{ ...s.btnSecundario }}>Cancelar</button></div>
-          </div>
-        </div>
+        <ModalCompletar
+          objetivo={objetivos.find(function(o) { return o.id === modalCompletar; })}
+          onConfirmar={completarObjetivo}
+          onCancelar={function() { setModalCompletar(null); }}
+        />
       )}
+
       {objetivos.length === 0 ? (
-        <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}><p style={{ color: '#94a3b8', fontSize: 16 }}>No tienes objetivos cargados aun.</p></div>
+        <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}>
+          <p style={{ color: '#94a3b8', fontSize: 16 }}>No tenés objetivos cargados aún.</p>
+        </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Corp.</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Mi Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Coment. Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Accion</th></tr></thead>
-            <tbody>{objetivos.map(function(obj) { return (
-              <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={td}>{obj.objetivo} {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b' }}>(editado)</span>}</td>
-                <td style={td}>{obj.corporativo || '-'}</td>
-                <td style={{ ...td, fontWeight: 700, textAlign: 'center' }}>{obj.ponderacion}%</td>
-                <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : obj.status === 'aceptado' ? '#fef3c7' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : obj.status === 'aceptado' ? '#92400e' : '#64748b' }}>{obj.status}</span></td>
-                <td style={td}>{obj.alcance_completado || '-'}</td>
-                <td style={td}>{obj.comentario_lider ? obj.comentario_lider.substring(0, 30) + '...' : '-'}</td>
-                <td style={td}>
-                  {(obj.status === 'pendiente' || obj.status === 'aceptado') && <button onClick={function() { editarObjetivo(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 11, padding: '4px 8px', marginRight: 4 }}>Editar</button>}
-                  {obj.status === 'pendiente' && <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#3b82f6', fontSize: 12, padding: '6px 12px' }}>Aceptar</button>}
-                  {obj.status === 'aceptado' && <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '6px 12px' }}>Completar</button>}
-                </td>
-              </tr>
-            ); })}</tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {objetivos.map(function(obj) {
+            var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#92400e', rechazado: '#dc2626', pendiente: '#64748b' };
+            var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#fef3c7', rechazado: '#fee2e2', pendiente: '#f1f5f9' };
+            return (
+              <div key={obj.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 15, color: '#231F20' }}>{obj.objetivo}</strong>
+                      {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b', background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>editado</span>}
+                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#64748b' }}>{obj.status}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#231F20' }}>{obj.ponderacion}%</span>
+                    </div>
+                    {obj.corporativo && <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Corporativo: {obj.corporativo}</p>}
+                    {obj.comentario_lider && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>Lider: {obj.comentario_lider}</p>}
+                    {obj.alcance_completado && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#1e40af' }}>Mi alcance: {obj.alcance_completado} — {obj.justificacion_completado}</p>}
+                    {obj.alcance_validado && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#166534', fontWeight: 600 }}>Alcance validado: {obj.alcance_validado}%</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(obj.status === 'pendiente') && (
+                      <>
+                        <button onClick={function() { abrirEditar(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 12 }}>✏️ Editar</button>
+                        <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '8px 16px' }}>✅ Aceptar</button>
+                      </>
+                    )}
+                    {obj.status === 'aceptado' && (
+                      <>
+                        <button onClick={function() { abrirEditar(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 12 }}>✏️ Editar</button>
+                        <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '8px 16px' }}>Registrar alcance</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Modal para completar objetivo con botones de alcance
+function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
+  var [alcance, setAlcance] = useState('');
+  var [justificacion, setJustificacion] = useState('');
+  if (!objetivo) return null;
+
+  var ALCANCES = [
+    { valor: '80', label: '80%', sublabel: 'Parcialmente alcanzado', color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+    { valor: '100', label: '100%', sublabel: 'Alcanzado', color: '#166534', bg: '#dcfce7', border: '#86efac' },
+    { valor: '120', label: '120%', sublabel: 'Superado', color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+  ];
+
+  // Mostrar definicion del nivel seleccionado
+  var defAlcance = alcance ? (objetivo['alcance_' + alcance + '_descripcion'] || objetivo['alcance_' + alcance + '_meta'] || '') : '';
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onCancelar}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 520, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+        <h3 style={{ marginTop: 0, color: '#231F20' }}>Registrar alcance</h3>
+        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}><strong>{objetivo.objetivo}</strong></p>
+
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#231F20', marginBottom: 10 }}>¿Qué nivel alcanzaste?</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+          {ALCANCES.map(function(a) {
+            var sel = alcance === a.valor;
+            return (
+              <button key={a.valor} onClick={function() { setAlcance(a.valor); }}
+                style={{
+                  padding: '14px 8px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                  border: '2px solid ' + (sel ? a.color : a.border),
+                  background: sel ? a.bg : 'white',
+                  transition: 'all 0.15s',
+                }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: a.color }}>{a.label}</div>
+                <div style={{ fontSize: 11, color: a.color, fontWeight: 600 }}>{a.sublabel}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {alcance && defAlcance && (
+          <div style={{ background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#475569' }}>
+            <strong>Definicion del nivel:</strong> {defAlcance}
+          </div>
+        )}
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Justificación *</label>
+          <textarea value={justificacion} onChange={function(e) { setJustificacion(e.target.value); }}
+            placeholder="Explicá el resultado alcanzado, qué hiciste, qué resultados obtuviste..."
+            style={{ width: '100%', minHeight: 90, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button
+            onClick={function() {
+              if (!alcance) return alert('Seleccioná un nivel de alcance');
+              if (!justificacion.trim()) return alert('La justificación es obligatoria');
+              onConfirmar(objetivo.id, alcance, justificacion);
+            }}
+            style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>
+            Confirmar alcance
+          </button>
+          <button onClick={onCancelar} style={s.btnSecundario}>Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }
