@@ -372,57 +372,60 @@ function DashboardView({ stats, colabs }) {
 
         {/* Gráfico 2 — Promedio por competencia/seniority */}
         <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 360 }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia y Seniority</h4>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-            {sensU.map(function(sen) {
-              return <div key={sen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#475569' }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: CSEN[sen] || '#94a3b8', border: '1px solid #e2e8f0' }} />
-                {sen}
-              </div>;
-            })}
-          </div>
+          <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia</h4>
           {promedios.length === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 300 }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc' }}>
-                    <th style={{ ...th, fontSize: 11, padding: '6px 8px', textAlign: 'left' }}>Competencia</th>
-                    {sensU.map(function(sen) { return <th key={sen} style={{ ...th, fontSize: 11, padding: '6px 8px', textAlign: 'center' }}>{sen.split('/')[0]}</th>; })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {compsU.map(function(comp, ci) {
-                    return (
-                      <tr key={comp} style={{ borderBottom: '1px solid #f1f5f9', background: ci % 2 === 0 ? 'white' : '#fafaf8' }}>
-                        <td style={{ ...td, fontSize: 12, padding: '8px' }}>{comp}</td>
-                        {sensU.map(function(sen) {
-                          var dato = promedios.find(function(p) { return p.nombre === comp && p.seniority === sen; });
-                          var val = dato ? dato.prom : null;
-                          var cls = val ? clasificarRating(val) : null;
-                          return (
-                            <td key={sen} style={{ ...td, textAlign: 'center', padding: '8px' }}>
-                              {val ? (
-                                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 6, fontSize: 13, fontWeight: 700, background: cls ? cls.bg : '#f1f5f9', color: cls ? cls.color : '#64748b' }}>
-                                  {val.toFixed(1)}
-                                </span>
-                              ) : <span style={{ color: '#e2e8f0' }}>—</span>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (function() {
+            // Calcular promedio global por competencia (sin importar seniority)
+            var porComp = {};
+            promedios.forEach(function(p) {
+              if (!porComp[p.nombre]) porComp[p.nombre] = { sum: 0, count: 0 };
+              porComp[p.nombre].sum += p.prom;
+              porComp[p.nombre].count++;
+            });
+            var compData = Object.entries(porComp).map(function(e) {
+              return { nombre: e[0], prom: e[1].sum / e[1].count };
+            }).sort(function(a, b) { return b.prom - a.prom; });
+            return (
+              <div>
+                {compData.map(function(c) {
+                  var cls = clasificarRating(c.prom);
+                  var pct = (c.prom / 5) * 100;
+                  return (
+                    <div key={c.nombre} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                        <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{c.nombre}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {cls && <span style={{ fontSize: 10, fontWeight: 600, color: cls.color }}>{cls.label}</span>}
+                          <span style={{ fontSize: 15, fontWeight: 800, color: '#231F20', minWidth: 28, textAlign: 'right' }}>{c.prom.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: 8, height: 28, overflow: 'hidden', position: 'relative' }}>
+                        <div style={{
+                          height: '100%', borderRadius: 8,
+                          width: pct + '%',
+                          background: cls ? cls.color : '#231F20',
+                          transition: 'width 0.4s ease',
+                          display: 'flex', alignItems: 'center', paddingLeft: 10, boxSizing: 'border-box'
+                        }}>
+                          {pct > 20 && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{c.prom.toFixed(1)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                  <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
   );
 }
+
 
 function ParticipantesView({ colabs }) {
   return (
