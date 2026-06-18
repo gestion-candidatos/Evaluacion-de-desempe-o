@@ -290,60 +290,93 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 // DASHBOARD Y TABLAS ADMIN
 // =============================================
 function DashboardView({ stats, colabs }) {
+  var [filtroArea, setFiltroArea] = useState('Todas');
+  var [filtroSeniority, setFiltroSeniority] = useState('Todos');
+
   var evaluaciones = stats.evaluaciones || [];
   var puntuaciones = stats.puntuaciones || [];
   var perfiles = stats.perfiles || colabs;
 
+  // Opciones de filtro
+  var areas = ['Todas'].concat([...new Set(perfiles.map(function(p) { return p.area; }).filter(Boolean))].sort());
+  var seniorities = ['Todos'].concat([...new Set(perfiles.map(function(p) { return p.seniority; }).filter(Boolean))].sort());
+
+  // Perfiles filtrados
+  var perfilesFiltrados = perfiles.filter(function(p) {
+    if (filtroArea !== 'Todas' && p.area !== filtroArea) return false;
+    if (filtroSeniority !== 'Todos' && p.seniority !== filtroSeniority) return false;
+    return true;
+  });
+  var idsFiltrados = perfilesFiltrados.map(function(p) { return p.id; });
+
+  // Evaluaciones filtradas
+  var evalFiltradas = evaluaciones.filter(function(e) { return idsFiltrados.includes(e.colaborador_id); });
+
   // Gráfico 1: Distribución Bajo/Medio/Alto
-  var evalLider = evaluaciones.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
+  var evalLider = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
   var bajo = 0; var medio = 0; var alto = 0;
   evalLider.forEach(function(e) {
     var r = parseFloat(e.rating_calibrado || e.rating_promedio);
     if (r < 3) bajo++; else if (r <= 3.5) medio++; else alto++;
   });
   var totalG1 = bajo + medio + alto;
-
-  // Gráfico 2: promedio por competencia/seniority
-  var evalIdToSen = {};
-  evaluaciones.forEach(function(e) {
-    var p = perfiles.find(function(x) { return x.id === e.colaborador_id; });
-    if (p) evalIdToSen[e.id] = p.seniority;
-  });
-  var compMap = {};
-  puntuaciones.forEach(function(p) {
-    var nombre = p.competencias && p.competencias.nombre;
-    var sen = evalIdToSen[p.evaluacion_id];
-    if (!nombre || !sen || !p.rating) return;
-    var key = nombre + '|' + sen;
-    if (!compMap[key]) compMap[key] = { nombre: nombre, seniority: sen, sum: 0, count: 0 };
-    compMap[key].sum += parseFloat(p.rating);
-    compMap[key].count++;
-  });
-  var promedios = Object.values(compMap).map(function(c) {
-    return { nombre: c.nombre, seniority: c.seniority, prom: c.sum / c.count };
-  }).sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
-  var compsU = [];
-  promedios.forEach(function(p) { if (!compsU.includes(p.nombre)) compsU.push(p.nombre); });
-  var sensU = [];
-  promedios.forEach(function(p) { if (!sensU.includes(p.seniority)) sensU.push(p.seniority); });
-  var CSEN = { 'Analista': '#D4D2C6', 'Especialista/Supervisor': '#94a3b8', 'Jefe/Experto': '#231F20', 'Gerente': '#64748b' };
-
   var grupos = [
     { label: 'Alto', valor: alto, color: '#166534', rango: '3.6 – 5.0' },
     { label: 'Medio', valor: medio, color: '#92400e', rango: '3.0 – 3.5' },
     { label: 'Bajo', valor: bajo, color: '#dc2626', rango: '1.0 – 2.9' },
   ];
 
+  // Gráfico 2: promedio por competencia (filtrado)
+  var evalIdsFiltrados = evalFiltradas.map(function(e) { return e.id; });
+  var compMap = {};
+  puntuaciones.forEach(function(p) {
+    if (!evalIdsFiltrados.includes(p.evaluacion_id)) return;
+    var nombre = p.competencias && p.competencias.nombre;
+    if (!nombre || !p.rating) return;
+    if (!compMap[nombre]) compMap[nombre] = { sum: 0, count: 0 };
+    compMap[nombre].sum += parseFloat(p.rating);
+    compMap[nombre].count++;
+  });
+  var compData = Object.entries(compMap).map(function(e) {
+    return { nombre: e[0], prom: e[1].sum / e[1].count };
+  }).sort(function(a, b) { return b.prom - a.prom; });
+
+  var selectStyle = { padding: '8px 12px', borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, background: 'white', color: '#231F20', cursor: 'pointer', fontWeight: 500 };
+
   return (
     <div>
+      {/* KPI Cards */}
       <div style={s.grid}>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colabs.length}</p></div>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{perfilesFiltrados.length}</p></div>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.length}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.filter(function(e) { return e.estado === 'enviado'; }).length}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.filter(function(e) { return e.estado !== 'enviado'; }).length}</p></div>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, marginTop: 20, flexWrap: 'wrap' }}>
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 12, margin: '16px 0', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>Filtrar por:</span>
+        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={selectStyle}>
+          {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+        </select>
+        <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={selectStyle}>
+          {seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los seniority' : s}</option>; })}
+        </select>
+        {(filtroArea !== 'Todas' || filtroSeniority !== 'Todos') && (
+          <button onClick={function() { setFiltroArea('Todas'); setFiltroSeniority('Todos'); }}
+            style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>
+            ✕ Limpiar filtros
+          </button>
+        )}
+        {(filtroArea !== 'Todas' || filtroSeniority !== 'Todos') && (
+          <span style={{ fontSize: 12, color: '#64748b' }}>
+            Mostrando {perfilesFiltrados.length} de {perfiles.length} colaboradores
+          </span>
+        )}
+      </div>
+
+      {/* Gráficos */}
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
 
         {/* Gráfico 1 — Distribución */}
         <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
@@ -370,62 +403,36 @@ function DashboardView({ stats, colabs }) {
           {totalG1 > 0 && <p style={{ margin: '12px 0 0 0', fontSize: 12, color: '#64748b', textAlign: 'center' }}>Total: {totalG1} colaboradores</p>}
         </div>
 
-        {/* Gráfico 2 — Promedio por competencia/seniority */}
-        <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 360 }}>
+        {/* Gráfico 2 — Promedio por competencia */}
+        <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 320 }}>
           <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia</h4>
-          {promedios.length === 0 ? (
+          {compData.length === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
-          ) : (function() {
-            // Calcular promedio global por competencia (sin importar seniority)
-            var porComp = {};
-            promedios.forEach(function(p) {
-              if (!porComp[p.nombre]) porComp[p.nombre] = { sum: 0, count: 0 };
-              porComp[p.nombre].sum += p.prom;
-              porComp[p.nombre].count++;
-            });
-            var compData = Object.entries(porComp).map(function(e) {
-              return { nombre: e[0], prom: e[1].sum / e[1].count };
-            }).sort(function(a, b) { return b.prom - a.prom; });
+          ) : compData.map(function(c) {
+            var cls = clasificarRating(c.prom);
+            var pct = (c.prom / 5) * 100;
             return (
-              <div>
-                {compData.map(function(c) {
-                  var cls = clasificarRating(c.prom);
-                  var pct = (c.prom / 5) * 100;
-                  return (
-                    <div key={c.nombre} style={{ marginBottom: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                        <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{c.nombre}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {cls && <span style={{ fontSize: 10, fontWeight: 600, color: cls.color }}>{cls.label}</span>}
-                          <span style={{ fontSize: 15, fontWeight: 800, color: '#231F20', minWidth: 28, textAlign: 'right' }}>{c.prom.toFixed(1)}</span>
-                        </div>
-                      </div>
-                      <div style={{ background: '#f1f5f9', borderRadius: 8, height: 28, overflow: 'hidden', position: 'relative' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 8,
-                          width: pct + '%',
-                          background: cls ? cls.color : '#231F20',
-                          transition: 'width 0.4s ease',
-                          display: 'flex', alignItems: 'center', paddingLeft: 10, boxSizing: 'border-box'
-                        }}>
-                          {pct > 20 && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{c.prom.toFixed(1)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
-                  <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+              <div key={c.nombre} style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{c.nombre}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {cls && <span style={{ fontSize: 10, fontWeight: 600, color: cls.color }}>{cls.label}</span>}
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#231F20', minWidth: 28, textAlign: 'right' }}>{c.prom.toFixed(1)}</span>
+                  </div>
+                </div>
+                <div style={{ background: '#f1f5f9', borderRadius: 8, height: 28, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 8, width: pct + '%', background: cls ? cls.color : '#231F20', display: 'flex', alignItems: 'center', paddingLeft: 10, boxSizing: 'border-box', transition: 'width 0.4s ease' }}>
+                    {pct > 20 && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{c.prom.toFixed(1)}</span>}
+                  </div>
                 </div>
               </div>
             );
-          })()}
+          })}
         </div>
       </div>
     </div>
   );
 }
-
 
 function ParticipantesView({ colabs }) {
   return (
