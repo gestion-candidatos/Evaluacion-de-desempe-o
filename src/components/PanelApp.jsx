@@ -130,7 +130,7 @@ export default function PanelApp() {
           {menuActivo === 'desempeno' && <DesempenoView profile={profileEfectivo} cicloActivo={cicloActivo} setCicloActivo={setCicloActivo} />}
           {menuActivo === 'misobjetivos' && <ObjetivosColaborador profile={profile} />}
           {menuActivo === 'miequipo_obj' && <ObjetivosGerente profile={profile} />}
-          {menuActivo === 'compania_obj' && <PlaceholderView titulo="🏢 Objetivos de la Compañia" descripcion="Modulo en desarrollo." />}
+          {menuActivo === 'compania_obj' && <ObjetivosCompania />}
           {menuActivo === 'admin_obj' && !vistaComoColaborador && <PanelAdminObjetivos profile={profile} />}
         </main>
       </div>
@@ -1530,6 +1530,153 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
     <div style={{ marginBottom: 24 }}>
       <h4 style={s.seccionTitulo}>{titulo}</h4>
       <textarea value={valor} onChange={function(e) { onChange(e.target.value); }} style={{ ...s.textarea }} disabled={disabled} readOnly={disabled} />
+    </div>
+  );
+}
+
+
+// =============================================
+// OBJETIVOS COMPAÑIA
+// =============================================
+var OBJETIVOS_COMPANIA = [
+  {
+    id: 1,
+    titulo: 'Rentabilidad',
+    icono: '📈',
+    resumen: 'Lograr el 23% de Rentabilidad después de impuestos medido en el P&L acumulado 2026.',
+    detalle: 'Lograr el 23% de Rentabilidad después de impuestos medido en el P&L acumulado enero – diciembre 2026 sumando los locales que operamos pasado los 3 primeros meses de apertura:\n\n• Fabric: todo el año sin Juncal ni Junín\n• Tigre Morado: todo el año solo Palermo\n• Meiji: todo el año solo Palermo\n• Kohi: todo el año\n• Yatai Belgrano: todo el año\n• Yatai Palermo: desde Junio\n• Ada: desde Junio',
+    meta: '23% de Rentabilidad',
+    medicion: 'P&L acumulado enero – diciembre 2026',
+  },
+  {
+    id: 2,
+    titulo: 'Expansión',
+    icono: '🚀',
+    resumen: 'Lograr aperturas a lo largo del 2026 en Argentina y LATAM, propios o franquicias, cumpliendo el plan de 12 a 15 locales.',
+    detalle: 'Lograr tener aperturas a lo largo del 2026 tanto para Argentina como en LATAM, propios o franquicias, cualquier marca, para cumplir en tiempo y forma con el plan de expansión 2026.\n\n• Meta: 12 a 15 locales por año\n• Se considera apertura a local con facturación dentro del calendario enero – diciembre 2026\n• Medición: RTDM o el sistema que utilice la compañía',
+    meta: '12 a 15 locales',
+    medicion: 'RTDM — enero – diciembre 2026',
+  },
+  {
+    id: 3,
+    titulo: 'Tráfico',
+    icono: '🎯',
+    resumen: 'Lograr tickets anuales de un +3% vs año anterior en tiendas comparables.',
+    detalle: 'Lograr tickets anuales de un +3% vs año anterior, medido en tiendas comparables acumulado enero – diciembre con la información provista por RTDM.\n\nMarcas incluidas:\n• Fabric Sushi (completa)\n• Tigre Morado (completa)\n• Meiji Mutsu (completa)\n• Yatai (completa)\n• ADA (completa)',
+    meta: '+3% tickets vs año anterior',
+    medicion: 'RTDM — tiendas comparables enero – diciembre 2026',
+  },
+];
+
+function ObjetivosCompania() {
+  var [seleccionado, setSeleccionado] = useState(null);
+
+  return (
+    <div>
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ color: '#231F20', margin: '0 0 6px 0', fontSize: 22, fontWeight: 700 }}>🏢 Objetivos de la Compañía 2026</h2>
+        <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Objetivos estratégicos de Fabric Group para el ejercicio 2026. Hacé clic en una tarjeta para ver el detalle.</p>
+      </div>
+
+      {/* Tarjetas */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 32 }}>
+        {OBJETIVOS_COMPANIA.map(function(obj) {
+          var activo = seleccionado === obj.id;
+          return (
+            <div
+              key={obj.id}
+              onClick={function() { setSeleccionado(activo ? null : obj.id); }}
+              style={{
+                background: activo ? '#231F20' : '#D4D2C6',
+                borderRadius: 14,
+                padding: '24px 22px',
+                cursor: 'pointer',
+                border: '2px solid ' + (activo ? '#231F20' : '#C8C6BA'),
+                boxShadow: activo ? '0 4px 20px rgba(35,31,32,0.18)' : '0 2px 8px rgba(0,0,0,0.06)',
+                transition: 'all 0.18s ease',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+              {/* Número */}
+              <div style={{
+                position: 'absolute', top: 16, right: 18,
+                fontSize: 42, fontWeight: 900, opacity: 0.08,
+                color: activo ? '#fff' : '#231F20', lineHeight: 1,
+                fontFamily: 'Georgia, serif',
+              }}>0{obj.id}</div>
+
+              <div style={{ fontSize: 28, marginBottom: 10 }}>{obj.icono}</div>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: 18, fontWeight: 700, color: activo ? '#D4D2C6' : '#231F20' }}>
+                {obj.titulo}
+              </h3>
+              <p style={{ margin: '0 0 16px 0', fontSize: 13, color: activo ? '#C8C6BA' : '#475569', lineHeight: 1.55 }}>
+                {obj.resumen}
+              </p>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 12, fontWeight: 600,
+                color: activo ? '#D4D2C6' : '#231F20',
+                borderTop: '1px solid ' + (activo ? 'rgba(212,210,198,0.3)' : 'rgba(35,31,32,0.12)'),
+                paddingTop: 12, width: '100%',
+              }}>
+                <span>{activo ? '▲ Ocultar detalle' : '▼ Ver detalle'}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Panel de detalle */}
+      {seleccionado && (function() {
+        var obj = OBJETIVOS_COMPANIA.find(function(o) { return o.id === seleccionado; });
+        if (!obj) return null;
+        return (
+          <div style={{
+            background: 'white',
+            border: '2px solid #231F20',
+            borderRadius: 14,
+            overflow: 'hidden',
+            boxShadow: '0 4px 24px rgba(35,31,32,0.10)',
+          }}>
+            {/* Header del detalle */}
+            <div style={{ background: '#231F20', padding: '20px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ fontSize: 28 }}>{obj.icono}</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Objetivo estratégico 2026</p>
+                  <h3 style={{ margin: '2px 0 0 0', fontSize: 20, fontWeight: 700, color: '#D4D2C6' }}>{obj.titulo}</h3>
+                </div>
+              </div>
+              <button
+                onClick={function() { setSeleccionado(null); }}
+                style={{ background: 'rgba(212,210,198,0.15)', border: '1px solid rgba(212,210,198,0.3)', borderRadius: 8, color: '#D4D2C6', cursor: 'pointer', fontSize: 18, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ✕
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div style={{ padding: '24px 28px' }}>
+              {/* Chips de meta y medición */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+                <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}>
+                  <p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Meta</p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.meta}</p>
+                </div>
+                <div style={{ background: '#f8f7f4', border: '1px solid #D4D2C6', borderRadius: 8, padding: '8px 14px' }}>
+                  <p style={{ margin: 0, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Medición</p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#231F20' }}>{obj.medicion}</p>
+                </div>
+              </div>
+
+              {/* Detalle */}
+              <div style={{ background: '#fafaf8', border: '1px solid #e8e6e0', borderRadius: 10, padding: '18px 20px' }}>
+                <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Descripción completa</p>
+                <p style={{ margin: 0, fontSize: 14, color: '#231F20', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{obj.detalle}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
