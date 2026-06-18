@@ -1910,48 +1910,95 @@ function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
 
 function PanelAdminObjetivos({ profile }) {
   var [objetivos, setObjetivos] = useState([]); var [colaboradores, setColaboradores] = useState([]); var [cargando, setCargando] = useState(true);
-  var [filtroArea, setFiltroArea] = useState('Todas'); var [filtroSeniority, setFiltroSeniority] = useState('Todos');
-  var [mostrarForm, setMostrarForm] = useState(false); var [mostrarHistorico, setMostrarHistorico] = useState(false);
-  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25,  alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
+  var [nuevoObjetivo, setNuevoObjetivo] = useState(null);
   var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
   useEffect(function() { cargarDatos(); }, []);
   async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
-  async function agregarObjetivoAdmin() { if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo'); var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente',  alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null }); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25,  alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos(); }
+
+  function abrirNuevoAdmin() {
+    setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
+      alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
+      alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
+      alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' });
+    setMostrarForm(true); setMostrarHistorico(false);
+  }
+
+  async function agregarObjetivoAdmin() {
+    if (!colaboradorSeleccionado) return alert('Selecciona un colaborador');
+    if (!nuevoObjetivo.objetivo) return alert('El objetivo es obligatorio');
+    if (!nuevoObjetivo.ponderacion || nuevoObjetivo.ponderacion <= 0) return alert('La ponderacion es obligatoria');
+    // Validar ponderacion del colaborador seleccionado
+    var objsColab = objetivos.filter(function(o) { return o.colaborador_id === colaboradorSeleccionado && o.status !== 'rechazado'; });
+    var usada = objsColab.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
+    if (usada + parseFloat(nuevoObjetivo.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
+    var { data: { session } } = await supabase.auth.getSession();
+    await supabase.from('objetivos').insert({
+      gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
+      objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo,
+      ponderacion: parseFloat(nuevoObjetivo.ponderacion), alcance_tipo: nuevoObjetivo.alcance_tipo,
+      alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_80_meta: nuevoObjetivo.alcance_80_meta,
+      alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_100_meta: nuevoObjetivo.alcance_100_meta,
+      alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null, alcance_120_meta: nuevoObjetivo.alcance_120_meta,
+    });
+    setNuevoObjetivo(null); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos();
+  }
+
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
+
   function exportarExcel() {
-    var datos = objetivosFiltrados.map(function(obj, i) { return { 'N': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance': obj.alcance_completado || obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
+    var datos = objetivosFiltrados.map(function(obj, i) { return { 'N': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance Colaborador': obj.alcance_completado || '', 'Justificacion Colaborador': obj.justificacion_completado || '', 'Alcance Validado': obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
     if (datos.length === 0) return alert('No hay datos para exportar');
     var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
     var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     var link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'Objetivos_' + new Date().toISOString().slice(0,10) + '.csv'; link.click();
   }
+
   var areas = ['Todas'].concat([...new Set(colaboradores.map(function(c) { return c.area; }).filter(Boolean))]);
   var seniorities = ['Todos'].concat([...new Set(colaboradores.map(function(c) { return c.seniority; }).filter(Boolean))]);
   var objetivosFiltrados = objetivos.filter(function(obj) { if (filtroArea !== 'Todas' && obj.colaborador?.area !== filtroArea) return false; if (filtroSeniority !== 'Todos' && obj.colaborador?.seniority !== filtroSeniority) return false; return true; });
   if (cargando) return <p>Cargando panel admin...</p>;
+
+  // Objetivos del colaborador seleccionado (para calcular ponderacion disponible en FormObjetivo)
+  var objsDelColab = colaboradorSeleccionado ? objetivos.filter(function(o) { return o.colaborador_id === colaboradorSeleccionado && o.status !== 'rechazado'; }) : [];
+
   return (
     <div>
       <h2 style={{ color: '#231F20', marginBottom: 20 }}>Panel Admin - Todos los Objetivos</h2>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las Areas' : a}</option>; })}</select>
         <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}</select>
-        <button onClick={function() { setMostrarForm(!mostrarForm); setMostrarHistorico(false); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Objetivo</button>
-        <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>Subir Historico</button>
+        <button onClick={function() { abrirNuevoAdmin(); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Objetivo</button>
+        <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); setNuevoObjetivo(null); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>Subir Historico</button>
         <button onClick={exportarExcel} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>Exportar CSV</button>
       </div>
+
+      {/* Formulario nuevo objetivo con FormObjetivo */}
       {mostrarForm && (
         <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-          <h4>Asignar Objetivo a Colaborador</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div><label style={{ fontSize: 12 }}>Colaborador *</label><select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="">Seleccionar...</option>{colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} - {c.area}</option>; })}</select></div>
-            <div><label style={{ fontSize: 12 }}>Objetivo *</label><input value={nuevoObjetivo.objetivo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, objetivo: e.target.value}); }} placeholder="Describir..." style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Corporativo</label><input value={nuevoObjetivo.corporativo} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, corporativo: e.target.value}); }} placeholder="Ej: Ventas" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div>
-            <div><label style={{ fontSize: 12 }}>Ponderacion (%)</label><select value={nuevoObjetivo.ponderacion} onChange={function(e) { setNuevoObjetivo({...nuevoObjetivo, ponderacion: parseFloat(e.target.value)}); }} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }}><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option><option value="35">35%</option><option value="40">40%</option><option value="50">50%</option></select></div>
+          <h4 style={{ marginTop: 0 }}>Asignar Objetivo a Colaborador</h4>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 600 }}>Colaborador *</label>
+            <select value={colaboradorSeleccionado} onChange={function(e) { setColaboradorSeleccionado(e.target.value); }}
+              style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #D4D2C6', marginTop: 4 }}>
+              <option value="">Seleccionar colaborador...</option>
+              {colaboradores.map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email} — {c.area}</option>; })}
+            </select>
           </div>
-          <button onClick={agregarObjetivoAdmin} style={{ ...s.btnPrimario, background: '#22c55e', marginTop: 12 }}>Guardar</button>
+          {colaboradorSeleccionado && nuevoObjetivo && (
+            <FormObjetivo
+              valor={nuevoObjetivo} onChange={setNuevoObjetivo}
+              objetivos={objsDelColab} editandoId={null}
+              titulo=""
+              onGuardar={agregarObjetivoAdmin}
+              onCancelar={function() { setMostrarForm(false); setNuevoObjetivo(null); setColaboradorSeleccionado(''); }}
+            />
+          )}
+          {!colaboradorSeleccionado && (
+            <p style={{ color: '#94a3b8', fontSize: 13 }}>Seleccioná un colaborador para continuar.</p>
+          )}
         </div>
       )}
+
       {mostrarHistorico && (
         <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
           <h4>Subir Objetivo Historico</h4>
