@@ -1323,7 +1323,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
   var [formObj, setFormObj] = useState(null);
 
   var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
-    alcance_0_descripcion: '', alcance_0_fecha: '', alcance_0_meta: '',
+    
     alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
     alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
     alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
@@ -1373,7 +1373,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
     var datos = {
       objetivo: formObj.objetivo, corporativo: formObj.corporativo,
       ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
-      alcance_0_descripcion: formObj.alcance_0_descripcion, alcance_0_fecha: formObj.alcance_0_fecha || null, alcance_0_meta: formObj.alcance_0_meta,
+      
       alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
       alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
       alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
@@ -1551,7 +1551,7 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
   var ponderacionOk = parseFloat(obj.ponderacion) <= disponible && parseFloat(obj.ponderacion) > 0;
 
   var ALCANCES = [
-    { key: '0', label: '0% — No alcanzado', bg: '#fee2e2', border: '#fca5a5', color: '#dc2626' },
+    
     { key: '80', label: '80% — Parcialmente alcanzado', bg: '#fef3c7', border: '#fcd34d', color: '#92400e' },
     { key: '100', label: '100% — Alcanzado', bg: '#dcfce7', border: '#86efac', color: '#166534' },
     { key: '120', label: '120% — Superado', bg: '#dbeafe', border: '#93c5fd', color: '#1e40af' },
@@ -1670,7 +1670,7 @@ function ObjetivosColaborador({ profile }) {
   var [modalCompletar, setModalCompletar] = useState(null);
 
   var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
-    alcance_0_descripcion: '', alcance_0_fecha: '', alcance_0_meta: '',
+    
     alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
     alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
     alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
@@ -1695,7 +1695,7 @@ function ObjetivosColaborador({ profile }) {
     setFormObj({
       objetivo: obj.objetivo || '', corporativo: obj.corporativo || '',
       ponderacion: obj.ponderacion || 0, alcance_tipo: obj.alcance_tipo || 'fecha',
-      alcance_0_descripcion: obj.alcance_0_descripcion || '', alcance_0_fecha: obj.alcance_0_fecha || '', alcance_0_meta: obj.alcance_0_meta || '',
+      
       alcance_80_descripcion: obj.alcance_80_descripcion || '', alcance_80_fecha: obj.alcance_80_fecha || '', alcance_80_meta: obj.alcance_80_meta || '',
       alcance_100_descripcion: obj.alcance_100_descripcion || '', alcance_100_fecha: obj.alcance_100_fecha || '', alcance_100_meta: obj.alcance_100_meta || '',
       alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '', alcance_120_meta: obj.alcance_120_meta || '',
@@ -1707,7 +1707,7 @@ function ObjetivosColaborador({ profile }) {
     var datos = {
       objetivo: formObj.objetivo, corporativo: formObj.corporativo,
       ponderacion: parseFloat(formObj.ponderacion), alcance_tipo: formObj.alcance_tipo,
-      alcance_0_descripcion: formObj.alcance_0_descripcion, alcance_0_fecha: formObj.alcance_0_fecha || null, alcance_0_meta: formObj.alcance_0_meta,
+      
       alcance_80_descripcion: formObj.alcance_80_descripcion, alcance_80_fecha: formObj.alcance_80_fecha || null, alcance_80_meta: formObj.alcance_80_meta,
       alcance_100_descripcion: formObj.alcance_100_descripcion, alcance_100_fecha: formObj.alcance_100_fecha || null, alcance_100_meta: formObj.alcance_100_meta,
       alcance_120_descripcion: formObj.alcance_120_descripcion, alcance_120_fecha: formObj.alcance_120_fecha || null, alcance_120_meta: formObj.alcance_120_meta,
@@ -1913,11 +1913,11 @@ function PanelAdminObjetivos({ profile }) {
   var [filtroArea, setFiltroArea] = useState('Todas'); var [filtroSeniority, setFiltroSeniority] = useState('Todos');
   var [mostrarForm, setMostrarForm] = useState(false); var [mostrarHistorico, setMostrarHistorico] = useState(false);
   var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
-  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
+  var [nuevoObjetivo, setNuevoObjetivo] = useState({ objetivo: '', corporativo: '', ponderacion: 25,  alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' });
   var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
   useEffect(function() { cargarDatos(); }, []);
   async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
-  async function agregarObjetivoAdmin() { if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo'); var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente', alcance_0_descripcion: nuevoObjetivo.alcance_0_descripcion, alcance_0_fecha: nuevoObjetivo.alcance_0_fecha || null, alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null }); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25, alcance_0_descripcion: '', alcance_0_fecha: '', alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos(); }
+  async function agregarObjetivoAdmin() { if (!colaboradorSeleccionado || !nuevoObjetivo.objetivo) return alert('Selecciona colaborador y escribe el objetivo'); var { data: { session } } = await supabase.auth.getSession(); await supabase.from('objetivos').insert({ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo, ponderacion: nuevoObjetivo.ponderacion, status: 'pendiente',  alcance_80_descripcion: nuevoObjetivo.alcance_80_descripcion, alcance_80_fecha: nuevoObjetivo.alcance_80_fecha || null, alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null }); setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: 25,  alcance_80_descripcion: '', alcance_80_fecha: '', alcance_100_descripcion: '', alcance_100_fecha: '', alcance_120_descripcion: '', alcance_120_fecha: '' }); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos(); }
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
   function exportarExcel() {
     var datos = objetivosFiltrados.map(function(obj, i) { return { 'N': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance': obj.alcance_completado || obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
