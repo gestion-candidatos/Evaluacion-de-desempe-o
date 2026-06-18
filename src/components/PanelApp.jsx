@@ -673,6 +673,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                   <td style={{ ...td, textAlign: 'center' }}>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promLider || '-'}</div>
                     {clasifLider && <div style={{ fontSize: 9, color: clasifLider.color, fontWeight: 600 }}>{clasifLider.label}</div>}
+                  </td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     {/* Rating calibrado: default = lider, solo admin puede editar */}
                     {d.evaluacionLider && !soloLectura ? (
@@ -731,7 +732,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                       </div>
                     ) : (
                       <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic' }}>
-                        {d.comentarioCalibracion || (parseFloat(d.ratingFinal) === parseFloat(d.promLider) ? 'Sin cambios — igual al lider' : '-')}
+                        {d.comentarioCalibracion || (parseFloat(d.ratingFinal) === parseFloat(d.promLider) ? 'Sin cambios - igual al lider' : '-')}
                       </span>
                     )}
                   </td>
