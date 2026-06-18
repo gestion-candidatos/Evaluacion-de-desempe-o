@@ -817,11 +817,12 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
   if (carg) return <p>Cargando...</p>;
 
+
   return (
     <div style={{ maxWidth: 960 }}>
-      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
-      <h3>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b' }}>{colaborador.area} - {colaborador.seniority}</p>
+      <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
+      <h3 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
+      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} - {colaborador.seniority}</p>
 
       {yaEnviada && (
         <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
@@ -829,87 +830,120 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         </div>
       )}
 
-      {/* Resumen autoevaluacion si existe */}
+      {/* Resumen autoevaluacion — solo rating y estado, SIN comentarios finales */}
       {autoEval && (
-        <div style={{ background: '#f8fafc', border: '2px solid #D4D2C6', borderRadius: 12, padding: 16, marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h4 style={{ margin: 0, color: '#231F20' }}>Autoevaluacion del colaborador</h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: autoEval.estado === 'enviado' ? '#166534' : '#92400e', fontWeight: 600 }}>
-                {autoEval.estado === 'enviado' ? 'Enviada' : 'Borrador'}
+        <div style={{ background: '#f8fafc', border: '2px solid #D4D2C6', borderRadius: 12, padding: '12px 16px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 600, color: '#231F20', fontSize: 14 }}>Autoevaluacion del colaborador</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 12, color: autoEval.estado === 'enviado' ? '#166534' : '#92400e', fontWeight: 600 }}>
+              {autoEval.estado === 'enviado' ? '✅ Enviada' : '⏳ Borrador'}
+            </span>
+            {autoEval.rating_promedio && (
+              <span style={{ background: '#231F20', color: '#D4D2C6', padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: 18 }}>
+                {autoEval.rating_promedio}
               </span>
-              {autoEval.rating_promedio && (
-                <span style={{ background: '#231F20', color: '#D4D2C6', padding: '4px 12px', borderRadius: 8, fontWeight: 700, fontSize: 16 }}>
-                  {autoEval.rating_promedio}
-                </span>
-              )}
-            </div>
+            )}
           </div>
-          {autoEval.comentarios_finales && (
-            <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px 0' }}>
-              <strong>Comentarios finales:</strong> {autoEval.comentarios_finales}
-            </p>
-          )}
         </div>
       )}
 
-      {/* Competencias con autoevaluacion visible al lado */}
+      {/* Competencias */}
       {competencias.map(function(comp) {
-        var autoData = autoPuntsMap[comp.id] || autoPuntsMap[String(comp.id)] || null;
-        // Debug en consola
-        if (Object.keys(autoPuntsMap).length > 0) console.log("comp.id:", comp.id, "autoData:", autoData, "keys:", Object.keys(autoPuntsMap));
+        var autoData = autoPuntsMap[comp.id] || null;
         return (
-          <div key={comp.id} style={{ ...s.competenciaCard, padding: 0, overflow: 'hidden' }}>
-            {/* Cabecera competencia */}
-            <div style={{ background: '#D4D2C6', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h5 style={{ margin: 0, color: '#231F20', fontSize: 14 }}>{comp.nombre}</h5>
-              <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'Ocultar niveles' : 'Ver niveles'}</button>
+          <div key={comp.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+
+            {/* Cabecera con nombre y descripcion */}
+            <div style={{ background: '#D4D2C6', padding: '12px 16px' }}>
+              <h5 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 15 }}>{comp.nombre}</h5>
+              {comp.descripcion && <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>{comp.descripcion}</p>}
             </div>
-            {showInfo[comp.id] && (
-              <div style={{ ...s.ratingInfoBox, margin: 12, marginBottom: 0 }}>
-                {[1,2,3,4,5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}
-              </div>
-            )}
-            {/* Dos columnas */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-              {/* Columna izquierda: autoevaluacion (solo lectura) */}
-              <div style={{ padding: 14, borderRight: '2px solid #e2e8f0', background: '#fafaf8' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>Autoevaluacion</p>
+
+            {/* Niveles desplegables */}
+            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <button
+                onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 16px', fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+                {showInfo[comp.id] ? '▲ Ocultar niveles' : '▼ Ver niveles de desempeño'}
+              </button>
+              {showInfo[comp.id] && (
+                <div style={{ padding: '0 16px 12px' }}>
+                  {[1,2,3,4,5].map(function(r) {
+                    return (
+                      <div key={r} style={{ padding: '6px 10px', marginBottom: 3, borderRadius: 4, fontSize: 13, color: '#475569', background: 'white', border: '1px solid #e2e8f0' }}>
+                        <strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Dos columnas: auto izq, lider der */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+
+              {/* Columna izquierda: autoevaluacion del colaborador */}
+              <div style={{ padding: 16, borderRight: '2px solid #e2e8f0', background: '#fafaf9' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Autoevaluacion del colaborador
+                </p>
                 {autoData ? (
-                  <>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <div>
+                    {/* Puntaje seleccionado */}
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                       {[1,2,3,4,5].map(function(r) {
                         return (
-                          <div key={r} style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, background: autoData.rating === r ? '#231F20' : '#e2e8f0', color: autoData.rating === r ? '#D4D2C6' : '#94a3b8' }}>{r}</div>
+                          <div key={r} style={{
+                            width: 38, height: 38, borderRadius: 8,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 16, fontWeight: 700,
+                            background: autoData.rating === r ? '#231F20' : '#e2e8f0',
+                            color: autoData.rating === r ? '#D4D2C6' : '#94a3b8',
+                            border: autoData.rating === r ? '2px solid #231F20' : '2px solid transparent'
+                          }}>{r}</div>
                         );
                       })}
                     </div>
-                    <p style={{ fontSize: 13, color: '#475569', margin: 0, fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
+                    {/* Comentario del colaborador */}
+                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 13, color: '#475569', minHeight: 40, fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
                       {autoData.comentario || 'Sin comentario'}
-                    </p>
-                  </>
+                    </div>
+                  </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic' }}>Sin autoevaluacion</p>
+                  <div style={{ padding: 12, background: '#fff3cd', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
+                    ⚠️ El colaborador aun no completo esta competencia
+                  </div>
                 )}
               </div>
-              {/* Columna derecha: evaluacion lider (editable) */}
-              <div style={{ padding: 14 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#231F20', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>Mi evaluacion</p>
-                <div style={s.ratingRow}>
+
+              {/* Columna derecha: evaluacion del lider */}
+              <div style={{ padding: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#231F20', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Evaluacion del lider
+                </p>
+                {/* Puntaje lider */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                   {[1,2,3,4,5].map(function(r) {
                     return (
-                      <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
-                        style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
+                      <button key={r}
+                        onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                        style={{
+                          width: 38, height: 38, borderRadius: 8, border: 'none',
+                          fontSize: 16, fontWeight: 700, cursor: bloqueado ? 'default' : 'pointer',
+                          background: ratings[comp.id] === r ? '#231F20' : '#f1f5f9',
+                          color: ratings[comp.id] === r ? 'white' : '#475569'
+                        }}>
                         {r}
                       </button>
                     );
                   })}
                 </div>
+                {/* Comentario lider */}
                 <textarea
                   value={comentarios[comp.id] || ''}
                   onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
-                  placeholder="Comentario del lider..."
-                  style={{ ...s.textareaSmall, marginTop: 4 }}
+                  placeholder="Escribe tu comentario sobre esta competencia..."
+                  style={{ ...s.textareaSmall, minHeight: 60 }}
                   readOnly={bloqueado}
                 />
               </div>
@@ -918,13 +952,36 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         );
       })}
 
+      {/* Rating en tiempo real */}
       <RatingFinalBadge ratings={ratings} />
-      <SeccionText titulo="Comentarios Finales del Lider" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
+
+      {/* Comentarios finales — AL FINAL */}
+      <div style={{ marginTop: 8, marginBottom: 20 }}>
+        <h4 style={s.seccionTitulo}>Comentarios Finales del Lider</h4>
+        <textarea
+          value={comFin}
+          onChange={function(e) { if (!bloqueado) setComFin(e.target.value); }}
+          placeholder="Resumen general de la evaluacion, fortalezas y areas de mejora..."
+          style={{ ...s.textarea, minHeight: 120 }}
+          disabled={bloqueado}
+          readOnly={bloqueado}
+        />
+      </div>
+
+      {/* Comentarios finales de la autoevaluacion — AL FINAL tambien */}
+      {autoEval?.comentarios_finales && (
+        <div style={{ marginBottom: 20, padding: 16, background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 10 }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#231F20', fontSize: 14 }}>Comentarios finales del colaborador</h4>
+          <p style={{ margin: 0, fontSize: 13, color: '#475569' }}>{autoEval.comentarios_finales}</p>
+        </div>
+      )}
+
       {msg && <div style={s.mensajeToast}>{msg}</div>}
+
       {!bloqueado && (
-        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-          <button onClick={guardar} style={s.btnSecundario}>Guardar</button>
-          <button onClick={enviar} style={s.btnPrimario}>Enviar evaluacion</button>
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar borrador</button>
+          <button onClick={enviar} style={s.btnPrimario}>📤 Enviar evaluacion</button>
         </div>
       )}
     </div>
