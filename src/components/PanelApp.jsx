@@ -2082,8 +2082,8 @@ function PanelAdminObjetivos({ profile }) {
     var usada = objsColab.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
     if (usada + parseFloat(nuevoObjetivo.ponderacion) > 100) return alert('La ponderacion total del colaborador supera el 100%. Disponible: ' + (100 - usada) + '%');
     var { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('objetivos').insert({
-      gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: "pendiente",
+    var { error: insertErr } = await supabase.from('objetivos').insert({
+      gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
       leader_id: (colaboradores.find(function(c) { return c.id === colaboradorSeleccionado; }) || {}).leader_id || null,
       objetivo: nuevoObjetivo.objetivo, corporativo: nuevoObjetivo.corporativo,
       ponderacion: parseFloat(nuevoObjetivo.ponderacion), alcance_tipo: nuevoObjetivo.alcance_tipo,
@@ -2091,7 +2091,7 @@ function PanelAdminObjetivos({ profile }) {
       alcance_100_descripcion: nuevoObjetivo.alcance_100_descripcion, alcance_100_fecha: nuevoObjetivo.alcance_100_fecha || null, alcance_100_meta: nuevoObjetivo.alcance_100_meta,
       alcance_120_descripcion: nuevoObjetivo.alcance_120_descripcion, alcance_120_fecha: nuevoObjetivo.alcance_120_fecha || null, alcance_120_meta: nuevoObjetivo.alcance_120_meta,
     });
-    setNuevoObjetivo(null); setColaboradorSeleccionado(''); setMostrarForm(false); cargarDatos();
+    if (insertErr) { alert('Error al guardar objetivo: ' + insertErr.message); return; }
   }
 
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
