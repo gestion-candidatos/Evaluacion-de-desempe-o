@@ -781,13 +781,24 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         var rm = {}; var cm = {};
         (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
         setRatings(rm); setComent(cm);
+        console.log('Eval lider existente ID:', liderEval.id, 'estado:', liderEval.estado, 'punts:', punts?.length);
       } else if (!soloLectura) {
-        var { data: nuevo } = await supabase.from('evaluaciones')
+        console.log('Creando evaluacion_lider — colaborador:', colaborador.id, 'evaluador:', session.user.id);
+        var { data: nuevo, error: insertErr } = await supabase.from('evaluaciones')
           .insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId })
           .select('id').single();
-        if (nuevo) setEvalData(nuevo);
+        console.log('Insert result:', nuevo, 'error:', insertErr);
+        if (nuevo) {
+          setEvalData(nuevo);
+        } else {
+          console.error('FALLO insert — probablemente RLS:', insertErr?.message);
+          // Intentar buscar si ya existe (race condition)
+          var { data: existing } = await supabase.from('evaluaciones')
+            .select('id, estado').eq('colaborador_id', colaborador.id)
+            .eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+          if (existing) { console.log('Encontrada existente:', existing); setEvalData(existing); }
+        }
       }
-      setCarg(false);
     })();
   }, []);
 
@@ -853,6 +864,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
       <h3 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
       <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} - {colaborador.seniority}</p>
 
+      <div style={{ padding: 10, background: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: 8, marginBottom: 16, fontSize: 12, color: "#0369a1" }}>🔍 Debug: soloLectura={String(soloLectura)} | yaEnviada={String(yaEnviada)} | bloqueado={String(bloqueado)} | evalId={evalData?.id || "null"} | estado={evalData?.estado || "null"} | comps={competencias.length}</div>
       {yaEnviada && (
         <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
           <strong style={{ color: '#166534', fontSize: 15 }}>Evaluacion enviada. No se puede modificar.</strong>
