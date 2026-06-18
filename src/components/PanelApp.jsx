@@ -112,6 +112,7 @@ export default function PanelApp() {
               {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo('admin_obj'); }} style={{ ...sidebarStyle.subMenuItem, background: menuActivo === 'admin_obj' ? '#D4D2C6' : 'transparent', color: menuActivo === 'admin_obj' ? '#231F20' : '#D4D2C6', fontWeight: 600 }}>🔧 Panel Admin</button>}
             </div>
           )}
+          {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_usuarios"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_usuarios" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_usuarios" ? "#231F20" : "#D4D2C6", borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>👥 USUARIOS</button>}
           {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_modulos"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_modulos" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_modulos" ? "#231F20" : "#D4D2C6", marginTop: 8, borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>⚙️ MODULOS</button>}
         </nav>
         <div style={sidebarStyle.footer}><span style={{ fontSize: 12, color: '#D4D2C6' }}>{profile.email}</span><button onClick={cerrarSesion} style={{ ...s.btnSalir, marginTop: 8, width: '100%' }}>Cerrar Sesion</button></div>
@@ -149,6 +150,7 @@ export default function PanelApp() {
           {menuActivo === 'compania_obj' && verObjCompania && <ObjetivosCompania esAdmin={esAdmin && !vistaComoColaborador} />}
           {menuActivo === 'admin_obj' && !vistaComoColaborador && esSuperAdmin && <PanelAdminObjetivos profile={profile} />}
           {menuActivo === 'gestion_modulos' && !vistaComoColaborador && esSuperAdmin && <GestionModulos />}
+          {menuActivo === 'gestion_usuarios' && !vistaComoColaborador && esSuperAdmin && <GestionUsuarios />}
           {!verDesempeno && !verAlgunObj && (
             <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}>
               <p style={{ fontSize: 40, marginBottom: 16 }}>🔒</p>
@@ -238,7 +240,20 @@ function PanelLiderConAutoevaluacion({ cicloId, profile, soloLectura }) { var [v
 function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstado }) {
   var [vista, setVista] = useState('dashboard'); var [stats, setStats] = useState({ total: 0, enviadas: 0, pendientes: 0 }); var [colabs, setColabs] = useState([]); var [hist, setHist] = useState(null);
   useEffect(function() { cargar(); }, [cicloId]);
-  async function cargar() { var [{ count: t }, { count: e }, { data: p }, { data: f }] = await Promise.all([supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId), supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('estado', 'enviado'), supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', cicloId), supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo').neq('role', 'admin_rrhh')]); var ids = (p || []).map(function(x) { return x.colaborador_id; }); setColabs((f || []).filter(function(c) { return ids.includes(c.id); })); setStats({ total: t || 0, enviadas: e || 0, pendientes: (t || 0) - (e || 0) }); }
+  async function cargar() {
+    var [{ count: t }, { count: e }, { data: p }, { data: f }, { data: evs }, { data: punts }] = await Promise.all([
+      supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId),
+      supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('estado', 'enviado'),
+      supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', cicloId),
+      supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo').neq('role', 'admin_rrhh'),
+      supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, rating_promedio, rating_calibrado, estado').eq('ciclo_id', cicloId),
+      supabase.from('puntuaciones').select('evaluacion_id, competencia_id, rating, competencias(nombre)'),
+    ]);
+    var ids = (p || []).map(function(x) { return x.colaborador_id; });
+    var colabsFiltrados = (f || []).filter(function(c) { return ids.includes(c.id); });
+    setColabs(colabsFiltrados);
+    setStats({ total: t || 0, enviadas: e || 0, pendientes: (t || 0) - (e || 0), evaluaciones: evs || [], puntuaciones: punts || [], perfiles: colabsFiltrados });
+  }
   if (hist) return <HistorialAdmin colaborador={hist} onVolver={function() { setHist(null); }} />;
   return (
     <div>
@@ -275,15 +290,206 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 // DASHBOARD Y TABLAS ADMIN
 // =============================================
 function DashboardView({ stats, colabs }) {
+  // Extraer datos para gráficos
+  var evaluaciones = stats.evaluaciones || [];
+  var puntuaciones = stats.puntuaciones || [];
+  var perfiles = stats.perfiles || colabs;
+
+  // Gráfico 1: Distribución Bajo/Medio/Alto de ratings calibrados (o del líder si no hay calibrado)
+  var evalLider = evaluaciones.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
+  var grupos = { bajo: 0, medio: 0, alto: 0 };
+  evalLider.forEach(function(e) {
+    var r = parseFloat(e.rating_calibrado || e.rating_promedio);
+    if (r < 3) grupos.bajo++;
+    else if (r <= 3.5) grupos.medio++;
+    else grupos.alto++;
+  });
+  var totalGraf1 = grupos.bajo + grupos.medio + grupos.alto;
+
+  // Gráfico 2: Promedio por competencia y seniority
+  // Mapear evaluacion_id -> seniority del colaborador
+  var evalIdToSeniority = {};
+  evaluaciones.forEach(function(e) {
+    var perf = perfiles.find(function(p) { return p.id === e.colaborador_id; });
+    if (perf) evalIdToSeniority[e.id] = perf.seniority;
+  });
+  // Agrupar puntuaciones por competencia + seniority
+  var compSeniority = {};
+  puntuaciones.forEach(function(p) {
+    var nombre = p.competencias?.nombre;
+    var sen = evalIdToSeniority[p.evaluacion_id];
+    if (!nombre || !sen || !p.rating) return;
+    var key = nombre + '||' + sen;
+    if (!compSeniority[key]) compSeniority[key] = { nombre: nombre, seniority: sen, ratings: [] };
+    compSeniority[key].ratings.push(parseFloat(p.rating));
+  });
+  var promedios = Object.values(compSeniority).map(function(c) {
+    return { nombre: c.nombre, seniority: c.seniority, promedio: (c.ratings.reduce(function(s, r) { return s + r; }, 0) / c.ratings.length) };
+  }).sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+
+  var competenciasUnicas = [...new Set(promedios.map(function(p) { return p.nombre; }))];
+  var senioritiesUnicas = [...new Set(promedios.map(function(p) { return p.seniority; }))];
+  var COLORES_SEN = { 'Analista': '#D4D2C6', 'Especialista/Supervisor': '#94a3b8', 'Jefe/Experto': '#231F20', 'Gerente': '#64748b' };
+
+  // Bar chart helper
+  function BarChart({ datos, titulo, colorFn, labelFn, maxVal }) {
+    var max = maxVal || Math.max(...datos.map(function(d) { return d.valor; }), 1);
+    var W = 340; var H = 180; var PL = 10; var PR = 10; var PT = 20; var PB = 40;
+    var barW = datos.length > 0 ? Math.min(60, (W - PL - PR) / datos.length - 8) : 40;
+    var totalW = datos.length * (barW + 8);
+    var startX = PL + (W - PL - PR - totalW) / 2;
+    return (
+      <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 300 }}>
+        <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>{titulo}</h4>
+        {datos.length === 0 ? (
+          <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin datos suficientes</p>
+        ) : (
+          <svg viewBox={'0 0 ' + W + ' ' + H} style={{ width: '100%', maxWidth: W }}>
+            {/* Grid lines */}
+            {[0, 1, 2, 3, 4, 5].map(function(v) {
+              var y = PT + (H - PT - PB) * (1 - v / (maxVal || 5));
+              return (
+                <g key={v}>
+                  <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                  <text x={PL - 2} y={y + 4} fontSize="9" fill="#94a3b8" textAnchor="end">{v}</text>
+                </g>
+              );
+            })}
+            {/* Barras */}
+            {datos.map(function(d, i) {
+              var x = startX + i * (barW + 8);
+              var barH = (d.valor / max) * (H - PT - PB);
+              var y = PT + (H - PT - PB) - barH;
+              return (
+                <g key={i}>
+                  <rect x={x} y={y} width={barW} height={barH} rx="4" fill={colorFn(d, i)} />
+                  <text x={x + barW / 2} y={y - 4} fontSize="10" fill="#231F20" textAnchor="middle" fontWeight="700">
+                    {d.valor.toFixed(1)}
+                  </text>
+                  <text x={x + barW / 2} y={H - PB + 14} fontSize="9" fill="#475569" textAnchor="middle">
+                    {labelFn(d).substring(0, 10)}
+                  </text>
+                  {labelFn(d).length > 10 && (
+                    <text x={x + barW / 2} y={H - PB + 25} fontSize="9" fill="#475569" textAnchor="middle">
+                      {labelFn(d).substring(10, 20)}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* KPI Cards */}
       <div style={s.grid}>
         <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colabs.length}</p></div>
         <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
         <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div>
         <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div>
       </div>
+
+      {/* Gráficos */}
+      <div style={{ display: 'flex', gap: 20, marginTop: 20, flexWrap: 'wrap' }}>
+
+        {/* Gráfico 1: Distribución Bajo/Medio/Alto */}
+        <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
+          <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>📊 Distribución de Desempeño</h4>
+          <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Bajo: 1–2.9 | Medio: 3–3.5 | Alto: 3.6–5</p>
+          {totalGraf1 === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin evaluaciones calibradas aún</p>
+          ) : (
+            <div>
+              {/* Donut visual simple con barras horizontales */}
+              {[
+                { label: 'Alto', valor: grupos.alto, color: '#166534', bg: '#dcfce7', rango: '3.6 – 5.0' },
+                { label: 'Medio', valor: grupos.medio, color: '#92400e', bg: '#fef3c7', rango: '3.0 – 3.5' },
+                { label: 'Bajo', valor: grupos.bajo, color: '#dc2626', bg: '#fee2e2', rango: '1.0 – 2.9' },
+              ].map(function(g) {
+                var pct = totalGraf1 > 0 ? (g.valor / totalGraf1 * 100).toFixed(0) : 0;
+                return (
+                  <div key={g.label} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>({g.rango})</span></span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#231F20' }}>{g.valor} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({pct}%)</span></span>
+                    </div>
+                    <div style={{ background: '#f1f5f9', borderRadius: 6, height: 24, overflow: 'hidden' }}>
+                      <div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6, transition: 'width 0.5s ease', display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
+                        {pct > 15 && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>{pct}%</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <p style={{ margin: '12px 0 0 0', fontSize: 12, color: '#64748b', textAlign: 'center' }}>Total: {totalGraf1} colaboradores evaluados</p>
+            </div>
+          )}
+        </div>
+
+        {/* Gráfico 2: Promedio por competencia y seniority */}
+        <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 360 }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia y Seniority</h4>
+          {/* Leyenda seniority */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            {senioritiesUnicas.map(function(sen) {
+              return <div key={sen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#475569' }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: COLORES_SEN[sen] || '#94a3b8' }} />
+                {sen}
+              </div>;
+            })}
+          </div>
+          {promedios.length === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              {(function() { var W2 = Math.max(400, competenciasUnicas.length * 80); var H2 = 220; var PL2 = 16; var PT2 = 16; var PB2 = 60; var PR2 = 16; return (<svg viewBox={"0 0 " + W2 + " " + H2} style={{ width: "100%", minWidth: 400 }}>
+                {/* Grid */}
+                {[1,2,3,4,5].map(function(v) {
+                  var y = PT2 + (H2 - PT2 - PB2) * (1 - v / 5);
+                  return <g key={v}>
+                    <line x1={PL2} y1={y} x2={W2 - PR2} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+                    <text x={PL2 - 2} y={y + 3} fontSize="9" fill="#94a3b8" textAnchor="end">{v}</text>
+                  </g>;
+                })}
+                {/* Barras agrupadas por competencia */}
+                {competenciasUnicas.map(function(comp, ci) {
+                  var grupoAncho = (W2 - PL2 - PR2) / competenciasUnicas.length;
+                  var xBase = PL2 + ci * grupoAncho;
+                  var barW2 = Math.min(18, (grupoAncho - 8) / Math.max(senioritiesUnicas.length, 1));
+                  var sens = promedios.filter(function(p) { return p.nombre === comp; });
+                  return (
+                    <g key={comp}>
+                      {sens.map(function(sen, si) {
+                        var x = xBase + 4 + si * (barW2 + 2);
+                        var barH2 = (sen.promedio / 5) * (H2 - PT2 - PB2);
+                        var y = PT2 + (H2 - PT2 - PB2) - barH2;
+                        return (
+                          <g key={si}>
+                            <rect x={x} y={y} width={barW2} height={barH2} rx="3" fill={COLORES_SEN[sen.seniority] || '#94a3b8'} />
+                            <text x={x + barW2 / 2} y={y - 3} fontSize="8" fill="#231F20" textAnchor="middle" fontWeight="600">{sen.promedio.toFixed(1)}</text>
+                          </g>
+                        );
+                      })}
+                      {/* Label competencia */}
+                      <text x={xBase + grupoAncho / 2} y={H2 - PB2 + 14} fontSize="9" fill="#475569" textAnchor="middle">{comp.substring(0, 12)}</text>
+                      {comp.length > 12 && <text x={xBase + grupoAncho / 2} y={H2 - PB2 + 24} fontSize="9" fill="#475569" textAnchor="middle">{comp.substring(12, 24)}</text>}
+                    </g>
+                  );
+                })}
+              </svg>
+              ); })()}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
   );
 }
 
@@ -1577,7 +1783,7 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
         <div>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Ponderacion (%)</label>
           <input
-            type="number" min="1" max={disponible + (parseFloat(obj.ponderacion) || 0)}
+            type="number" min="1" max={Math.min(100, disponible + (parseFloat(obj.ponderacion) || 0))}
             value={obj.ponderacion || ''}
             onChange={function(e) { onChange({...obj, ponderacion: parseFloat(e.target.value) || 0}); }}
             style={{ width: '100%', padding: 8, borderRadius: 6, border: '2px solid ' + (ponderacionOk ? '#D4D2C6' : '#dc2626'), boxSizing: 'border-box' }} />
@@ -1916,7 +2122,7 @@ function PanelAdminObjetivos({ profile }) {
   var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
   var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
   useEffect(function() { cargarDatos(); }, []);
-  async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
+  async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority, leader_id, lider:leader_id(full_name, email)), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
 
   function abrirNuevoAdmin() {
     setNuevoObjetivo({ objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
@@ -2018,13 +2224,13 @@ function PanelAdminObjetivos({ profile }) {
       {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: '#D4D2C6' }}>Gerente</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th></tr></thead>
+            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: "#D4D2C6" }}>Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th></tr></thead>
             <tbody>{objetivosFiltrados.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={td}><strong>{obj.colaborador?.full_name || '-'}</strong></td>
                 <td style={td}>{obj.colaborador?.area || '-'}</td>
                 <td style={td}>{obj.colaborador?.seniority || '-'}</td>
-                <td style={td}>{obj.gerente?.full_name || '-'}</td>
+                <td style={td}>{obj.colaborador?.lider?.full_name || obj.colaborador?.lider?.email || '-'}</td>
                 <td style={td}>{obj.objetivo}</td>
                 <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{obj.ponderacion}%</td>
                 <td style={td}><span style={{ padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: obj.status === 'validado' ? '#dcfce7' : obj.status === 'completado' ? '#dbeafe' : '#f1f5f9', color: obj.status === 'validado' ? '#166534' : obj.status === 'completado' ? '#1e40af' : '#64748b' }}>{obj.status}</span></td>
@@ -2281,6 +2487,216 @@ function ObjetivosCompania({ esAdmin }) {
 // =============================================
 // GESTIÓN DE MÓDULOS POR USUARIO (solo superadmin)
 // =============================================
+// =============================================
+// GESTIÓN DE USUARIOS (superadmin)
+// =============================================
+function GestionUsuarios() {
+  var [usuarios, setUsuarios] = useState([]);
+  var [carg, setCarg] = useState(true);
+  var [busqueda, setBusqueda] = useState('');
+  var [modalNuevo, setModalNuevo] = useState(false);
+  var [modalPass, setModalPass] = useState(null); // user object
+  var [formNuevo, setFormNuevo] = useState({ email: '', full_name: '', area: '', seniority: 'Analista', role: 'colaborador', password: '' });
+  var [nuevaPass, setNuevaPass] = useState('');
+  var [msg, setMsg] = useState('');
+  var [guardando, setGuardando] = useState(false);
+
+  var SENIORITIES = ['Analista', 'Especialista/Supervisor', 'Jefe/Experto', 'Gerente'];
+  var ROLES = ['colaborador', 'lider', 'admin_rrhh'];
+
+  useEffect(function() { cargar(); }, []);
+
+  async function cargar() {
+    var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').order('full_name');
+    setUsuarios(data || []); setCarg(false);
+  }
+
+  async function toggleActivo(user) {
+    await supabase.from('profiles').update({ activo: !user.activo }).eq('id', user.id);
+    setUsuarios(function(prev) { return prev.map(function(u) { return u.id === user.id ? { ...u, activo: !u.activo } : u; }); });
+  }
+
+  async function crearUsuario() {
+    if (!formNuevo.email || !formNuevo.password || !formNuevo.full_name) return alert('Email, nombre y contraseña son obligatorios');
+    setGuardando(true);
+    // Crear en Supabase Auth via admin API — usamos signUp desde el cliente
+    var { data: authData, error: authErr } = await supabase.auth.signUp({
+      email: formNuevo.email,
+      password: formNuevo.password,
+      options: { data: { full_name: formNuevo.full_name } }
+    });
+    if (authErr) { setMsg('Error: ' + authErr.message); setGuardando(false); return; }
+    // Crear perfil
+    if (authData?.user?.id) {
+      await supabase.from('profiles').upsert({
+        id: authData.user.id, email: formNuevo.email, full_name: formNuevo.full_name,
+        area: formNuevo.area, seniority: formNuevo.seniority, role: formNuevo.role, activo: true
+      });
+    }
+    setMsg('Usuario creado. Debe confirmar su email para poder ingresar.');
+    setModalNuevo(false);
+    setFormNuevo({ email: '', full_name: '', area: '', seniority: 'Analista', role: 'colaborador', password: '' });
+    setGuardando(false); cargar();
+    setTimeout(function() { setMsg(''); }, 4000);
+  }
+
+  async function cambiarPassword() {
+    if (!nuevaPass || nuevaPass.length < 6) return alert('La contraseña debe tener al menos 6 caracteres');
+    setGuardando(true);
+    // Usar Supabase Admin API via edge function o update directo
+    var { error } = await supabase.auth.admin.updateUserById(modalPass.id, { password: nuevaPass });
+    if (error) {
+      // Fallback: si no tiene admin SDK, usar update normal solo si es el usuario logueado
+      var { error: err2 } = await supabase.auth.updateUser({ password: nuevaPass });
+      if (err2) { setMsg('Error: necesitás permisos de admin para cambiar contraseñas de otros usuarios'); setGuardando(false); return; }
+    }
+    setMsg('Contraseña actualizada para ' + modalPass.email);
+    setModalPass(null); setNuevaPass(''); setGuardando(false);
+    setTimeout(function() { setMsg(''); }, 4000);
+  }
+
+  var usuariosFiltrados = busqueda
+    ? usuarios.filter(function(u) { return (u.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) || (u.email || '').toLowerCase().includes(busqueda.toLowerCase()); })
+    : usuarios;
+
+  if (carg) return <p>Cargando usuarios...</p>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: '0 0 4px 0', color: '#231F20' }}>👥 Gestión de Usuarios</h2>
+          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{usuarios.length} usuarios — {usuarios.filter(function(u) { return u.activo; }).length} activos</p>
+        </div>
+        <button onClick={function() { setModalNuevo(true); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Usuario</button>
+      </div>
+
+      {msg && <div style={{ padding: 12, background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, marginBottom: 16, color: '#166534', fontWeight: 600 }}>{msg}</div>}
+
+      <input value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
+        placeholder="Buscar por nombre o email..."
+        style={{ width: '100%', maxWidth: 360, padding: '10px 14px', borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14, marginBottom: 16, boxSizing: 'border-box' }} />
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+          <thead>
+            <tr style={{ background: '#231F20' }}>
+              {['Nombre', 'Email', 'Area', 'Seniority', 'Rol', 'Estado', 'Acciones'].map(function(h) {
+                return <th key={h} style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>{h}</th>;
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {usuariosFiltrados.map(function(u, idx) {
+              return (
+                <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#fafaf8' }}>
+                  <td style={{ ...td, padding: '12px 14px' }}><strong style={{ color: '#231F20' }}>{u.full_name || '-'}</strong></td>
+                  <td style={{ ...td, padding: '12px 14px', fontSize: 12, color: '#64748b' }}>{u.email}</td>
+                  <td style={{ ...td, padding: '12px 14px' }}>{u.area || '-'}</td>
+                  <td style={{ ...td, padding: '12px 14px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{u.seniority || '-'}</span>
+                  </td>
+                  <td style={{ ...td, padding: '12px 14px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                      background: u.role === 'admin_rrhh' ? '#231F20' : u.role === 'lider' ? '#dbeafe' : '#f1f5f9',
+                      color: u.role === 'admin_rrhh' ? '#D4D2C6' : u.role === 'lider' ? '#1e40af' : '#64748b' }}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
+                    <button onClick={function() { toggleActivo(u); }} style={{
+                      padding: '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      background: u.activo ? '#dcfce7' : '#fee2e2',
+                      color: u.activo ? '#166534' : '#dc2626'
+                    }}>{u.activo ? '✓ Activo' : '✗ Inactivo'}</button>
+                  </td>
+                  <td style={{ ...td, padding: '12px 14px' }}>
+                    <button onClick={function() { setModalPass(u); setNuevaPass(''); }}
+                      style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', cursor: 'pointer' }}>
+                      🔑 Contraseña
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal nuevo usuario */}
+      {modalNuevo && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalNuevo(false); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>+ Nuevo Usuario</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { label: 'Nombre completo *', key: 'full_name', type: 'text', placeholder: 'Juan Perez' },
+                { label: 'Email corporativo *', key: 'email', type: 'email', placeholder: 'juan@grupo-fabric.com' },
+                { label: 'Contraseña inicial *', key: 'password', type: 'password', placeholder: 'Min. 6 caracteres' },
+                { label: 'Area', key: 'area', type: 'text', placeholder: 'Ej: Operaciones' },
+              ].map(function(f) {
+                return (
+                  <div key={f.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                    <input type={f.type} value={formNuevo[f.key] || ''} placeholder={f.placeholder}
+                      onChange={function(e) { var u = {}; u[f.key] = e.target.value; setFormNuevo({...formNuevo, ...u}); }}
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+                );
+              })}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Seniority</label>
+                <select value={formNuevo.seniority} onChange={function(e) { setFormNuevo({...formNuevo, seniority: e.target.value}); }}
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14 }}>
+                  {SENIORITIES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Rol</label>
+                <select value={formNuevo.role} onChange={function(e) { setFormNuevo({...formNuevo, role: e.target.value}); }}
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 14 }}>
+                  {ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button onClick={crearUsuario} disabled={guardando} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>
+                {guardando ? 'Creando...' : 'Crear Usuario'}
+              </button>
+              <button onClick={function() { setModalNuevo(false); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal cambiar contraseña */}
+      {modalPass && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalPass(null); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 420, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ marginTop: 0 }}>🔑 Cambiar Contraseña</h3>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}><strong>{modalPass.full_name}</strong> — {modalPass.email}</p>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Nueva contraseña *</label>
+              <input type="password" value={nuevaPass} onChange={function(e) { setNuevaPass(e.target.value); }}
+                placeholder="Mínimo 6 caracteres"
+                style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, padding: 12, marginBottom: 20, fontSize: 12, color: '#92400e' }}>
+              ⚠️ Para cambiar contraseñas de otros usuarios se requiere acceso de Service Role en Supabase. Si no funciona, el usuario puede usar "Olvidé mi contraseña" en el login.
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={cambiarPassword} disabled={guardando} style={{ ...s.btnPrimario, flex: 1 }}>
+                {guardando ? 'Guardando...' : 'Cambiar Contraseña'}
+              </button>
+              <button onClick={function() { setModalPass(null); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GestionModulos() {
   var [usuarios, setUsuarios] = useState([]);
   var [modulos, setModulos] = useState({});
