@@ -1019,7 +1019,6 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
       {!bloqueado && (
         <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-          <button onClick={guardar} style={s.btnSecundario}>💾 Guardar borrador</button>
           <button onClick={enviar} style={s.btnPrimario}>📤 Enviar evaluacion</button>
         </div>
       )}
