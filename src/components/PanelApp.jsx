@@ -988,10 +988,10 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
 
             {/* Layout: auto arriba (readonly), lider abajo (editable) */}
-            <div style={{ padding: 16 }}>
+            <div style={{ padding: 16, overflow: 'hidden' }}>
 
               {/* Autoevaluacion del colaborador — solo lectura */}
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 14, overflow: 'hidden', wordBreak: 'break-word' }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Autoevaluacion del colaborador
                 </p>
@@ -1010,7 +1010,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
                         );
                       })}
                     </div>
-                    <div style={{ fontSize: 13, color: '#475569', fontStyle: autoData.comentario ? 'normal' : 'italic' }}>
+                    <div style={{ fontSize: 13, color: "#475569", fontStyle: autoData.comentario ? "normal" : "italic", wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>
                       {autoData.comentario || 'Sin comentario'}
                     </div>
                   </div>
