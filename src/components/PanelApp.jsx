@@ -1811,8 +1811,6 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
   );
 }
 
-  );
-}
 
 
 function ObjetivosColaborador({ profile }) {
