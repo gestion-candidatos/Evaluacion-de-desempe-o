@@ -779,6 +779,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
   var [autoEval, setAutoEval] = useState(null);
   var [autoPuntsMap, setAutoPuntsMap] = useState({});
   var [evalData, setEvalData] = useState(null);
+  var [enviada, setEnviada] = useState(false);
   var [showInfo, setShowInfo] = useState({});
 
   useEffect(function() {
@@ -868,7 +869,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     })();
   }, []);
 
-  var yaEnviada = evalData?.estado === 'enviado';
+  var yaEnviada = enviada || evalData?.estado === "enviado";
   var bloqueado = soloLectura || yaEnviada;
 
   async function obtenerOCrearEvalId() {
@@ -919,6 +920,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
     if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
     setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+    setEnviada(true);
     setMsg('Evaluacion enviada correctamente');
   }
 
@@ -1030,11 +1032,11 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
                   {[1,2,3,4,5].map(function(r) {
                     return (
                       <button key={r}
-                        onClick={function() { setRatings({ ...ratings, [comp.id]: r }); }}
+                        onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
                         style={{
                           width: 42, height: 42, borderRadius: 8, border: '2px solid',
                           borderColor: ratings[comp.id] === r ? '#231F20' : '#e2e8f0',
-                          fontSize: 18, fontWeight: 700, cursor: 'pointer',
+                          fontSize: 18, fontWeight: 700, cursor: bloqueado ? "default" : "pointer",
                           background: ratings[comp.id] === r ? '#231F20' : '#f8fafc',
                           color: ratings[comp.id] === r ? 'white' : '#475569'
                         }}>
