@@ -2556,7 +2556,7 @@ function GestionUsuarios() {
                         onChange={function(e) { var _uid = u.id; asignarLider(_uid, e.target.value); }}
                         style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #D4D2C6", fontSize: 12, background: "white" }}>
                         <option value="">Sin lider</option>
-                        {usuarios.filter(function(l) { return l.id !== u.id && (l.role === "lider" || l.role === "admin_rrhh"); }).map(function(l) {
+                        {usuarios.filter(function(l) { return l.id !== u.id && l.activo; }).sort(function(a,b) { return (a.full_name||"").localeCompare(b.full_name||""); }).map(function(l) {
                           return <option key={l.id} value={l.id}>{l.full_name || l.email}</option>;
                         })}
                       </select>
