@@ -288,7 +288,7 @@ function EvaluacionesAdmin({ cicloId }) {
 }
 
 function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
-  var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState('Todas');
+  var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState('Todas'); var [editandoCal, setEditandoCal] = useState(null); var [calTemp, setCalTemp] = useState({ rating: '', comentario: '' });
   useEffect(function() { cargar(); }, [cicloId]);
   async function cargar() {
     setCarg(true);
@@ -298,11 +298,33 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
       if (!ev.colaborador) return;
       if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null };
       if (ev.tipo_evaluacion === 'autoevaluacion') { mapa[ev.colaborador_id].autoevaluacion = ev; mapa[ev.colaborador_id].promAuto = ev.rating_promedio; }
-      if (ev.tipo_evaluacion === 'evaluacion_lider') { mapa[ev.colaborador_id].evaluacionLider = ev; mapa[ev.colaborador_id].promLider = ev.rating_promedio; mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado; mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null; }
+      if (ev.tipo_evaluacion === 'evaluacion_lider') {
+        mapa[ev.colaborador_id].evaluacionLider = ev;
+        mapa[ev.colaborador_id].promLider = ev.rating_promedio;
+        mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
+        // Default: calibrado = rating del lider si no fue editado aun
+        var cal = ev.rating_calibrado;
+        if (!cal && ev.rating_promedio) {
+          cal = ev.rating_promedio;
+          // Guardar el default en la base de datos
+          supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
+        }
+        mapa[ev.colaborador_id].ratingFinal = cal;
+      }
     });
     setDatos(Object.values(mapa)); setCarg(false);
   }
-  async function guardarCal(evaluacionId, rating, comentario) { await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId); setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); }); }
+
+  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
+    // Si el rating calibrado es igual al del lider, no requiere comentario
+    if (parseFloat(rating) !== parseFloat(ratingLider) && !comentario.trim()) {
+      alert('Debes justificar por que el rating calibrado difiere del rating del lider.');
+      return;
+    }
+    await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
+    setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
+  }
+
 
   async function generarPDFCompleto(d) {
     console.log('=== PDF DEBUG ===');
@@ -651,24 +673,67 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                   <td style={{ ...td, textAlign: 'center' }}>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promLider || '-'}</div>
                     {clasifLider && <div style={{ fontSize: 9, color: clasifLider.color, fontWeight: 600 }}>{clasifLider.label}</div>}
-                  </td>
-                  <td style={{ ...td, textAlign: 'center', fontSize: 14, fontWeight: 700, color: gap ? (Math.abs(gap) <= 0.5 ? '#231F20' : Math.abs(gap) <= 1 ? '#f59e0b' : '#dc2626') : '#94a3b8' }}>{gap ? (gap > 0 ? '+' : '') + gap : '-'}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
+                    {/* Rating calibrado: default = lider, solo admin puede editar */}
                     {d.evaluacionLider && !soloLectura ? (
-                      <select value={d.ratingFinal || ''} onChange={function(e) { guardarCal(d.evaluacionLider.id, parseFloat(e.target.value), d.comentarioCalibracion || ''); }} style={{ padding: '6px 10px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, fontWeight: 600, background: 'white' }}>
-                        <option value="">Seleccionar</option><option value="1.0">1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option><option value="1.3">1.3</option><option value="1.4">1.4</option><option value="1.5">1.5</option><option value="1.6">1.6</option><option value="1.7">1.7</option><option value="1.8">1.8</option><option value="1.9">1.9</option><option value="2.0">2.0</option><option value="2.1">2.1</option><option value="2.2">2.2</option><option value="2.3">2.3</option><option value="2.4">2.4</option><option value="2.5">2.5</option><option value="2.6">2.6</option><option value="2.7">2.7</option><option value="2.8">2.8</option><option value="2.9">2.9</option><option value="3.0">3.0</option><option value="3.1">3.1</option><option value="3.2">3.2</option><option value="3.3">3.3</option><option value="3.4">3.4</option><option value="3.5">3.5</option><option value="3.6">3.6</option><option value="3.7">3.7</option><option value="3.8">3.8</option><option value="3.9">3.9</option><option value="4.0">4.0</option><option value="4.1">4.1</option><option value="4.2">4.2</option><option value="4.3">4.3</option><option value="4.4">4.4</option><option value="4.5">4.5</option><option value="4.6">4.6</option><option value="4.7">4.7</option><option value="4.8">4.8</option><option value="4.9">4.9</option><option value="5.0">5.0</option>
-                      </select>
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: '#231F20', marginBottom: 4 }}>
+                          {d.ratingFinal || d.promLider || '-'}
+                        </div>
+                        {clasificarRating(parseFloat(d.ratingFinal || d.promLider)) && (
+                          <div style={{ fontSize: 9, color: clasificarRating(parseFloat(d.ratingFinal || d.promLider)).color, fontWeight: 600, marginBottom: 6 }}>
+                            {clasificarRating(parseFloat(d.ratingFinal || d.promLider)).label}
+                          </div>
+                        )}
+                        {/* Boton editar — solo admin */}
+                        <button
+                          onClick={function() { setEditandoCal(editandoCal === d.colaborador.id ? null : d.colaborador.id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
+                          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid #D4D2C6', background: editandoCal === d.colaborador.id ? '#231F20' : 'white', color: editandoCal === d.colaborador.id ? '#D4D2C6' : '#231F20', cursor: 'pointer' }}>
+                          {editandoCal === d.colaborador.id ? 'Cancelar' : '✏️ Editar'}
+                        </button>
+                      </div>
                     ) : (
                       <div>
-                        <span style={{ fontWeight: 700 }}>{d.ratingFinal || '-'}</span>
-                        {clasificarRating(parseFloat(d.ratingFinal)) && <div style={{ fontSize: 9, color: clasificarRating(parseFloat(d.ratingFinal)).color, fontWeight: 600 }}>{clasificarRating(parseFloat(d.ratingFinal)).label}</div>}
+                        <span style={{ fontWeight: 700, fontSize: 16 }}>{d.ratingFinal || d.promLider || '-'}</span>
+                        {clasificarRating(parseFloat(d.ratingFinal || d.promLider)) && <div style={{ fontSize: 9, color: clasificarRating(parseFloat(d.ratingFinal || d.promLider)).color, fontWeight: 600 }}>{clasificarRating(parseFloat(d.ratingFinal || d.promLider)).label}</div>}
                       </div>
                     )}
                   </td>
-                  <td style={{ ...td, minWidth: 150 }}>
-                    {d.evaluacionLider && !soloLectura ? (
-                      <input type="text" value={d.comentarioCalibracion || ''} onChange={function(e) { guardarCal(d.evaluacionLider.id, d.ratingFinal || null, e.target.value); }} placeholder="Justificar calibracion..." style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #D4D2C6', fontSize: 12 }} />
-                    ) : <span>{d.comentarioCalibracion || '-'}</span>}
+                  <td style={{ ...td, minWidth: 220 }}>
+                    {editandoCal === d.colaborador.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <select value={calTemp.rating} onChange={function(e) { setCalTemp({ ...calTemp, rating: e.target.value }); }} style={{ padding: '5px 8px', borderRadius: 6, border: '2px solid #231F20', fontSize: 13, fontWeight: 600 }}>
+                          <option value="">Seleccionar</option>
+                          <option value="1.0">1.0</option><option value="1.1">1.1</option><option value="1.2">1.2</option><option value="1.3">1.3</option><option value="1.4">1.4</option><option value="1.5">1.5</option><option value="1.6">1.6</option><option value="1.7">1.7</option><option value="1.8">1.8</option><option value="1.9">1.9</option>
+                          <option value="2.0">2.0</option><option value="2.1">2.1</option><option value="2.2">2.2</option><option value="2.3">2.3</option><option value="2.4">2.4</option><option value="2.5">2.5</option><option value="2.6">2.6</option><option value="2.7">2.7</option><option value="2.8">2.8</option><option value="2.9">2.9</option>
+                          <option value="3.0">3.0</option><option value="3.1">3.1</option><option value="3.2">3.2</option><option value="3.3">3.3</option><option value="3.4">3.4</option><option value="3.5">3.5</option><option value="3.6">3.6</option><option value="3.7">3.7</option><option value="3.8">3.8</option><option value="3.9">3.9</option>
+                          <option value="4.0">4.0</option><option value="4.1">4.1</option><option value="4.2">4.2</option><option value="4.3">4.3</option><option value="4.4">4.4</option><option value="4.5">4.5</option><option value="4.6">4.6</option><option value="4.7">4.7</option><option value="4.8">4.8</option><option value="4.9">4.9</option>
+                          <option value="5.0">5.0</option>
+                        </select>
+                        {parseFloat(calTemp.rating) !== parseFloat(d.promLider) && (
+                          <textarea
+                            value={calTemp.comentario}
+                            onChange={function(e) { setCalTemp({ ...calTemp, comentario: e.target.value }); }}
+                            placeholder="Justificacion obligatoria si cambia el rating del lider..."
+                            style={{ padding: 6, borderRadius: 6, border: '2px solid #f59e0b', fontSize: 12, fontFamily: 'inherit', minHeight: 60, resize: 'vertical' }}
+                          />
+                        )}
+                        <button
+                          onClick={function() {
+                            if (!calTemp.rating) return alert('Selecciona un rating');
+                            if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificacion es obligatoria cuando el rating difiere del lider');
+                            guardarCal(d.evaluacionLider.id, parseFloat(calTemp.rating), calTemp.comentario, d.promLider);
+                            setEditandoCal(null);
+                          }}
+                          style={{ ...s.btnPrimario, padding: '6px 14px', fontSize: 12 }}>
+                          Confirmar
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic' }}>
+                        {d.comentarioCalibracion || (parseFloat(d.ratingFinal) === parseFloat(d.promLider) ? 'Sin cambios — igual al lider' : '-')}
+                      </span>
+                    )}
                   </td>
                   <td style={td}><button onClick={function() { onHist && onHist(d.colaborador); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>📋</button></td>
                   <td style={td}><button onClick={function() { verPDF(d); }} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>👁️ PDF</button></td>
