@@ -1791,7 +1791,6 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
         <button
           onClick={function() {
             console.log('GUARDAR clickeado', obj);
