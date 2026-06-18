@@ -1882,19 +1882,25 @@ function GestionModulos() {
                   {MODULOS_DISPONIBLES.map(function(m) {
                     var activo = modsUser[m.id] === true;
                     var cargandoEste = guardando === u.id + m.id;
+                    var _uid = u.id; var _mid = m.id;
                     return (
                       <td key={m.id} style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
                         <button
-                          onClick={function() { toggleModulo(u.id, m.id, activo); }}
+                          onClick={function() {
+                            var val = (modulos[_uid] || {})[_mid] === true;
+                            toggleModulo(_uid, _mid, val);
+                          }}
                           disabled={cargandoEste}
                           style={{
-                            width: 36, height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 16,
-                            background: activo ? '#231F20' : '#f1f5f9',
+                            width: 44, height: 44, borderRadius: 8, border: '2px solid',
+                            borderColor: activo ? '#231F20' : '#e2e8f0',
+                            cursor: 'pointer', fontSize: 18, fontWeight: 700,
+                            background: activo ? '#231F20' : 'white',
                             color: activo ? '#D4D2C6' : '#94a3b8',
                             opacity: cargandoEste ? 0.5 : 1,
                             transition: 'all 0.15s',
                           }}>
-                          {cargandoEste ? '...' : activo ? '✓' : '○'}
+                          {cargandoEste ? '⏳' : activo ? '✓' : '○'}
                         </button>
                       </td>
                     );
