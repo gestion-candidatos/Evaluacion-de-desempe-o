@@ -290,16 +290,140 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 // DASHBOARD Y TABLAS ADMIN
 // =============================================
 function DashboardView({ stats, colabs }) {
-  // Extraer datos para gráficos
   var evaluaciones = stats.evaluaciones || [];
   var puntuaciones = stats.puntuaciones || [];
   var perfiles = stats.perfiles || colabs;
 
-  // Gráfico 1: Distribución Bajo/Medio/Alto de ratings calibrados (o del líder si no hay calibrado)
+  // Gráfico 1: Distribución Bajo/Medio/Alto
   var evalLider = evaluaciones.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
-  var grupos = { bajo: 0, medio: 0, alto: 0 };
+  var bajo = 0; var medio = 0; var alto = 0;
   evalLider.forEach(function(e) {
     var r = parseFloat(e.rating_calibrado || e.rating_promedio);
+    if (r < 3) bajo++; else if (r <= 3.5) medio++; else alto++;
+  });
+  var totalG1 = bajo + medio + alto;
+
+  // Gráfico 2: promedio por competencia/seniority
+  var evalIdToSen = {};
+  evaluaciones.forEach(function(e) {
+    var p = perfiles.find(function(x) { return x.id === e.colaborador_id; });
+    if (p) evalIdToSen[e.id] = p.seniority;
+  });
+  var compMap = {};
+  puntuaciones.forEach(function(p) {
+    var nombre = p.competencias && p.competencias.nombre;
+    var sen = evalIdToSen[p.evaluacion_id];
+    if (!nombre || !sen || !p.rating) return;
+    var key = nombre + '|' + sen;
+    if (!compMap[key]) compMap[key] = { nombre: nombre, seniority: sen, sum: 0, count: 0 };
+    compMap[key].sum += parseFloat(p.rating);
+    compMap[key].count++;
+  });
+  var promedios = Object.values(compMap).map(function(c) {
+    return { nombre: c.nombre, seniority: c.seniority, prom: c.sum / c.count };
+  }).sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
+  var compsU = [];
+  promedios.forEach(function(p) { if (!compsU.includes(p.nombre)) compsU.push(p.nombre); });
+  var sensU = [];
+  promedios.forEach(function(p) { if (!sensU.includes(p.seniority)) sensU.push(p.seniority); });
+  var CSEN = { 'Analista': '#D4D2C6', 'Especialista/Supervisor': '#94a3b8', 'Jefe/Experto': '#231F20', 'Gerente': '#64748b' };
+
+  var grupos = [
+    { label: 'Alto', valor: alto, color: '#166534', rango: '3.6 – 5.0' },
+    { label: 'Medio', valor: medio, color: '#92400e', rango: '3.0 – 3.5' },
+    { label: 'Bajo', valor: bajo, color: '#dc2626', rango: '1.0 – 2.9' },
+  ];
+
+  return (
+    <div>
+      <div style={s.grid}>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>👥 Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{colabs.length}</p></div>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>📋 Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.total}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.enviadas}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{stats.pendientes}</p></div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, marginTop: 20, flexWrap: 'wrap' }}>
+
+        {/* Gráfico 1 — Distribución */}
+        <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
+          <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14 }}>📊 Distribución de Desempeño</h4>
+          <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Bajo: 1–2.9 | Medio: 3–3.5 | Alto: 3.6–5</p>
+          {totalG1 === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin evaluaciones calibradas aún</p>
+          ) : grupos.map(function(g) {
+            var pct = Math.round(g.valor / totalG1 * 100);
+            return (
+              <div key={g.label} style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>({g.rango})</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#231F20' }}>{g.valor} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({pct}%)</span></span>
+                </div>
+                <div style={{ background: '#f1f5f9', borderRadius: 6, height: 24, overflow: 'hidden' }}>
+                  <div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6, display: 'flex', alignItems: 'center', paddingLeft: 8, boxSizing: 'border-box' }}>
+                    {pct > 15 && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>{pct}%</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {totalG1 > 0 && <p style={{ margin: '12px 0 0 0', fontSize: 12, color: '#64748b', textAlign: 'center' }}>Total: {totalG1} colaboradores</p>}
+        </div>
+
+        {/* Gráfico 2 — Promedio por competencia/seniority */}
+        <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 360 }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia y Seniority</h4>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            {sensU.map(function(sen) {
+              return <div key={sen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#475569' }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: CSEN[sen] || '#94a3b8', border: '1px solid #e2e8f0' }} />
+                {sen}
+              </div>;
+            })}
+          </div>
+          {promedios.length === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 300 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ ...th, fontSize: 11, padding: '6px 8px', textAlign: 'left' }}>Competencia</th>
+                    {sensU.map(function(sen) { return <th key={sen} style={{ ...th, fontSize: 11, padding: '6px 8px', textAlign: 'center' }}>{sen.split('/')[0]}</th>; })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {compsU.map(function(comp, ci) {
+                    return (
+                      <tr key={comp} style={{ borderBottom: '1px solid #f1f5f9', background: ci % 2 === 0 ? 'white' : '#fafaf8' }}>
+                        <td style={{ ...td, fontSize: 12, padding: '8px' }}>{comp}</td>
+                        {sensU.map(function(sen) {
+                          var dato = promedios.find(function(p) { return p.nombre === comp && p.seniority === sen; });
+                          var val = dato ? dato.prom : null;
+                          var cls = val ? clasificarRating(val) : null;
+                          return (
+                            <td key={sen} style={{ ...td, textAlign: 'center', padding: '8px' }}>
+                              {val ? (
+                                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 6, fontSize: 13, fontWeight: 700, background: cls ? cls.bg : '#f1f5f9', color: cls ? cls.color : '#64748b' }}>
+                                  {val.toFixed(1)}
+                                </span>
+                              ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
     if (r < 3) grupos.bajo++;
     else if (r <= 3.5) grupos.medio++;
     else grupos.alto++;
@@ -490,8 +614,6 @@ function DashboardView({ stats, colabs }) {
   );
 }
 
-  );
-}
 
 function ParticipantesView({ colabs }) {
   return (
