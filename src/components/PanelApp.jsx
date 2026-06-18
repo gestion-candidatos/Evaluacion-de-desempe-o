@@ -717,17 +717,14 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
   useEffect(function() {
     (async function() {
-      var [{ data: comps }, { data: { session } }] = await Promise.all([
-        supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', colaborador.seniority || 'Analista'),
-        supabase.auth.getSession()
-      ]);
-      // Si no hay competencias para ese seniority, traer todas
-      if (!comps || comps.length === 0) {
-        var { data: allComps } = await supabase.from('competencias').select('id, nombre, descripcion');
-        setComp(allComps || []);
-      } else {
-        setComp(comps);
-      }
+      // Cargar todas las competencias sin filtrar — el filtro por seniority causaba que no aparecieran
+      var { data: comps, error: compsErr } = await supabase
+        .from('competencias').select('id, nombre, descripcion').order('nombre', { ascending: true });
+      console.log('Competencias:', comps?.length, 'error:', compsErr);
+      setComp(comps || []);
+
+      var { data: { session } } = await supabase.auth.getSession();
+
 
       // Siempre cargar autoevaluacion sin importar el estado
       var { data: ae, error: aeErr } = await supabase.from('evaluaciones')
