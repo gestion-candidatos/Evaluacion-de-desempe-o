@@ -2610,7 +2610,7 @@ function GestionUsuarios() {
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
           <thead>
             <tr style={{ background: '#231F20' }}>
-              {['Nombre', 'Email', 'Area', 'Seniority', 'Rol', 'Lider', 'Estado', 'Acciones'].map(function(h) {
+              {['Nombre', 'Email', 'Area', 'Seniority', 'Rol', 'Lider', 'Estado'].map(function(h) {
                 return <th key={h} style={{ ...th, color: '#D4D2C6', padding: '12px 14px' }}>{h}</th>;
               })}
             </tr>
@@ -2654,11 +2654,6 @@ function GestionUsuarios() {
                       color: u.activo ? '#166534' : '#dc2626'
                     }}>{u.activo ? '✓ Activo' : '✗ Inactivo'}</button>
                   </td>
-                  <td style={{ ...td, padding: '12px 14px' }}>
-                    <button onClick={function() { setModalPass(u); setNuevaPass(''); }}
-                      style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', cursor: 'pointer' }}>
-                      🔑 Contraseña
-                    </button>
                   </td>
                 </tr>
               );
@@ -2713,30 +2708,6 @@ function GestionUsuarios() {
         </div>
       )}
 
-      {/* Modal cambiar contraseña */}
-      {modalPass && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalPass(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 420, width: '90%' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ marginTop: 0 }}>🔑 Cambiar Contraseña</h3>
-            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}><strong>{modalPass.full_name}</strong> — {modalPass.email}</p>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Nueva contraseña *</label>
-              <input type="password" value={nuevaPass} onChange={function(e) { setNuevaPass(e.target.value); }}
-                placeholder="Mínimo 6 caracteres"
-                style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 14, boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, padding: 12, marginBottom: 20, fontSize: 12, color: '#92400e' }}>
-              ⚠️ Para cambiar contraseñas de otros usuarios se requiere acceso de Service Role en Supabase. Si no funciona, el usuario puede usar "Olvidé mi contraseña" en el login.
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={cambiarPassword} disabled={guardando} style={{ ...s.btnPrimario, flex: 1 }}>
-                {guardando ? 'Guardando...' : 'Cambiar Contraseña'}
-              </button>
-              <button onClick={function() { setModalPass(null); }} style={s.btnSecundario}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
