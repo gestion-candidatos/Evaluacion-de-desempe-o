@@ -2654,7 +2654,6 @@ function GestionUsuarios() {
                       color: u.activo ? '#166534' : '#dc2626'
                     }}>{u.activo ? '✓ Activo' : '✗ Inactivo'}</button>
                   </td>
-                  </td>
                 </tr>
               );
             })}
