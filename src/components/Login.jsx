@@ -145,9 +145,9 @@ var styles = {
   },
   leftSide: {
     flex: '1.2',
-    backgroundImage: 'url("/login-bg.jpg.png")',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
+    
+    
+    
     position: 'relative',
     display: 'flex',
     alignItems: 'flex-end',
@@ -156,7 +156,7 @@ var styles = {
   },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'linear-gradient(to top, rgba(35,31,32,0.92) 0%, rgba(35,31,32,0.4) 50%, rgba(35,31,32,0.1) 100%)',
+    background: 'linear-gradient(135deg, #231F20 0%, #3a3130 40%, #4a3828 70%, #2d2420 100%)',
   },
   leftContent: {
     position: 'relative', zIndex: 1,
