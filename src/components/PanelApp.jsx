@@ -2633,7 +2633,7 @@ function GestionUsuarios() {
                     </span>
                   </td>
                   <td style={{ ...td, padding: "8px 14px", minWidth: 160 }}>
-                    {u.role !== "admin_rrhh" ? (
+                    {(u.role !== "admin_rrhh" || u.email === "florencia.salvaneschi@grupo-fabric.com" || u.email === "adrian.galvan@grupo-fabric.com") ? (
                       <select
                         value={u.leader_id || ""}
                         onChange={function(e) { var _uid = u.id; asignarLider(_uid, e.target.value); }}
