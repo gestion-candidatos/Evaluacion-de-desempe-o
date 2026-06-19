@@ -6,7 +6,7 @@ export default function Login() {
   var [error, setError] = useState('');
   var [email, setEmail] = useState('');
   var [password, setPassword] = useState('');
-  var [modo, setModo] = useState('google'); // 'google' o 'email'
+  var [modo, setModo] = useState('google');
 
   async function handleGoogleLogin() {
     setLoading(true);
@@ -39,13 +39,12 @@ export default function Login() {
 
   return (
     <div style={styles.container}>
-      {/* Lado Izquierdo */}
+      {/* Lado Izquierdo — imagen de fondo con overlay suave */}
       <div style={styles.leftSide}>
         <div style={styles.overlay} />
         <div style={styles.leftContent}>
-          <img src="/logo.jpg" alt="Fabric Group" style={{ height: 80, marginBottom: 20, borderRadius: 8 }} />
+          <img src="/logo.jpg" alt="Fabric Group" style={styles.logo} />
           <h1 style={styles.brandName}>Fabric Group</h1>
-          <p style={styles.tagline}>Evaluación de Desempeño</p>
           <div style={styles.divider} />
           <p style={styles.description}>
             Plataforma integral para la gestión del talento,
@@ -54,21 +53,19 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Lado Derecho */}
+      {/* Lado Derecho — formulario */}
       <div style={styles.rightSide}>
         <div style={styles.loginCard}>
           <div style={styles.logoContainer}>
-            <img src="/logo.jpg" alt="Fabric Group" style={{ height: 72, borderRadius: 12, boxShadow: '0 8px 24px rgba(35,31,32,0.18)' }} />
+            <img src="/logo.jpg" alt="Fabric Group" style={styles.logoRight} />
           </div>
 
           <h2 style={styles.welcomeTitle}>Bienvenido</h2>
           <p style={styles.welcomeSubtitle}>Ingresá a tu cuenta para continuar</p>
 
-          {error && (
-            <div style={styles.errorBox}>⚠️ {error}</div>
-          )}
+          {error && <div style={styles.errorBox}>⚠️ {error}</div>}
 
-          {/* Toggle Google / Email */}
+          {/* Toggle */}
           <div style={styles.toggleContainer}>
             <button
               onClick={function() { setModo('google'); setError(''); }}
@@ -82,7 +79,7 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Opción Google */}
+          {/* Google */}
           {modo === 'google' && (
             <div style={{ width: '100%' }}>
               <button
@@ -105,15 +102,14 @@ export default function Login() {
             </div>
           )}
 
-          {/* Opción Email */}
+          {/* Email */}
           {modo === 'email' && (
             <form onSubmit={handleEmailLogin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Email</label>
                 <div style={styles.inputWrapper}>
                   <span style={styles.inputIcon}>📧</span>
-                  <input
-                    type="email" value={email}
+                  <input type="email" value={email}
                     onChange={function(e) { setEmail(e.target.value); }}
                     placeholder="tu.email@grupo-fabric.com"
                     required style={styles.input} />
@@ -123,15 +119,13 @@ export default function Login() {
                 <label style={styles.label}>Contraseña</label>
                 <div style={styles.inputWrapper}>
                   <span style={styles.inputIcon}>🔒</span>
-                  <input
-                    type="password" value={password}
+                  <input type="password" value={password}
                     onChange={function(e) { setPassword(e.target.value); }}
                     placeholder="••••••••"
                     required style={styles.input} />
                 </div>
               </div>
-              <button
-                type="submit" disabled={loading}
+              <button type="submit" disabled={loading}
                 style={loading ? { ...styles.emailButton, opacity: 0.6, cursor: 'not-allowed' } : styles.emailButton}>
                 {loading ? 'Verificando...' : 'Ingresar'}
               </button>
@@ -145,29 +139,134 @@ export default function Login() {
 }
 
 var styles = {
-  container: { display: 'flex', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  leftSide: { flex: '1', backgroundImage: 'url("/login-bg.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(135deg, rgba(35,31,32,0.92) 0%, rgba(35,31,32,0.75) 100%)' },
-  leftContent: { position: 'relative', zIndex: 1, textAlign: 'center', padding: '40px', maxWidth: '500px' },
-  brandName: { fontSize: '42px', fontWeight: '700', color: '#D4D2C6', margin: '0 0 8px 0', letterSpacing: '2px', textTransform: 'uppercase' },
-  tagline: { fontSize: '20px', fontWeight: '300', color: '#D4D2C6', margin: '0 0 24px 0', letterSpacing: '1px' },
-  divider: { width: '60px', height: '3px', background: '#D4D2C6', margin: '0 auto 24px auto' },
-  description: { fontSize: '15px', color: '#9ca3af', lineHeight: '1.8', margin: 0 },
-  rightSide: { flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: '40px' },
-  loginCard: { width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center' },
-  logoContainer: { textAlign: 'center', marginBottom: '28px' },
-  welcomeTitle: { fontSize: '28px', fontWeight: '700', color: '#231F20', textAlign: 'center', margin: '0 0 8px 0' },
-  welcomeSubtitle: { fontSize: '14px', color: '#64748b', textAlign: 'center', margin: '0 0 24px 0' },
-  errorBox: { padding: '12px 16px', background: '#fef2f2', borderRadius: '8px', color: '#dc2626', fontSize: '13px', textAlign: 'center', border: '1px solid #fecaca', fontWeight: '500', marginBottom: 16, width: '100%', boxSizing: 'border-box' },
-  toggleContainer: { display: 'flex', width: '100%', background: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 24, boxSizing: 'border-box' },
-  toggleBtn: { flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, background: 'transparent', color: '#64748b', transition: 'all 0.15s' },
-  toggleActivo: { background: '#231F20', color: '#D4D2C6', boxShadow: '0 2px 8px rgba(35,31,32,0.2)' },
-  googleButton: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '14px 24px', background: 'white', color: '#231F20', border: '2px solid #e2e8f0', borderRadius: '12px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: 12 },
-  emailButton: { padding: '14px', background: 'linear-gradient(135deg, #231F20, #3a3536)', color: '#D4D2C6', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(35,31,32,0.3)' },
+  container: {
+    display: 'flex', minHeight: '100vh',
+    fontFamily: '"Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  },
+  leftSide: {
+    flex: '1.2',
+    backgroundImage: 'url("/login-bg.jpg.png")',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    minHeight: '100vh',
+  },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'linear-gradient(to top, rgba(35,31,32,0.92) 0%, rgba(35,31,32,0.4) 50%, rgba(35,31,32,0.1) 100%)',
+  },
+  leftContent: {
+    position: 'relative', zIndex: 1,
+    padding: '48px',
+    maxWidth: '520px',
+  },
+  logo: {
+    height: 56, borderRadius: 8, marginBottom: 20,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+  },
+  brandName: {
+    fontSize: '38px', fontWeight: '700',
+    color: '#F0EDE8',
+    margin: '0 0 16px 0',
+    letterSpacing: '3px',
+    textTransform: 'uppercase',
+    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+  },
+  divider: {
+    width: '48px', height: '3px',
+    background: '#D4D2C6',
+    margin: '0 0 20px 0',
+    borderRadius: 2,
+  },
+  description: {
+    fontSize: '15px', color: 'rgba(240,237,232,0.85)',
+    lineHeight: '1.7', margin: 0,
+    textShadow: '0 1px 4px rgba(0,0,0,0.3)',
+  },
+  rightSide: {
+    flex: '1',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: '#F0EDE8',
+    padding: '40px',
+    minWidth: 400,
+  },
+  loginCard: {
+    width: '100%', maxWidth: '400px',
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+  },
+  logoContainer: { textAlign: 'center', marginBottom: '24px' },
+  logoRight: {
+    height: 64, borderRadius: 10,
+    boxShadow: '0 4px 16px rgba(35,31,32,0.15)',
+  },
+  welcomeTitle: {
+    fontSize: '26px', fontWeight: '700',
+    color: '#231F20', textAlign: 'center',
+    margin: '0 0 6px 0',
+  },
+  welcomeSubtitle: {
+    fontSize: '14px', color: '#64748b',
+    textAlign: 'center', margin: '0 0 24px 0',
+  },
+  errorBox: {
+    padding: '12px 16px', background: '#fef2f2',
+    borderRadius: '8px', color: '#dc2626',
+    fontSize: '13px', textAlign: 'center',
+    border: '1px solid #fecaca', fontWeight: '500',
+    marginBottom: 16, width: '100%', boxSizing: 'border-box',
+  },
+  toggleContainer: {
+    display: 'flex', width: '100%',
+    background: '#e8e5e0', borderRadius: 10,
+    padding: 4, marginBottom: 24, boxSizing: 'border-box',
+  },
+  toggleBtn: {
+    flex: 1, padding: '10px', border: 'none',
+    borderRadius: 8, cursor: 'pointer',
+    fontSize: 14, fontWeight: 600,
+    background: 'transparent', color: '#64748b',
+    transition: 'all 0.15s',
+  },
+  toggleActivo: {
+    background: '#231F20', color: '#D4D2C6',
+    boxShadow: '0 2px 8px rgba(35,31,32,0.2)',
+  },
+  googleButton: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '100%', padding: '14px 24px',
+    background: 'white', color: '#231F20',
+    border: '2px solid #D4D2C6', borderRadius: '12px',
+    fontSize: '15px', fontWeight: '600', cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    marginBottom: 12, transition: 'all 0.2s',
+  },
+  emailButton: {
+    padding: '14px', background: '#231F20',
+    color: '#D4D2C6', border: 'none',
+    borderRadius: '10px', fontSize: '15px',
+    fontWeight: '600', cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(35,31,32,0.25)',
+    letterSpacing: '0.3px',
+  },
   inputGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '13px', fontWeight: '600', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  label: {
+    fontSize: '12px', fontWeight: '600',
+    color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px',
+  },
   inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
   inputIcon: { position: 'absolute', left: '14px', fontSize: '16px', zIndex: 1 },
-  input: { width: '100%', padding: '14px 16px 14px 44px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box', outline: 'none', background: 'white' },
-  footerText: { textAlign: 'center', fontSize: '12px', color: '#94a3b8', marginTop: '8px' }
+  input: {
+    width: '100%', padding: '13px 16px 13px 44px',
+    borderRadius: '10px', border: '2px solid #D4D2C6',
+    fontSize: '14px', boxSizing: 'border-box',
+    outline: 'none', background: 'white',
+    transition: 'border-color 0.2s',
+  },
+  footerText: {
+    textAlign: 'center', fontSize: '12px',
+    color: '#94a3b8', marginTop: '8px',
+  },
 };
