@@ -281,7 +281,7 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
 
 function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLectura }) {
   var [v, setV] = useState('autoevaluacion'); var [tieneEq, setTieneEq] = useState(false); var [part, setPart] = useState(false); var [verif, setVerif] = useState(true);
-  useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); if (session) { var [{ count: e }, { count: p }] = await Promise.all([supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('leader_id', session.user.id), supabase.from('ciclo_colaboradores').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('colaborador_id', session.user.id)]); setTieneEq((e || 0) > 0); setPart((p || 0) > 0); } setVerif(false); })(); }, [cicloId]);
+  useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); if (session) { var [{ count: e }, { count: p }] = await Promise.all([supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('leader_id', session.user.id).eq('activo', true), supabase.from('ciclo_colaboradores').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('colaborador_id', session.user.id)]); setTieneEq((e || 0) > 0); setPart((p || 0) > 0); } setVerif(false); })(); }, [cicloId]);
   if (verif) return <p>Verificando...</p>; if (!part) return <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p>No estas participando en este ciclo.</p></div>;
   return <div><div style={{ display: 'flex', gap: 12, marginBottom: 20 }}><button onClick={function() { setV('autoevaluacion'); }} style={v === 'autoevaluacion' ? s.btnPrimario : s.btnInfo}>📝 Mi Evaluacion</button>{tieneEq && <button onClick={function() { setV('equipo'); }} style={v === 'equipo' ? s.btnPrimario : s.btnInfo}>👥 Mi Equipo</button>}</div>{v === 'autoevaluacion' ? <PanelColaborador userId={userId} seniority={seniority} cicloId={cicloId} soloLectura={soloLectura} /> : <EquipoLider cicloId={cicloId} profile={profile} soloLectura={soloLectura} />}</div>;
 }
@@ -932,7 +932,7 @@ function HistorialAdmin({ colaborador, onVolver }) { var [hist, setHist] = useSt
 function EquipoLider({ cicloId, profile, soloLectura }) {
   var [equipo, setEquipo] = useState([]); var [colSel, setColSel] = useState(null); var [fbVis, setFbVis] = useState(null);
   useEffect(function() { cargar(); }, [cicloId]);
-  async function cargar() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data: d } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id); if (!d) return; setEquipo(d); }
+  async function cargar() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data: d } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id).eq('activo', true); if (!d) return; setEquipo(d); }
   if (colSel) return <EvaluacionLider colaborador={colSel} cicloId={cicloId} onVolver={function() { setColSel(null); cargar(); }} soloLectura={soloLectura} />;
   if (fbVis) return <FeedbackForm feedback={fbVis} cicloId={cicloId} onVolver={function() { setFbVis(null); cargar(); }} />;
   return <div><h3>👥 Mi Equipo ({equipo.length})</h3>{equipo.length === 0 ? <p>No tienes colaboradores.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{equipo.map(function(c) { return (<div key={c.id} style={{ ...s.tarjetaStat }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}><div style={{ flex: 1 }}><h4>{c.full_name || c.email}</h4><p style={{ color: '#64748b', fontSize: 13 }}>{c.area} · {c.seniority}</p></div><div style={{ display: 'flex', gap: 8 }}><button onClick={function() { setFbVis(c); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e' }}>💬 FB</button><button onClick={function() { setColSel(c); }} style={s.btnPrimario}>{soloLectura ? '👁️ Ver' : '📝 Evaluar'}</button></div></div></div>); })}</div>}</div>;
@@ -1435,7 +1435,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
 function ObjetivosGerente({ profile }) {
   var [equipo, setEquipo] = useState([]); var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null); var [cargando, setCargando] = useState(true);
   useEffect(function() { cargarEquipo(); }, []);
-  async function cargarEquipo() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id); setEquipo(data || []); setCargando(false); }
+  async function cargarEquipo() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id).eq('activo', true); setEquipo(data || []); setCargando(false); }
   if (cargando) return <p>Cargando equipo...</p>;
   if (colaboradorSeleccionado) return <GestionObjetivosLider colaborador={colaboradorSeleccionado} profile={profile} onVolver={function() { setColaboradorSeleccionado(null); }} />;
   return (
@@ -2102,13 +2102,89 @@ function PanelAdminObjetivos({ profile }) {
   }
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
 
-  function exportarExcel() {
-    var datos = objetivosFiltrados.map(function(obj, i) { return { 'N': i+1, 'Colaborador': obj.colaborador?.full_name || '', 'Email': obj.colaborador?.email || '', 'Area': obj.colaborador?.area || '', 'Seniority': obj.colaborador?.seniority || '', 'Objetivo': obj.objetivo, 'Corporativo': obj.corporativo || '', 'Ponderacion': obj.ponderacion + '%', 'Status': obj.status, 'Alcance Colaborador': obj.alcance_completado || '', 'Justificacion Colaborador': obj.justificacion_completado || '', 'Alcance Validado': obj.alcance_validado || '', 'Comentario Lider': obj.comentario_lider || '', 'Historico': obj.es_historico ? 'Si' : 'No', 'Fecha': obj.fecha_historica || '' }; });
-    if (datos.length === 0) return alert('No hay datos para exportar');
-    var csv = Object.keys(datos[0]).join(',') + '\n' + datos.map(function(d) { return Object.values(d).map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
-    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'Objetivos_' + new Date().toISOString().slice(0,10) + '.csv'; link.click();
+  async function exportarExcel(tipo) {
+    var XLSX = await import('xlsx');
+    var wb = XLSX.utils.book_new();
+
+    if (tipo === 'objetivos' || tipo === 'ambos') {
+      // Agrupar objetivos por colaborador
+      var colabsMap = {};
+      objetivosFiltrados.forEach(function(obj) {
+        var nombre = obj.colaborador?.full_name || obj.colaborador?.email || 'Sin nombre';
+        if (!colabsMap[nombre]) colabsMap[nombre] = [];
+        colabsMap[nombre].push(obj);
+      });
+      Object.entries(colabsMap).forEach(function(entry) {
+        var nombre = entry[0]; var objs = entry[1];
+        var filas = objs.map(function(obj) { return {
+          'Objetivo': obj.objetivo || '',
+          'Corporativo': obj.corporativo || '',
+          'Ponderacion': (obj.ponderacion || 0) + '%',
+          'Estado': obj.status || '',
+          'Tipo Alcance': obj.alcance_tipo || '',
+          'Alcance 80 - Descripcion': obj.alcance_80_descripcion || '',
+          'Alcance 80 - Meta/Fecha': obj.alcance_80_fecha || obj.alcance_80_meta || '',
+          'Alcance 100 - Descripcion': obj.alcance_100_descripcion || '',
+          'Alcance 100 - Meta/Fecha': obj.alcance_100_fecha || obj.alcance_100_meta || '',
+          'Alcance 120 - Descripcion': obj.alcance_120_descripcion || '',
+          'Alcance 120 - Meta/Fecha': obj.alcance_120_fecha || obj.alcance_120_meta || '',
+          'Alcance Reportado': obj.alcance_completado ? obj.alcance_completado + '%' : '',
+          'Justificacion Colaborador': obj.justificacion_completado || '',
+          'Alcance Validado': obj.alcance_validado ? obj.alcance_validado + '%' : '',
+          'Comentario Lider': obj.comentario_lider || '',
+          'Comentario Validacion': obj.comentario_validacion_lider || '',
+        }; });
+        var ws = XLSX.utils.json_to_sheet(filas);
+        // Ancho de columnas
+        ws['!cols'] = [40,20,12,12,12,30,20,30,20,30,20,16,30,16,20,30].map(function(w) { return { wch: w }; });
+        var hojaNombre = nombre.substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, '');
+        XLSX.utils.book_append_sheet(wb, ws, hojaNombre);
+      });
+    }
+
+    if (tipo === 'evaluaciones' || tipo === 'ambos') {
+      // Traer evaluaciones frescas con puntuaciones
+      var { data: evs } = await supabase.from('evaluaciones')
+        .select('*, colaborador:colaborador_id(full_name, email, area, seniority), puntuaciones(rating, comentario, competencias(nombre))')
+        .in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+
+      var colabsEvMap = {};
+      (evs || []).forEach(function(ev) {
+        var nombre = ev.colaborador?.full_name || ev.colaborador?.email || 'Sin nombre';
+        if (!colabsEvMap[nombre]) colabsEvMap[nombre] = [];
+        colabsEvMap[nombre].push(ev);
+      });
+
+      Object.entries(colabsEvMap).forEach(function(entry) {
+        var nombre = entry[0]; var evList = entry[1];
+        var filas = [];
+        evList.forEach(function(ev) {
+          (ev.puntuaciones || []).forEach(function(p) {
+            filas.push({
+              'Tipo': ev.tipo_evaluacion === 'autoevaluacion' ? 'Autoevaluacion' : 'Evaluacion Lider',
+              'Estado': ev.estado || '',
+              'Competencia': p.competencias?.nombre || '',
+              'Rating': p.rating || '',
+              'Comentario': p.comentario || '',
+              'Rating Promedio': ev.rating_promedio || '',
+              'Rating Calibrado': ev.rating_calibrado || '',
+              'Comentarios Finales': ev.comentarios_finales || '',
+            });
+          });
+        });
+        if (filas.length === 0) filas.push({ 'Tipo': 'Sin evaluaciones', 'Estado': '', 'Competencia': '', 'Rating': '', 'Comentario': '', 'Rating Promedio': '', 'Rating Calibrado': '', 'Comentarios Finales': '' });
+        var ws = XLSX.utils.json_to_sheet(filas);
+        ws['!cols'] = [18,12,25,8,35,14,14,35].map(function(w) { return { wch: w }; });
+        var hojaNombre = ('EV_' + nombre).substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, '');
+        XLSX.utils.book_append_sheet(wb, ws, hojaNombre);
+      });
+    }
+
+    if (wb.SheetNames.length === 0) return alert('No hay datos para exportar');
+    var fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, 'Fabric_' + tipo + '_' + fecha + '.xlsx');
   }
+
 
   var areas = ['Todas'].concat([...new Set(colaboradores.map(function(c) { return c.area; }).filter(Boolean))]);
   var seniorities = ['Todos'].concat([...new Set(colaboradores.map(function(c) { return c.seniority; }).filter(Boolean))]);
@@ -2126,7 +2202,7 @@ function PanelAdminObjetivos({ profile }) {
         <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}</select>
         <button onClick={function() { abrirNuevoAdmin(); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>+ Nuevo Objetivo</button>
         <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); setNuevoObjetivo(null); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>Subir Historico</button>
-        <button onClick={exportarExcel} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>Exportar CSV</button>
+        <div style={{ position: 'relative', display: 'inline-block' }}><button onClick={function() { var m = document.getElementById('export-menu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>⬇️ Exportar Excel</button><div id="export-menu" style={{ display: 'none', position: 'absolute', top: '100%', left: 0, background: 'white', border: '1px solid #D4D2C6', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 200 }}><button onClick={function() { exportarExcel('objetivos'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>📋 Objetivos (por colaborador)</button><button onClick={function() { exportarExcel('evaluaciones'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>📊 Evaluaciones (por colaborador)</button><button onClick={function() { exportarExcel('ambos'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>📦 Todo junto</button></div></div>
       </div>
 
       {/* Formulario nuevo objetivo con FormObjetivo */}
