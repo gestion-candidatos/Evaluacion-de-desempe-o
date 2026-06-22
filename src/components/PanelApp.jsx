@@ -200,7 +200,13 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
 
   useEffect(function() { cargarCiclos(); if (esAdmin) cargarColabs(); }, []);
   async function cargarCiclos() { var { data } = await supabase.from('ciclos').select('*').order('fecha_inicio', { ascending: false }); setCiclos(data || []); setCarg(false); }
-  async function cargarColabs() { var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true); setTodos(data || []); }
+  async function cargarColabs() {
+    var { data } = await supabase.from('profiles')
+      .select('id, email, full_name, area, seniority, role')
+      .eq('activo', true)
+      .or("role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com");
+    setTodos(data || []);
+  }
   async function crearCiclo() { if (!nom || !fIni) return alert('Nombre y fecha obligatorios'); await supabase.from('ciclos').insert({ nombre: nom, fecha_inicio: fIni, fecha_fin: fFin || null, estado: 'activo' }); setNom(''); setFIni(''); setFFin(''); setShowC(false); cargarCiclos(); }
   async function toggleCiclo(ciclo) { var nuevo = ciclo.estado === 'activo' ? 'cerrado' : 'activo'; await supabase.from('ciclos').update({ estado: nuevo }).eq('id', ciclo.id); cargarCiclos(); }
   async function abrirGestion(ciclo) { setCGestion(ciclo.id); var { data } = await supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', ciclo.id); setParts((data || []).map(function(p) { return p.colaborador_id; })); }
@@ -245,7 +251,7 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
       supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId),
       supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('estado', 'enviado'),
       supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', cicloId),
-      supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo').neq('role', 'admin_rrhh'),
+      supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo').or('role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com').eq('activo', true),
       supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, rating_promedio, rating_calibrado, estado').eq('ciclo_id', cicloId),
       supabase.from('puntuaciones').select('evaluacion_id, competencia_id, rating, competencias(nombre)'),
     ]);
