@@ -54,7 +54,7 @@ export default function PanelApp() {
   async function cargarPerfil() {
     var { data: { session } } = await supabase.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
-    var { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').eq('id', session.user.id).single();
+    var { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role, activo, leader_id').eq('id', session.user.id).single();
     if (perfil && perfil.activo === false) { await supabase.auth.signOut(); alert('Cuenta desactivada.'); window.location.href = '/'; return; }
     // Admin ve todo siempre
     if (perfil.role === 'admin_rrhh') {
@@ -132,7 +132,7 @@ export default function PanelApp() {
                 🔧 Volver a Admin
               </button>
             )}
-            <span style={s.badge}>{emojiRol} {nombreRol}</span>
+            <span style={s.badge}>{emojiRol} {profile.puesto || nombreRol}</span>
           </div>
         </header>
 
@@ -202,7 +202,7 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
   async function cargarCiclos() { var { data } = await supabase.from('ciclos').select('*').order('fecha_inicio', { ascending: false }); setCiclos(data || []); setCarg(false); }
   async function cargarColabs() {
     var { data } = await supabase.from('profiles')
-      .select('id, email, full_name, area, seniority, role')
+      .select('id, email, full_name, area, seniority, puesto, role')
       .eq('activo', true)
       .or("role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com");
     setTodos(data || []);
@@ -217,7 +217,7 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}><h2 style={{ color: '#231F20', margin: 0 }}>📊 Ciclos de Evaluacion</h2>{esAdmin && <button onClick={function() { setShowC(!showC); }} style={s.btnPrimario}>+ Nuevo Ciclo</button>}</div>
       {showC && <div style={{ ...s.tarjetaStat, marginBottom: 20 }}><h4>Crear Nuevo Ciclo</h4><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}><div><label>Nombre</label><input value={nom} onChange={function(e) { setNom(e.target.value); }} placeholder="Ej: 1er Semestre 2025" style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6', width: 200 }} /></div><div><label>Fecha Inicio</label><input type="date" value={fIni} onChange={function(e) { setFIni(e.target.value); }} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div><div><label>Fecha Fin</label><input type="date" value={fFin} onChange={function(e) { setFFin(e.target.value); }} style={{ padding: 8, borderRadius: 6, border: '1px solid #D4D2C6' }} /></div><button onClick={crearCiclo} style={{ ...s.btnPrimario, background: '#22c55e', alignSelf: 'flex-end' }}>Crear</button></div></div>}
-      {cGestion && <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}><h4>👥 Seleccionar Participantes</h4><button onClick={function() { setCGestion(null); }} style={s.btnInfo}>✕</button></div><p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>{parts.length} colaboradores seleccionados</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto' }}>{todos.map(function(c) { return (<div key={c.id} onClick={function() { togglePart(c.id); }} style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: parts.includes(c.id) ? '#231F20' : 'white', color: parts.includes(c.id) ? '#D4D2C6' : '#231F20', border: '1px solid #D4D2C6' }}><div><strong style={{ fontSize: 13 }}>{c.full_name || c.email}</strong><p style={{ fontSize: 11, margin: 0, opacity: 0.7 }}>{c.area} · {c.seniority}</p></div><span>{parts.includes(c.id) ? '✅' : '○'}</span></div>); })}</div></div>}
+      {cGestion && <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}><h4>👥 Seleccionar Participantes</h4><button onClick={function() { setCGestion(null); }} style={s.btnInfo}>✕</button></div><p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>{parts.length} colaboradores seleccionados</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto' }}>{todos.map(function(c) { return (<div key={c.id} onClick={function() { togglePart(c.id); }} style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: parts.includes(c.id) ? '#231F20' : 'white', color: parts.includes(c.id) ? '#D4D2C6' : '#231F20', border: '1px solid #D4D2C6' }}><div><strong style={{ fontSize: 13 }}>{c.full_name || c.email}</strong><p style={{ fontSize: 11, margin: 0, opacity: 0.7 }}>{c.puesto || c.area} · {c.area}</p></div><span>{parts.includes(c.id) ? '✅' : '○'}</span></div>); })}</div></div>}
       {ciclos.length === 0 ? <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>No hay ciclos creados.</p></div> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
           {ciclos.map(function(ciclo) { return (
@@ -251,7 +251,7 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
       supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId),
       supabase.from('evaluaciones').select('*', { count: 'exact', head: true }).eq('ciclo_id', cicloId).eq('estado', 'enviado'),
       supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', cicloId),
-      supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo').or('role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com').eq('activo', true),
+      supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role, activo').or('role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com').eq('activo', true),
       supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, rating_promedio, rating_calibrado, estado').eq('ciclo_id', cicloId),
       supabase.from('puntuaciones').select('evaluacion_id, competencia_id, rating, competencias(nombre)'),
     ]);
@@ -640,7 +640,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     pdf.text('EVALUACION DE DESEMPENO', MX, y); y += 7;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
     pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
-    pdf.text(t('Area: ' + (d.colaborador.area || '-') + '   |   Seniority: ' + (d.colaborador.seniority || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
+    pdf.text(t('Puesto: ' + (d.colaborador.puesto || d.colaborador.area || '-') + '   |   Area: ' + (d.colaborador.area || '-') + '   |   Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
 
     // ---- CABECERA DE COLUMNAS ----
     chk(12);
@@ -938,10 +938,10 @@ function HistorialAdmin({ colaborador, onVolver }) { var [hist, setHist] = useSt
 function EquipoLider({ cicloId, profile, soloLectura }) {
   var [equipo, setEquipo] = useState([]); var [colSel, setColSel] = useState(null); var [fbVis, setFbVis] = useState(null);
   useEffect(function() { cargar(); }, [cicloId]);
-  async function cargar() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data: d } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id).eq('activo', true); if (!d) return; setEquipo(d); }
+  async function cargar() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data: d } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto').eq('leader_id', session.user.id).eq('activo', true); if (!d) return; setEquipo(d); }
   if (colSel) return <EvaluacionLider colaborador={colSel} cicloId={cicloId} onVolver={function() { setColSel(null); cargar(); }} soloLectura={soloLectura} />;
   if (fbVis) return <FeedbackForm feedback={fbVis} cicloId={cicloId} onVolver={function() { setFbVis(null); cargar(); }} />;
-  return <div><h3>👥 Mi Equipo ({equipo.length})</h3>{equipo.length === 0 ? <p>No tienes colaboradores.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{equipo.map(function(c) { return (<div key={c.id} style={{ ...s.tarjetaStat }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}><div style={{ flex: 1 }}><h4>{c.full_name || c.email}</h4><p style={{ color: '#64748b', fontSize: 13 }}>{c.area} · {c.seniority}</p></div><div style={{ display: 'flex', gap: 8 }}><button onClick={function() { setFbVis(c); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e' }}>💬 FB</button><button onClick={function() { setColSel(c); }} style={s.btnPrimario}>{soloLectura ? '👁️ Ver' : '📝 Evaluar'}</button></div></div></div>); })}</div>}</div>;
+  return <div><h3>👥 Mi Equipo ({equipo.length})</h3>{equipo.length === 0 ? <p>No tienes colaboradores.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{equipo.map(function(c) { return (<div key={c.id} style={{ ...s.tarjetaStat }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}><div style={{ flex: 1 }}><h4>{c.full_name || c.email}</h4><p style={{ color: '#64748b', fontSize: 13 }}>{c.puesto || c.area} · {c.area}</p></div><div style={{ display: 'flex', gap: 8 }}><button onClick={function() { setFbVis(c); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e' }}>💬 FB</button><button onClick={function() { setColSel(c); }} style={s.btnPrimario}>{soloLectura ? '👁️ Ver' : '📝 Evaluar'}</button></div></div></div>); })}</div>}</div>;
 }
 
 function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert('✅ Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button><h3>💬 Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>✅ Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>💾 Guardar</button></div>; }
@@ -1110,7 +1110,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     <div style={{ maxWidth: 960, width: "100%", overflow: "hidden" }}>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
       <h3 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.area} - {colaborador.seniority}</p>
+      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.puesto || colaborador.area} — {colaborador.seniority}</p>
 
       <div style={{ padding: 10, background: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: 8, marginBottom: 16, fontSize: 12, color: "#0369a1" }}>🔍 Debug: soloLectura={String(soloLectura)} | yaEnviada={String(yaEnviada)} | bloqueado={String(bloqueado)} | evalId={evalData?.id || "null"} | estado={evalData?.estado || "null"} | comps={competencias.length}</div>
       {yaEnviada && (
@@ -1441,7 +1441,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
 function ObjetivosGerente({ profile }) {
   var [equipo, setEquipo] = useState([]); var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null); var [cargando, setCargando] = useState(true);
   useEffect(function() { cargarEquipo(); }, []);
-  async function cargarEquipo() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority').eq('leader_id', session.user.id).eq('activo', true); setEquipo(data || []); setCargando(false); }
+  async function cargarEquipo() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto').eq('leader_id', session.user.id).eq('activo', true); setEquipo(data || []); setCargando(false); }
   if (cargando) return <p>Cargando equipo...</p>;
   if (colaboradorSeleccionado) return <GestionObjetivosLider colaborador={colaboradorSeleccionado} profile={profile} onVolver={function() { setColaboradorSeleccionado(null); }} />;
   return (
@@ -2537,7 +2537,7 @@ function GestionUsuarios() {
   useEffect(function() { cargar(); }, []);
 
   async function cargar() {
-    var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, role, activo, leader_id').order('full_name');
+    var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role, activo, leader_id').order('full_name');
     setUsuarios(data || []); setCarg(false);
   }
 
@@ -2734,7 +2734,7 @@ function GestionModulos() {
 
   async function cargar() {
     var [{ data: users }, { data: mods }] = await Promise.all([
-      supabase.from('profiles').select('id, email, full_name, area, seniority, role').neq('role', 'admin_rrhh').eq('activo', true).order('full_name'),
+      supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role').neq('role', 'admin_rrhh').eq('activo', true).order('full_name'),
       supabase.from('modulos_usuario').select('user_id, modulo, activo'),
     ]);
     // Armar mapa: { user_id: { modulo: true/false } }
