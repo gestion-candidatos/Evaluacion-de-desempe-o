@@ -472,7 +472,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   useEffect(function() { cargar(); }, [cicloId]);
   async function cargar() {
     setCarg(true);
-    var { data: evs } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+    var { data: evs } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
     var mapa = {};
     (evs || []).forEach(function(ev) {
       if (!ev.colaborador) return;
@@ -971,7 +971,6 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         .select('id, nombre, descripcion')
         .eq('aplica_a', colaborador.seniority)
         .order('nombre', { ascending: true });
-      console.log('Competencias para seniority', colaborador.seniority, ':', comps?.length);
       if (!comps || comps.length === 0) {
         // Fallback: traer todas y deduplicar por nombre
         var { data: todasComps } = await supabase
@@ -997,19 +996,16 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         .eq('tipo_evaluacion', 'autoevaluacion')
         .eq('ciclo_id', cicloId)
         .maybeSingle();
-      console.log("Query autoevaluacion - ae:", ae, "error:", aeErr);
       if (ae) {
         // Query sin join para máxima compatibilidad
         var { data: ap, error: apErr } = await supabase.from('puntuaciones')
           .select('id, rating, comentario, competencia_id')
           .eq('evaluacion_id', ae.id);
-        console.log('Autoevaluacion ID:', ae.id, 'Puntuaciones:', ap, 'Error:', apErr);
         setAutoEval({ ...ae, puntuaciones: ap || [] });
         var mapa = {};
         (ap || []).forEach(function(p) {
           mapa[p.competencia_id] = { rating: p.rating, comentario: p.comentario || '' };
         });
-        console.log('autoPuntsMap:', mapa);
         setAutoPuntsMap(mapa);
       }
 
@@ -1028,13 +1024,11 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
         var rm = {}; var cm = {};
         (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
         setRatings(rm); setComent(cm);
-        console.log('Eval lider existente ID:', liderEval.id, 'estado:', liderEval.estado, 'punts:', punts?.length);
       } else if (!soloLectura) {
         console.log('Creando evaluacion_lider — colaborador:', colaborador.id, 'evaluador:', session.user.id);
         var { data: nuevo, error: insertErr } = await supabase.from('evaluaciones')
           .insert({ colaborador_id: colaborador.id, evaluador_id: session.user.id, tipo_evaluacion: 'evaluacion_lider', estado: 'borrador', ciclo_id: cicloId })
           .select('id').single();
-        console.log('Insert result:', nuevo, 'error:', insertErr);
         if (nuevo) {
           setEvalData(nuevo);
         } else {
@@ -1110,9 +1104,8 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
     <div style={{ maxWidth: 960, width: "100%", overflow: "hidden" }}>
       <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver</button>
       <h3 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Evaluando a: {colaborador.full_name || colaborador.email}</h3>
-      <p style={{ color: '#64748b', marginBottom: 20 }}>{colaborador.puesto || colaborador.area} — {colaborador.seniority}</p>
+      <p style={{ color: "#64748b", marginBottom: 20 }}>{[colaborador.puesto, colaborador.area, colaborador.seniority].filter(Boolean).join(" · ")}</p>
 
-      <div style={{ padding: 10, background: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: 8, marginBottom: 16, fontSize: 12, color: "#0369a1" }}>🔍 Debug: soloLectura={String(soloLectura)} | yaEnviada={String(yaEnviada)} | bloqueado={String(bloqueado)} | evalId={evalData?.id || "null"} | estado={evalData?.estado || "null"} | comps={competencias.length}</div>
       {yaEnviada && (
         <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
           <strong style={{ color: '#166534', fontSize: 15 }}>Evaluacion enviada. No se puede modificar.</strong>
@@ -1370,7 +1363,7 @@ function PanelColaborador({ userId, seniority, cicloId, soloLectura }) {
   return (
     <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
       <h3>Mi Autoevaluacion</h3>
-      <p>Seniority: <strong>{seniority || 'No definido'}</strong></p>
+      <p style={{ color: "#64748b", fontSize: 13, marginBottom: 20 }}>{seniority || "No definido"}</p>
       {yaEnviada && (
         <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
           <strong style={{ color: '#166534', fontSize: 15 }}>Autoevaluacion enviada. No se puede modificar.</strong>
@@ -2086,7 +2079,6 @@ function PanelAdminObjetivos({ profile }) {
   }
 
   async function agregarObjetivoAdmin(datosForm) {
-    console.log("agregarObjetivoAdmin datosForm:", datosForm);
     if (!colaboradorSeleccionado) return alert('Selecciona un colaborador');
     if (!datosForm || !datosForm.objetivo) return alert('El objetivo es obligatorio');
     if (!datosForm.ponderacion || parseFloat(datosForm.ponderacion) <= 0) return alert('La ponderacion es obligatoria');
