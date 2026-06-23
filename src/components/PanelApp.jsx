@@ -1579,29 +1579,104 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
 // OBJETIVOS
 // =============================================
 function ObjetivosGerente({ profile }) {
-  var [equipo, setEquipo] = useState([]); var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null); var [cargando, setCargando] = useState(true);
+  var [equipo, setEquipo] = useState([]);
+  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
+  var [cargando, setCargando] = useState(true);
+  var [busqueda, setBusqueda] = useState('');
+  var [filtroArea, setFiltroArea] = useState('Todas');
+
   useEffect(function() { cargarEquipo(); }, []);
-  async function cargarEquipo() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto').eq('leader_id', session.user.id).eq('activo', true); setEquipo(data || []); setCargando(false); }
-  if (cargando) return <p>Cargando equipo...</p>;
+
+  async function cargarEquipo() {
+    var { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    var uid = session.user.id;
+
+    var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+    var todos = [];
+
+    if (visibilidad && visibilidad.length > 0) {
+      var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
+      if (esTodos) {
+        var { data: all } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
+        todos = all || [];
+      } else {
+        var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
+        var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+        if (areas.length > 0) { var { data: pa } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name'); todos = todos.concat(pa || []); }
+        if (usuarios.length > 0) { var { data: pu } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios); todos = todos.concat(pu || []); }
+        var vistos = {}; todos = todos.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
+      }
+    }
+
+    var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
+    (directos || []).forEach(function(c) { if (!todos.find(function(x) { return x.id === c.id; })) todos.push(c); });
+    todos.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+    setEquipo(todos);
+    setCargando(false);
+  }
+
+  if (cargando) return <p style={{ color: '#64748b', padding: 20 }}>Cargando equipo...</p>;
   if (colaboradorSeleccionado) return <GestionObjetivosLider colaborador={colaboradorSeleccionado} profile={profile} onVolver={function() { setColaboradorSeleccionado(null); }} />;
+
+  var areas = ['Todas'].concat([...new Set(equipo.map(function(c) { return c.area; }).filter(Boolean))].sort());
+  var equipoFiltrado = equipo.filter(function(c) {
+    if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
+    if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div>
-      <h2 style={{ color: '#231F20', marginBottom: 20 }}>🎯 Objetivos de Mi Equipo</h2>
-      <p style={{ color: '#64748b', marginBottom: 20 }}>Selecciona un colaborador para ver y validar sus objetivos.</p>
-      {equipo.length === 0 ? <p style={{ color: '#94a3b8' }}>No tienes colaboradores asignados.</p> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-          {equipo.map(function(col) { return (
-            <div key={col.id} onClick={function() { setColaboradorSeleccionado(col); }} style={{ ...s.tarjetaStat, cursor: 'pointer', border: '2px solid #D4D2C6' }}>
-              <h4 style={{ margin: 0, color: '#231F20' }}>{col.full_name || col.email}</h4>
-              <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0' }}>{col.area} · {col.seniority}</p>
-              <button style={{ ...s.btnPrimario, marginTop: 12, width: '100%' }}>Ver Objetivos</button>
-            </div>
-          ); })}
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ color: '#231F20', margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Objetivos de Mi Equipo</h2>
+        <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <input value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }} placeholder="Buscar por nombre o puesto..."
+          style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
+        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }}
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}>
+          {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+        </select>
+        {(busqueda || filtroArea !== 'Todas') && (
+          <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
+        )}
+      </div>
+
+      {equipoFiltrado.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
+          {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados.'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {equipoFiltrado.map(function(col) {
+            var iniciales = (col.full_name || col.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
+            var esDirecto = col.leader_id === profile.id;
+            return (
+              <div key={col.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px', cursor: 'pointer' }}
+                onClick={function() { setColaboradorSeleccionado(col); }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>{iniciales}</div>
+                  <div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 13, color: '#231F20' }}>{col.full_name || col.email}</strong>
+                      {!esDirecto && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>}
+                    </div>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>{col.puesto || col.area}</p>
+                  </div>
+                </div>
+                <button style={{ ...s.btnPrimario, width: '100%', fontSize: 12, padding: '8px', textAlign: 'center' }}>Ver Objetivos</button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
 
 function GestionObjetivosLider({ colaborador, profile, onVolver }) {
   var [objetivos, setObjetivos] = useState([]);
