@@ -347,25 +347,38 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 function DashboardView({ stats, colabs }) {
   var [filtroArea, setFiltroArea] = useState('Todas');
   var [filtroSeniority, setFiltroSeniority] = useState('Todos');
+  var [filtroColaborador, setFiltroColaborador] = useState('Todos');
+  var [filtroCiclo, setFiltroCiclo] = useState('Todos');
+  var [ciclos, setCiclos] = useState([]);
 
   var evaluaciones = stats.evaluaciones || [];
   var puntuaciones = stats.puntuaciones || [];
   var perfiles = stats.perfiles || colabs;
 
+  useEffect(function() {
+    supabase.from('ciclos').select('id, nombre').order('fecha_inicio', { ascending: false }).then(function(res) { setCiclos(res.data || []); });
+  }, []);
+
   // Opciones de filtro
   var areas = ['Todas'].concat([...new Set(perfiles.map(function(p) { return p.area; }).filter(Boolean))].sort());
   var seniorities = ['Todos'].concat([...new Set(perfiles.map(function(p) { return p.seniority; }).filter(Boolean))].sort());
+  var colaboradores = ['Todos'].concat(perfiles.map(function(p) { return { id: p.id, nombre: p.full_name || p.email }; }));
 
   // Perfiles filtrados
   var perfilesFiltrados = perfiles.filter(function(p) {
     if (filtroArea !== 'Todas' && p.area !== filtroArea) return false;
     if (filtroSeniority !== 'Todos' && p.seniority !== filtroSeniority) return false;
+    if (filtroColaborador !== 'Todos' && p.id !== filtroColaborador) return false;
     return true;
   });
   var idsFiltrados = perfilesFiltrados.map(function(p) { return p.id; });
 
-  // Evaluaciones filtradas
-  var evalFiltradas = evaluaciones.filter(function(e) { return idsFiltrados.includes(e.colaborador_id); });
+  // Evaluaciones filtradas por ciclo y perfil
+  var evalFiltradas = evaluaciones.filter(function(e) {
+    if (!idsFiltrados.includes(e.colaborador_id)) return false;
+    if (filtroCiclo !== 'Todos' && String(e.ciclo_id) !== String(filtroCiclo)) return false;
+    return true;
+  });
 
   // Gráfico 1: Distribución Bajo/Medio/Alto
   var evalLider = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
@@ -381,7 +394,7 @@ function DashboardView({ stats, colabs }) {
     { label: 'Bajo', valor: bajo, color: '#dc2626', rango: '1.0 – 2.9' },
   ];
 
-  // Gráfico 2: promedio por competencia (filtrado)
+  // Gráfico 2: Promedio por competencia (para araña)
   var evalIdsFiltrados = evalFiltradas.map(function(e) { return e.id; });
   var compMap = {};
   puntuaciones.forEach(function(p) {
@@ -396,46 +409,117 @@ function DashboardView({ stats, colabs }) {
     return { nombre: e[0], prom: e[1].sum / e[1].count };
   }).sort(function(a, b) { return b.prom - a.prom; });
 
-  var selectStyle = { padding: '8px 12px', borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, background: 'white', color: '#231F20', cursor: 'pointer', fontWeight: 500 };
+  // Colores filtro
+  var selectStyle = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', color: '#231F20', cursor: 'pointer', fontWeight: 500 };
+
+  // Gráfico de araña SVG
+  function SpiderChart({ datos }) {
+    if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>;
+
+    var N = datos.length;
+    var CX = 160; var CY = 160; var R = 120;
+    var niveles = [1, 2, 3, 4, 5];
+
+    function punto(idx, valor) {
+      var angulo = (Math.PI * 2 * idx / N) - Math.PI / 2;
+      var r = (valor / 5) * R;
+      return { x: CX + r * Math.cos(angulo), y: CY + r * Math.sin(angulo) };
+    }
+
+    function puntoEje(idx, r) {
+      var angulo = (Math.PI * 2 * idx / N) - Math.PI / 2;
+      return { x: CX + r * Math.cos(angulo), y: CY + r * Math.sin(angulo) };
+    }
+
+    var poligono = datos.map(function(d, i) { var p = punto(i, d.prom); return p.x + ',' + p.y; }).join(' ');
+
+    return (
+      <svg viewBox="0 0 320 320" style={{ width: '100%', maxWidth: 320 }}>
+        {/* Ejes de fondo por nivel */}
+        {niveles.map(function(niv) {
+          var puntos = datos.map(function(_, i) { var p = puntoEje(i, (niv / 5) * R); return p.x + ',' + p.y; }).join(' ');
+          return <polygon key={niv} points={puntos} fill="none" stroke={niv === 5 ? '#D4D2C6' : '#e8e6e0'} strokeWidth={niv === 5 ? 1.5 : 1} />;
+        })}
+        {/* Líneas desde el centro */}
+        {datos.map(function(_, i) {
+          var p = puntoEje(i, R);
+          return <line key={i} x1={CX} y1={CY} x2={p.x} y2={p.y} stroke="#e8e6e0" strokeWidth="1" />;
+        })}
+        {/* Polígono de datos */}
+        <polygon points={poligono} fill="rgba(35,31,32,0.12)" stroke="#231F20" strokeWidth="2" />
+        {/* Puntos */}
+        {datos.map(function(d, i) {
+          var p = punto(i, d.prom);
+          return (
+            <g key={i}>
+              <circle cx={p.x} cy={p.y} r="5" fill="#231F20" />
+              <title>{d.nombre}: {d.prom.toFixed(1)}</title>
+            </g>
+          );
+        })}
+        {/* Labels de competencias */}
+        {datos.map(function(d, i) {
+          var p = puntoEje(i, R + 22);
+          var anchor = p.x < CX - 5 ? 'end' : p.x > CX + 5 ? 'start' : 'middle';
+          var palabras = d.nombre.split(' ');
+          return (
+            <g key={i}>
+              {palabras.map(function(pal, pi) {
+                return <text key={pi} x={p.x} y={p.y + (pi * 13) - (palabras.length - 1) * 6} fontSize="10" fill="#231F20" fontWeight="600" textAnchor={anchor}>{pal}</text>;
+              })}
+              <text x={p.x} y={p.y + palabras.length * 13 - (palabras.length - 1) * 6} fontSize="11" fill="#64748b" textAnchor={anchor}>{d.prom.toFixed(1)}</text>
+            </g>
+          );
+        })}
+        {/* Valores centrales de escala */}
+        {niveles.map(function(niv) {
+          return <text key={niv} x={CX + 4} y={CY - (niv / 5) * R + 4} fontSize="8" fill="#94a3b8">{niv}</text>;
+        })}
+      </svg>
+    );
+  }
 
   return (
     <div>
       {/* KPI Cards */}
       <div style={s.grid}>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>Participantes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{perfilesFiltrados.length}</p></div>
-        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>Ver Evaluaciones</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.length}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>✅ Completadas</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.filter(function(e) { return e.estado === 'enviado'; }).length}</p></div>
-        <div style={{ ...s.tarjetaStat, borderTop: '4px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>⏳ Pendientes</p><p style={{ fontSize: 36, fontWeight: 700, color: '#231F20', margin: '8px 0' }}>{evalFiltradas.filter(function(e) { return e.estado !== 'enviado'; }).length}</p></div>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Participantes</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{perfilesFiltrados.length}</p></div>
+        <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.length}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '3px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Completadas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.estado === 'enviado'; }).length}</p></div>
+        <div style={{ ...s.tarjetaStat, borderTop: '3px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Pendientes</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.estado !== 'enviado'; }).length}</p></div>
       </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: 12, margin: '16px 0', flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>Filtrar por:</span>
-        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={selectStyle}>
+      <div style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap', alignItems: 'center', background: 'white', padding: '14px 16px', borderRadius: 10, border: '1px solid #e8e6e0' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filtrar:</span>
+        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); setFiltroColaborador('Todos'); }} style={selectStyle}>
           {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
         </select>
-        <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={selectStyle}>
+        <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); setFiltroColaborador('Todos'); }} style={selectStyle}>
           {seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los seniority' : s}</option>; })}
         </select>
-        {(filtroArea !== 'Todas' || filtroSeniority !== 'Todos') && (
-          <button onClick={function() { setFiltroArea('Todas'); setFiltroSeniority('Todos'); }}
-            style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>
-            ✕ Limpiar filtros
+        <select value={filtroColaborador} onChange={function(e) { setFiltroColaborador(e.target.value); setFiltroArea('Todas'); setFiltroSeniority('Todos'); }} style={{ ...selectStyle, minWidth: 180 }}>
+          <option value="Todos">Todos los colaboradores</option>
+          {perfiles.sort(function(a,b) { return (a.full_name||'').localeCompare(b.full_name||''); }).map(function(p) { return <option key={p.id} value={p.id}>{p.full_name || p.email}</option>; })}
+        </select>
+        <select value={filtroCiclo} onChange={function(e) { setFiltroCiclo(e.target.value); }} style={selectStyle}>
+          <option value="Todos">Todos los ciclos</option>
+          {ciclos.map(function(c) { return <option key={c.id} value={c.id}>{c.nombre}</option>; })}
+        </select>
+        {(filtroArea !== 'Todas' || filtroSeniority !== 'Todos' || filtroColaborador !== 'Todos' || filtroCiclo !== 'Todos') && (
+          <button onClick={function() { setFiltroArea('Todas'); setFiltroSeniority('Todos'); setFiltroColaborador('Todos'); setFiltroCiclo('Todos'); }}
+            style={{ fontSize: 12, padding: '7px 12px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>
+            Limpiar filtros
           </button>
-        )}
-        {(filtroArea !== 'Todas' || filtroSeniority !== 'Todos') && (
-          <span style={{ fontSize: 12, color: '#64748b' }}>
-            Mostrando {perfilesFiltrados.length} de {perfiles.length} colaboradores
-          </span>
         )}
       </div>
 
       {/* Gráficos */}
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 4 }}>
 
         {/* Gráfico 1 — Distribución */}
-        <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
-          <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14 }}>Distribución de Desempeño</h4>
+        <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 260 }}>
+          <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Distribución de Desempeño</h4>
           <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Bajo: 1–2.9 | Medio: 3–3.5 | Alto: 3.6–5</p>
           {totalG1 === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin evaluaciones calibradas aún</p>
@@ -447,7 +531,7 @@ function DashboardView({ stats, colabs }) {
                   <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>({g.rango})</span></span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#231F20' }}>{g.valor} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({pct}%)</span></span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: 6, height: 24, overflow: 'hidden' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}>
                   <div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6, display: 'flex', alignItems: 'center', paddingLeft: 8, boxSizing: 'border-box' }}>
                     {pct > 15 && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>{pct}%</span>}
                   </div>
@@ -458,31 +542,36 @@ function DashboardView({ stats, colabs }) {
           {totalG1 > 0 && <p style={{ margin: '12px 0 0 0', fontSize: 12, color: '#64748b', textAlign: 'center' }}>Total: {totalG1} colaboradores</p>}
         </div>
 
-        {/* Gráfico 2 — Promedio por competencia */}
-        <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 320 }}>
-          <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>Promedio por Competencia</h4>
-          {compData.length === 0 ? (
-            <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
-          ) : compData.map(function(c) {
-            var cls = clasificarRating(c.prom);
-            var pct = (c.prom / 5) * 100;
-            return (
-              <div key={c.nombre} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                  <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{c.nombre}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {cls && <span style={{ fontSize: 10, fontWeight: 600, color: cls.color }}>{cls.label}</span>}
-                    <span style={{ fontSize: 15, fontWeight: 800, color: '#231F20', minWidth: 28, textAlign: 'right' }}>{c.prom.toFixed(1)}</span>
+        {/* Gráfico 2 — Araña de competencias */}
+        <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h4 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 14, fontWeight: 700, alignSelf: 'flex-start' }}>
+            Promedio por Competencia
+            {filtroColaborador !== 'Todos' && (
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400, marginLeft: 8 }}>
+                — {(perfiles.find(function(p) { return p.id === filtroColaborador; }) || {}).full_name || ''}
+              </span>
+            )}
+          </h4>
+          <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8', alignSelf: 'flex-start' }}>
+            {filtroColaborador !== 'Todos' ? 'Vista individual del colaborador' : 'Promedio general del grupo seleccionado'}
+          </p>
+          <SpiderChart datos={compData} />
+          {compData.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', marginTop: 8 }}>
+              {compData.map(function(c) {
+                var cls = clasificarRating(c.prom);
+                return (
+                  <div key={c.nombre} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f0ec' }}>
+                    <span style={{ fontSize: 12, color: '#475569' }}>{c.nombre}</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {cls && <span style={{ fontSize: 10, color: cls.color, fontWeight: 600 }}>{cls.label}</span>}
+                      <span style={{ fontSize: 14, fontWeight: 800, color: '#231F20', minWidth: 28, textAlign: 'right' }}>{c.prom.toFixed(1)}</span>
+                    </div>
                   </div>
-                </div>
-                <div style={{ background: '#f1f5f9', borderRadius: 8, height: 28, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', borderRadius: 8, width: pct + '%', background: cls ? cls.color : '#231F20', display: 'flex', alignItems: 'center', paddingLeft: 10, boxSizing: 'border-box', transition: 'width 0.4s ease' }}>
-                    {pct > 20 && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{c.prom.toFixed(1)}</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
