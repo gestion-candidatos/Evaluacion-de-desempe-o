@@ -113,6 +113,7 @@ export default function PanelApp() {
             </div>
           )}
           {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_usuarios"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_usuarios" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_usuarios" ? "#231F20" : "#D4D2C6", borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>USUARIOS</button>}
+          {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_visibilidad"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_visibilidad" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_visibilidad" ? "#231F20" : "#D4D2C6", fontWeight: 600 }}>VISIBILIDAD</button>}
           {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_modulos"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_modulos" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_modulos" ? "#231F20" : "#D4D2C6", marginTop: 8, borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>MODULOS</button>}
         </nav>
         <div style={sidebarStyle.footer}><span style={{ fontSize: 12, color: '#D4D2C6' }}>{profile.email}</span><button onClick={cerrarSesion} style={{ ...s.btnSalir, marginTop: 8, width: '100%' }}>Cerrar Sesion</button></div>
@@ -150,6 +151,7 @@ export default function PanelApp() {
           {menuActivo === 'compania_obj' && verObjCompania && <ObjetivosCompania esAdmin={esAdmin && !vistaComoColaborador} />}
           {menuActivo === 'admin_obj' && !vistaComoColaborador && esSuperAdmin && <PanelAdminObjetivos profile={profile} />}
           {menuActivo === 'gestion_modulos' && !vistaComoColaborador && esSuperAdmin && <GestionModulos />}
+          {menuActivo === 'gestion_visibilidad' && !vistaComoColaborador && esSuperAdmin && <GestionVisibilidad />}
           {menuActivo === 'gestion_usuarios' && !vistaComoColaborador && esSuperAdmin && <GestionUsuarios />}
           {!verDesempeno && !verAlgunObj && (
             <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}>
@@ -950,13 +952,144 @@ function HistorialAdmin({ colaborador, onVolver }) { var [hist, setHist] = useSt
 // EQUIPO LIDER
 // =============================================
 function EquipoLider({ cicloId, profile, soloLectura }) {
-  var [equipo, setEquipo] = useState([]); var [colSel, setColSel] = useState(null); var [fbVis, setFbVis] = useState(null);
+  var [equipo, setEquipo] = useState([]);
+  var [colSel, setColSel] = useState(null);
+  var [fbVis, setFbVis] = useState(null);
+  var [busqueda, setBusqueda] = useState('');
+  var [filtroArea, setFiltroArea] = useState('Todas');
+  var [cargando, setCargando] = useState(true);
+
   useEffect(function() { cargar(); }, [cicloId]);
-  async function cargar() { var { data: { session } } = await supabase.auth.getSession(); if (!session) return; var { data: d } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto').eq('leader_id', session.user.id).eq('activo', true); if (!d) return; setEquipo(d); }
+
+  async function cargar() {
+    var { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    var uid = session.user.id;
+
+    // Ver configuración de visibilidad ampliada
+    var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+
+    var todosLosColabs = [];
+
+    if (visibilidad && visibilidad.length > 0) {
+      var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
+      if (esTodos) {
+        // Ve toda la compañía
+        var { data: todos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
+        todosLosColabs = todos || [];
+      } else {
+        // Ve áreas específicas
+        var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
+        var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+
+        var queries = [];
+        if (areas.length > 0) {
+          var { data: porArea } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
+          queries = queries.concat(porArea || []);
+        }
+        if (usuarios.length > 0) {
+          var { data: porUsuario } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
+          queries = queries.concat(porUsuario || []);
+        }
+        // Deduplicar
+        var vistos = {};
+        todosLosColabs = queries.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
+      }
+    }
+
+    // Siempre agregar reportes directos
+    var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
+    (directos || []).forEach(function(c) {
+      if (!todosLosColabs.find(function(x) { return x.id === c.id; })) todosLosColabs.push(c);
+    });
+
+    todosLosColabs.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+    setEquipo(todosLosColabs);
+    setCargando(false);
+  }
+
   if (colSel) return <EvaluacionLider colaborador={colSel} cicloId={cicloId} onVolver={function() { setColSel(null); cargar(); }} soloLectura={soloLectura} />;
   if (fbVis) return <FeedbackForm feedback={fbVis} cicloId={cicloId} onVolver={function() { setFbVis(null); cargar(); }} />;
-  return <div><h3>Mi Equipo ({equipo.length})</h3>{equipo.length === 0 ? <p>No tienes colaboradores.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{equipo.map(function(c) { return (<div key={c.id} style={{ ...s.tarjetaStat }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}><div style={{ flex: 1 }}><h4>{c.full_name || c.email}</h4><p style={{ color: '#64748b', fontSize: 13 }}>{c.puesto || c.area} · {c.area}</p></div><div style={{ display: 'flex', gap: 8 }}><button onClick={function() { setFbVis(c); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e' }}>💬 FB</button><button onClick={function() { setColSel(c); }} style={s.btnPrimario}>{soloLectura ? '👁️ Ver' : '📝 Evaluar'}</button></div></div></div>); })}</div>}</div>;
+
+  // Filtros
+  var areas = ['Todas'].concat([...new Set(equipo.map(function(c) { return c.area; }).filter(Boolean))].sort());
+  var equipoFiltrado = equipo.filter(function(c) {
+    if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
+    if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
+    return true;
+  });
+
+  if (cargando) return <p style={{ color: '#64748b', padding: 20 }}>Cargando equipo...</p>;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 20, fontWeight: 700 }}>Mi Equipo</h2>
+          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
+        </div>
+      </div>
+
+      {/* Buscador y filtros */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <input
+          value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
+          placeholder="Buscar por nombre o puesto..."
+          style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
+        <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }}
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}>
+          {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+        </select>
+        {(busqueda || filtroArea !== 'Todas') && (
+          <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
+        )}
+      </div>
+
+      {/* Lista */}
+      {equipoFiltrado.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
+          {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados para los filtros seleccionados.'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+          {equipoFiltrado.map(function(c) {
+            var iniciales = (c.full_name || c.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
+            var esDirecto = c.leader_id === profile.id;
+            return (
+              <div key={c.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px' }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+                    {iniciales}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 14, color: '#231F20' }}>{c.full_name || c.email}</strong>
+                      {!esDirecto && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>}
+                    </div>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.puesto || c.area}</p>
+                    <p style={{ margin: '1px 0 0 0', fontSize: 11, color: '#94a3b8' }}>{c.area}</p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={function() { setColSel(c); }} style={{ ...s.btnPrimario, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center' }}>
+                    {soloLectura ? 'Ver evaluación' : 'Evaluar'}
+                  </button>
+                  {esDirecto && (
+                    <button onClick={function() { setFbVis(c); }} style={{ ...s.btnSecundario, fontSize: 12, padding: '8px 12px' }}>
+                      Feedback
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
+
 
 function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert('✅ Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button><h3>💬 Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>✅ Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>Guardar</button></div>; }
 
@@ -2577,6 +2710,145 @@ function ObjetivosCompania({ esAdmin }) {
 // =============================================
 // GESTIÓN DE USUARIOS (superadmin)
 // =============================================
+function GestionVisibilidad() {
+  var [usuarios, setUsuarios] = useState([]);
+  var [visibilidades, setVisibilidades] = useState({});
+  var [carg, setCarg] = useState(true);
+  var [editando, setEditando] = useState(null);
+  var [form, setForm] = useState({ tipo: 'area', valor: '' });
+  var [msg, setMsg] = useState('');
+  var [busqueda, setBusqueda] = useState('');
+
+  var AREAS = ['RRHH','Operaciones','Marketing','Administración&Finanzas','Compras','Expansión','Comercial','Desarrollo Comercial','Gerencia General'];
+
+  useEffect(function() { cargar(); }, []);
+
+  async function cargar() {
+    var [{ data: users }, { data: vis }] = await Promise.all([
+      supabase.from('profiles').select('id, email, full_name, area, puesto, role').eq('activo', true).order('full_name'),
+      supabase.from('equipo_visibilidad').select('*'),
+    ]);
+    var mapa = {};
+    (users || []).forEach(function(u) { mapa[u.id] = []; });
+    (vis || []).forEach(function(v) { if (mapa[v.lider_id]) mapa[v.lider_id].push(v); });
+    setUsuarios(users || []);
+    setVisibilidades(mapa);
+    setCarg(false);
+  }
+
+  async function agregarVisibilidad(liderId) {
+    if (!form.tipo) return;
+    var valor = form.tipo === 'todos' ? null : form.valor;
+    if (form.tipo !== 'todos' && !valor) return alert('Ingresá un valor');
+    var { error } = await supabase.from('equipo_visibilidad').insert({ lider_id: liderId, tipo: form.tipo, valor: valor });
+    if (error) { setMsg('Error: ' + error.message); return; }
+    setMsg('Guardado');
+    setTimeout(function() { setMsg(''); }, 2000);
+    cargar();
+  }
+
+  async function eliminarVisibilidad(id) {
+    await supabase.from('equipo_visibilidad').delete().eq('id', id);
+    cargar();
+  }
+
+  var TAG_COLORS = { todos: { bg: '#231F20', color: '#D4D2C6' }, area: { bg: '#dbeafe', color: '#1e40af' }, usuario: { bg: '#dcfce7', color: '#166534' } };
+
+  var usuariosFiltrados = busqueda
+    ? usuarios.filter(function(u) { return (u.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) || (u.area || '').toLowerCase().includes(busqueda.toLowerCase()); })
+    : usuarios;
+
+  if (carg) return <p>Cargando...</p>;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: '#231F20', margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Visibilidad de Equipo</h2>
+        <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>Configurá qué usuarios o áreas puede ver cada líder en Evaluaciones y Objetivos.</p>
+      </div>
+
+      {msg && <div style={{ padding: 12, background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, marginBottom: 16, color: '#166534', fontWeight: 600 }}>{msg}</div>}
+
+      <input value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
+        placeholder="Buscar colaborador o área..."
+        style={{ width: '100%', maxWidth: 360, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, marginBottom: 20, boxSizing: 'border-box' }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {usuariosFiltrados.map(function(u) {
+          var vis = visibilidades[u.id] || [];
+          var abierto = editando === u.id;
+          return (
+            <div key={u.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <strong style={{ color: '#231F20', fontSize: 14 }}>{u.full_name || u.email}</strong>
+                  <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{u.puesto || u.area} · {u.area}</p>
+                </div>
+                <button onClick={function() { setEditando(abierto ? null : u.id); setForm({ tipo: 'area', valor: '' }); }}
+                  style={{ ...s.btnInfo, fontSize: 12 }}>
+                  {abierto ? 'Cerrar' : '+ Agregar visibilidad'}
+                </button>
+              </div>
+
+              {/* Tags de visibilidad actual */}
+              {vis.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                  {vis.map(function(v) {
+                    var tc = TAG_COLORS[v.tipo] || TAG_COLORS.area;
+                    return (
+                      <span key={v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: tc.bg, color: tc.color }}>
+                        {v.tipo === 'todos' ? 'Toda la compañía' : v.tipo === 'area' ? 'Área: ' + v.valor : 'Usuario'}
+                        <button onClick={function() { eliminarVisibilidad(v.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7 }}>×</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {vis.length === 0 && <p style={{ margin: '8px 0 0 0', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Solo ve sus reportes directos</p>}
+
+              {/* Formulario agregar */}
+              {abierto && (
+                <div style={{ marginTop: 14, padding: 14, background: '#F0EDE8', borderRadius: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Tipo</label>
+                    <select value={form.tipo} onChange={function(e) { setForm({ tipo: e.target.value, valor: '' }); }}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white' }}>
+                      <option value="todos">Toda la compañía</option>
+                      <option value="area">Por área</option>
+                      <option value="usuario">Por usuario específico</option>
+                    </select>
+                  </div>
+                  {form.tipo === 'area' && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Área</label>
+                      <select value={form.valor} onChange={function(e) { setForm({ ...form, valor: e.target.value }); }}
+                        style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white' }}>
+                        <option value="">Seleccionar...</option>
+                        {AREAS.map(function(a) { return <option key={a} value={a}>{a}</option>; })}
+                      </select>
+                    </div>
+                  )}
+                  {form.tipo === 'usuario' && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Usuario</label>
+                      <select value={form.valor} onChange={function(e) { setForm({ ...form, valor: e.target.value }); }}
+                        style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 200 }}>
+                        <option value="">Seleccionar...</option>
+                        {usuarios.filter(function(x) { return x.id !== u.id; }).map(function(x) { return <option key={x.id} value={x.id}>{x.full_name || x.email}</option>; })}
+                      </select>
+                    </div>
+                  )}
+                  <button onClick={function() { agregarVisibilidad(u.id); }} style={{ ...s.btnPrimario, fontSize: 12, padding: '8px 16px' }}>Agregar</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GestionUsuarios() {
   var [usuarios, setUsuarios] = useState([]);
   var [carg, setCarg] = useState(true);
