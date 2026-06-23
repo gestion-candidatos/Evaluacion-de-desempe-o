@@ -386,7 +386,7 @@ function DashboardView({ stats, colabs }) {
 
         {/* Gráfico 1 — Distribución */}
         <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
-          <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14 }}>📊 Distribución de Desempeño</h4>
+          <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14 }}>Distribución de Desempeño</h4>
           <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Bajo: 1–2.9 | Medio: 3–3.5 | Alto: 3.6–5</p>
           {totalG1 === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin evaluaciones calibradas aún</p>
@@ -411,7 +411,7 @@ function DashboardView({ stats, colabs }) {
 
         {/* Gráfico 2 — Promedio por competencia */}
         <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 320 }}>
-          <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>📈 Promedio por Competencia</h4>
+          <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14 }}>Promedio por Competencia</h4>
           {compData.length === 0 ? (
             <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>
           ) : compData.map(function(c) {
@@ -1118,7 +1118,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
           <span style={{ fontWeight: 600, color: '#231F20', fontSize: 14 }}>Autoevaluacion del colaborador</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 12, color: autoEval.estado === 'enviado' ? '#166534' : '#92400e', fontWeight: 600 }}>
-              {autoEval.estado === 'enviado' ? '✅ Enviada' : '⏳ Borrador'}
+              {autoEval.estado === 'enviado' ? 'Enviada' : 'Borrador'}
             </span>
             {autoEval.rating_promedio && (
               <span style={{ background: '#231F20', color: '#D4D2C6', padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: 18 }}>
@@ -1586,8 +1586,8 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Accion *</label>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={function() { setAccion('aprobar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'aprobar' ? '#166534' : '#e2e8f0', background: accion === 'aprobar' ? '#dcfce7' : 'white', cursor: 'pointer', fontWeight: 600, color: '#166534' }}>✅ Aprobar</button>
-                <button onClick={function() { setAccion('rechazar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'rechazar' ? '#dc2626' : '#e2e8f0', background: accion === 'rechazar' ? '#fee2e2' : 'white', cursor: 'pointer', fontWeight: 600, color: '#dc2626' }}>❌ Rechazar</button>
+                <button onClick={function() { setAccion('aprobar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'aprobar' ? '#166534' : '#e2e8f0', background: accion === 'aprobar' ? '#dcfce7' : 'white', cursor: 'pointer', fontWeight: 600, color: '#166534' }}>Aprobar</button>
+                <button onClick={function() { setAccion('rechazar'); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid', borderColor: accion === 'rechazar' ? '#dc2626' : '#e2e8f0', background: accion === 'rechazar' ? '#fee2e2' : 'white', cursor: 'pointer', fontWeight: 600, color: '#dc2626' }}>Rechazar</button>
               </div>
             </div>
             <div style={{ marginBottom: 16 }}>
@@ -1716,7 +1716,7 @@ function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCan
 
   return (
     <div style={{ ...s.tarjetaStat, marginBottom: 20, background: '#f8fafc' }}>
-      <h4 style={{ marginTop: 0 }}>{titulo || 'Nuevo Objetivo'}</h4>
+      <h4 style={{ marginTop: 0 }}>{titulo || 'Agregar objetivo'}</h4>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
         <div style={{ gridColumn: '1 / -1' }}>
@@ -1821,10 +1821,17 @@ function ObjetivosColaborador({ profile }) {
   var [modalCompletar, setModalCompletar] = useState(null);
 
   var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
-    
     alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
     alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
     alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
+
+  // Colores por corporativo
+  var CORP_COLORES = ['#2d6a4f','#c2410c','#1d4ed8','#7c3aed','#0e7490','#92400e','#064e3b'];
+  function colorCorp(nombre) {
+    if (!nombre) return '#64748b';
+    var idx = Math.abs(nombre.split('').reduce(function(a,c) { return a + c.charCodeAt(0); }, 0)) % CORP_COLORES.length;
+    return CORP_COLORES[idx];
+  }
 
   useEffect(function() { cargarObjetivos(); }, []);
 
@@ -1834,40 +1841,29 @@ function ObjetivosColaborador({ profile }) {
   }
 
   function abrirNuevo() {
-    // Calcular ponderacion disponible
-    var usada = (objetivos || []).filter(function(o) { return o.status !== 'rechazado'; })
-      .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
-    var disponible = Math.max(0, 100 - usada);
-    setFormObj({ ...FORM_VACIO, ponderacion: Math.min(disponible, 25) });
+    var usada = (objetivos || []).filter(function(o) { return o.status !== 'rechazado'; }).reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
+    setFormObj({ ...FORM_VACIO, ponderacion: Math.min(100 - usada, 25) });
     setEditandoId(null); setMostrarForm(true);
   }
 
   function abrirEditar(obj) {
-    setFormObj({
-      objetivo: obj.objetivo || '', corporativo: obj.corporativo || '',
-      ponderacion: obj.ponderacion || 0, alcance_tipo: obj.alcance_tipo || 'fecha',
-      
+    setFormObj({ objetivo: obj.objetivo || '', corporativo: obj.corporativo || '', ponderacion: obj.ponderacion || 0, alcance_tipo: obj.alcance_tipo || 'fecha',
       alcance_80_descripcion: obj.alcance_80_descripcion || '', alcance_80_fecha: obj.alcance_80_fecha || '', alcance_80_meta: obj.alcance_80_meta || '',
       alcance_100_descripcion: obj.alcance_100_descripcion || '', alcance_100_fecha: obj.alcance_100_fecha || '', alcance_100_meta: obj.alcance_100_meta || '',
-      alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '', alcance_120_meta: obj.alcance_120_meta || '',
-    });
+      alcance_120_descripcion: obj.alcance_120_descripcion || '', alcance_120_fecha: obj.alcance_120_fecha || '', alcance_120_meta: obj.alcance_120_meta || '' });
     setEditandoId(obj.id); setMostrarForm(true);
   }
 
   async function guardarObjetivo(datosForm) {
-    var datos = {
-      objetivo: datosForm.objetivo, corporativo: datosForm.corporativo,
-      ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
-      
+    var datos = { objetivo: datosForm.objetivo, corporativo: datosForm.corporativo, ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
       alcance_80_descripcion: datosForm.alcance_80_descripcion, alcance_80_fecha: datosForm.alcance_80_fecha || null, alcance_80_meta: datosForm.alcance_80_meta,
       alcance_100_descripcion: datosForm.alcance_100_descripcion, alcance_100_fecha: datosForm.alcance_100_fecha || null, alcance_100_meta: datosForm.alcance_100_meta,
-      alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta,
-    };
+      alcance_120_descripcion: datosForm.alcance_120_descripcion, alcance_120_fecha: datosForm.alcance_120_fecha || null, alcance_120_meta: datosForm.alcance_120_meta };
     if (editandoId) {
       await supabase.from('objetivos').update({ ...datos, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
     } else {
-      var { error: insErr } = await supabase.from("objetivos").insert({ ...datos, colaborador_id: profile.id, status: "pendiente" });
-      if (insErr) { alert("Error al guardar: " + insErr.message); return; }
+      var { error: insErr } = await supabase.from('objetivos').insert({ ...datos, colaborador_id: profile.id, status: 'pendiente' });
+      if (insErr) { alert('Error al guardar: ' + insErr.message); return; }
     }
     setMostrarForm(false); setFormObj(null); setEditandoId(null); cargarObjetivos();
   }
@@ -1877,110 +1873,161 @@ function ObjetivosColaborador({ profile }) {
     cargarObjetivos();
   }
 
-  async function completarObjetivo(objId, alcance, justificacion) {
-    await supabase.from('objetivos').update({
-      status: 'completado', completado_por_colaborador: true,
-      fecha_completado: new Date(), alcance_completado: alcance, justificacion_completado: justificacion
-    }).eq('id', objId);
-    setModalCompletar(null); cargarObjetivos();
-  }
-
-  // Calcular ponderacion total actual
-  var totalPond = objetivos.filter(function(o) { return o.status !== 'rechazado'; })
-    .reduce(function(sum, o) { return sum + (parseFloat(o.ponderacion) || 0); }, 0);
-
-  // Calcular alcance total ponderado (solo objetivos validados)
+  // Stats
+  var objActivos = objetivos.filter(function(o) { return o.status !== 'rechazado'; });
+  var totalPond = objActivos.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
+  var proxVenc = objetivos.filter(function(o) { return o.alcance_100_fecha || o.alcance_80_fecha; }).map(function(o) { return o.alcance_100_fecha || o.alcance_80_fecha; }).sort()[0];
   var objValidados = objetivos.filter(function(o) { return o.status === 'validado' && o.alcance_validado; });
   var alcanceTotal = null;
   if (objValidados.length > 0) {
-    var sumaPond = objValidados.reduce(function(s, o) { return s + parseFloat(o.ponderacion); }, 0);
-    var sumaAlc = objValidados.reduce(function(s, o) {
-      var val = parseFloat(o.alcance_validado) || 0;
-      return s + val * parseFloat(o.ponderacion);
-    }, 0);
-    alcanceTotal = sumaPond > 0 ? (sumaAlc / sumaPond).toFixed(1) : null;
+    var sp = objValidados.reduce(function(s,o) { return s + parseFloat(o.ponderacion); }, 0);
+    var sa = objValidados.reduce(function(s,o) { return s + parseFloat(o.alcance_validado) * parseFloat(o.ponderacion); }, 0);
+    alcanceTotal = sp > 0 ? (sa / sp).toFixed(1) : null;
   }
 
-  if (cargando) return <p>Cargando objetivos...</p>;
+  // Barra de ponderación
+  var corpGroups = {};
+  objActivos.forEach(function(o) {
+    var k = o.corporativo || 'Sin categoría';
+    if (!corpGroups[k]) corpGroups[k] = 0;
+    corpGroups[k] += parseFloat(o.ponderacion) || 0;
+  });
+
+  // Iniciales del colaborador
+  var iniciales = (profile.full_name || profile.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
+
+  if (cargando) return <p>Cargando...</p>;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ color: '#231F20', margin: '0 0 4px 0' }}>Mis Objetivos</h2>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <span style={{ fontSize: 13, color: totalPond === 100 ? '#166534' : '#dc2626', fontWeight: 600 }}>
-              Ponderacion total: {totalPond.toFixed(0)}% {totalPond === 100 ? '✅' : totalPond > 100 ? '⚠️ Supera 100%' : '— Falta llegar a 100%'}
-            </span>
-            {alcanceTotal && (
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', background: '#dbeafe', padding: '3px 10px', borderRadius: 8 }}>
-                Alcance anual: {alcanceTotal}%
-              </span>
-            )}
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+
+      {/* Header oscuro */}
+      <div style={{ background: '#231F20', borderRadius: 14, padding: '24px 28px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 10, background: '#D4D2C6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+            {iniciales}
+          </div>
+          <div>
+            <h2 style={{ margin: 0, color: '#F0EDE8', fontSize: 22, fontWeight: 700 }}>Objetivos — {profile.full_name || profile.email}</h2>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>{profile.area || ''}{profile.area && ' · '}ciclo 2026</p>
           </div>
         </div>
-        <button onClick={abrirNuevo} style={s.btnPrimario} disabled={totalPond >= 100}>
-          {totalPond >= 100 ? '100% completo' : 'Nuevo Objetivo'}
+        <button onClick={abrirNuevo} disabled={totalPond >= 100}
+          style={{ padding: '10px 20px', borderRadius: 8, border: '2px solid #D4D2C6', background: 'transparent', color: '#D4D2C6', cursor: totalPond >= 100 ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: totalPond >= 100 ? 0.5 : 1 }}>
+          {totalPond >= 100 ? '100% completado' : '+ Agregar objetivo'}
         </button>
       </div>
 
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        <div style={{ background: '#F0EDE8', borderRadius: 12, padding: '16px 20px', border: '1px solid #e2e0db' }}>
+          <p style={{ margin: '0 0 6px 0', fontSize: 12, color: '#64748b', fontWeight: 500 }}>Ponderación total</p>
+          <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: totalPond === 100 ? '#231F20' : '#c2410c' }}>{totalPond.toFixed(0)}%</p>
+        </div>
+        <div style={{ background: '#F0EDE8', borderRadius: 12, padding: '16px 20px', border: '1px solid #e2e0db' }}>
+          <p style={{ margin: '0 0 6px 0', fontSize: 12, color: '#64748b', fontWeight: 500 }}>Objetivos activos</p>
+          <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#231F20' }}>{objActivos.length}</p>
+        </div>
+        <div style={{ background: '#F0EDE8', borderRadius: 12, padding: '16px 20px', border: '1px solid #e2e0db' }}>
+          <p style={{ margin: '0 0 6px 0', fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+            {alcanceTotal ? 'Alcance total' : 'Próximo vencimiento'}
+          </p>
+          <p style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#231F20' }}>
+            {alcanceTotal ? alcanceTotal + '%' : proxVenc ? new Date(proxVenc).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Barra de ponderación por categoría */}
+      {objActivos.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ height: 8, borderRadius: 6, overflow: 'hidden', display: 'flex', background: '#e2e8f0' }}>
+            {Object.entries(corpGroups).map(function(entry, i) {
+              return <div key={i} style={{ width: (entry[1] / 100 * 100) + '%', background: colorCorp(entry[0]), transition: 'width 0.4s' }} />;
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+            {Object.entries(corpGroups).map(function(entry, i) {
+              return <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569' }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: colorCorp(entry[0]) }} />
+                {entry[0]} · {entry[1]}%
+              </div>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Formulario */}
       {mostrarForm && formObj && (
-        <FormObjetivo
-          valor={formObj} onChange={setFormObj}
-          objetivos={objetivos} editandoId={editandoId}
-          titulo={editandoId ? 'Editar Objetivo' : 'Nuevo Objetivo'}
+        <FormObjetivo valor={formObj} onChange={setFormObj} objetivos={objetivos} editandoId={editandoId}
+          titulo={editandoId ? 'Editar objetivo' : 'Agregar objetivo'}
           onGuardar={guardarObjetivo}
-          onCancelar={function() { setMostrarForm(false); setFormObj(null); setEditandoId(null); }}
-        />
+          onCancelar={function() { setMostrarForm(false); setFormObj(null); setEditandoId(null); }} />
       )}
 
       {modalCompletar && (
-        <ModalCompletar
-          objetivo={objetivos.find(function(o) { return o.id === modalCompletar; })}
-          onConfirmar={completarObjetivo}
-          onCancelar={function() { setModalCompletar(null); }}
-        />
+        <ModalCompletar objetivo={objetivos.find(function(o) { return o.id === modalCompletar; })}
+          onConfirmar={completarObjetivo} onCancelar={function() { setModalCompletar(null); }} />
       )}
 
+      {/* Lista de objetivos */}
       {objetivos.length === 0 ? (
-        <div style={{ ...s.tarjetaStat, textAlign: 'center', padding: 60 }}>
-          <p style={{ color: '#94a3b8', fontSize: 16 }}>No tenés objetivos cargados aún.</p>
+        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: '#F0EDE8', borderRadius: 12 }}>
+          No tenés objetivos cargados aún.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {objetivos.map(function(obj) {
-            var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#92400e', rechazado: '#dc2626', pendiente: '#64748b' };
-            var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#fef3c7', rechazado: '#fee2e2', pendiente: '#f1f5f9' };
+            var color = colorCorp(obj.corporativo);
+            var fechaRef = obj.alcance_100_fecha || obj.alcance_80_fecha;
+            var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#f1f5f9', rechazado: '#fee2e2', pendiente: '#fef3c7' };
+            var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#475569', rechazado: '#dc2626', pendiente: '#92400e' };
             return (
-              <div key={obj.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
-                      <strong style={{ fontSize: 15, color: '#231F20' }}>{obj.objetivo}</strong>
-                      {obj.editado_por_colaborador && <span style={{ fontSize: 10, color: '#f59e0b', background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>editado</span>}
-                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#64748b' }}>{obj.status}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#231F20' }}>{obj.ponderacion}%</span>
-                    </div>
-                    {obj.corporativo && <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Corporativo: {obj.corporativo}</p>}
-                    {obj.comentario_lider && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>Lider: {obj.comentario_lider}</p>}
-                    {obj.alcance_completado && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#1e40af' }}>Mi alcance: {obj.alcance_completado} — {obj.justificacion_completado}</p>}
-                    {obj.alcance_validado && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#166534', fontWeight: 600 }}>Alcance validado: {obj.alcance_validado}%</p>}
+              <div key={obj.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid ' + color, padding: '16px 20px', position: 'relative' }}>
+                {/* Header tarjeta */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: color }}>{obj.corporativo || 'Sin categoría'}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {(obj.status === 'pendiente') && (
+                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#475569' }}>
+                    {obj.status ? obj.status.charAt(0).toUpperCase() + obj.status.slice(1) : '-'}
+                  </span>
+                </div>
+
+                {/* Texto objetivo */}
+                <p style={{ margin: '0 0 12px 0', fontSize: 14, color: '#231F20', lineHeight: 1.55, wordBreak: 'break-word' }}>{obj.objetivo}</p>
+
+                {/* Footer */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                    {fechaRef && <span style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(fechaRef).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
+                    {obj.alcance_validado && <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>Alcance validado: {obj.alcance_validado}%</span>}
+                    {obj.comentario_lider && <span style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{obj.comentario_lider}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: '#231F20' }}>{obj.ponderacion}%</span>
+                    {obj.status === 'pendiente' && (
                       <>
-                        <button onClick={function() { abrirEditar(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 12 }}>Editar</button>
-                        <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '8px 16px' }}>Aceptar</button>
+                        <button onClick={function() { abrirEditar(obj); }} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', color: '#231F20', cursor: 'pointer', fontSize: 12 }}>Editar</button>
+                        <button onClick={function() { aceptarObjetivo(obj.id); }} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: '#231F20', color: '#D4D2C6', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Aceptar</button>
                       </>
                     )}
                     {obj.status === 'aceptado' && (
                       <>
-                        <button onClick={function() { abrirEditar(obj); }} style={{ ...s.btnInfo, background: '#fef3c7', color: '#92400e', fontSize: 12 }}>Editar</button>
-                        <button onClick={function() { setModalCompletar(obj.id); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '8px 16px' }}>Registrar alcance</button>
+                        <button onClick={function() { abrirEditar(obj); }} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', color: '#231F20', cursor: 'pointer', fontSize: 12 }}>Editar</button>
+                        <button onClick={function() { setModalCompletar(obj.id); }} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: '#231F20', color: '#D4D2C6', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Registrar alcance</button>
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Alcance completado */}
+                {obj.alcance_completado && (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0f9ff', borderRadius: 8, fontSize: 12, color: '#0369a1' }}>
+                    Alcance reportado: {obj.alcance_completado}% — {obj.justificacion_completado}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1988,9 +2035,13 @@ function ObjetivosColaborador({ profile }) {
       )}
     </div>
   );
+
+  async function completarObjetivo(objId, alcance, justificacion) {
+    await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcance, justificacion_completado: justificacion }).eq('id', objId);
+    setModalCompletar(null); cargarObjetivos();
+  }
 }
 
-// Modal para completar objetivo con botones de alcance
 function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
   var [alcance, setAlcance] = useState('');
   var [justificacion, setJustificacion] = useState('');
@@ -2194,11 +2245,11 @@ function PanelAdminObjetivos({ profile }) {
 
   return (
     <div>
-      <h2 style={{ color: '#231F20', marginBottom: 20 }}>Panel Admin - Todos los Objetivos</h2>
+      <h2 style={{ color: '#231F20', marginBottom: 20 }}>Panel Admin - Objetivos</h2>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las Areas' : a}</option>; })}</select>
         <select value={filtroSeniority} onChange={function(e) { setFiltroSeniority(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6' }}>{seniorities.map(function(s) { return <option key={s} value={s}>{s === 'Todos' ? 'Todos los Seniority' : s}</option>; })}</select>
-        <button onClick={function() { abrirNuevoAdmin(); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>Nuevo Objetivo</button>
+        <button onClick={function() { abrirNuevoAdmin(); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>Agregar objetivo</button>
         <button onClick={function() { setMostrarHistorico(!mostrarHistorico); setMostrarForm(false); setNuevoObjetivo(null); }} style={{ ...s.btnPrimario, background: '#8b5cf6' }}>Subir Historico</button>
         <div style={{ position: 'relative', display: 'inline-block' }}><button onClick={function() { var m = document.getElementById('export-menu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }} style={{ ...s.btnSecundario, background: '#22c55e', color: 'white', fontWeight: 600 }}>Exportar Excel</button><div id="export-menu" style={{ display: 'none', position: 'absolute', top: '100%', left: 0, background: 'white', border: '1px solid #D4D2C6', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 200 }}><button onClick={function() { exportarExcel('objetivos'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>Ver Objetivos (por colaborador)</button><button onClick={function() { exportarExcel('evaluaciones'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>Evaluaciones por colaborador</button><button onClick={function() { exportarExcel('ambos'); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13 }}>Todo junto</button></div></div>
       </div>
@@ -2363,12 +2414,12 @@ function ObjetivosCompania({ esAdmin }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28 }}>
         <div>
-          <h2 style={{ color: '#231F20', margin: '0 0 6px 0', fontSize: 22, fontWeight: 700 }}>🏢 Objetivos de la Compañía 2026</h2>
+          <h2 style={{ color: '#231F20', margin: '0 0 6px 0', fontSize: 22, fontWeight: 700 }}>Objetivos de la Compañía 2026</h2>
           <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Objetivos estratégicos de Fabric Group. Hacé clic en una tarjeta para ver el detalle.</p>
         </div>
         {esAdmin && (
           <button onClick={function() { abrirForm(null); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 13, padding: '10px 20px' }}>
-            Nuevo Objetivo
+            Agregar objetivo
           </button>
         )}
       </div>
@@ -2377,7 +2428,7 @@ function ObjetivosCompania({ esAdmin }) {
       {editando && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setEditando(null); }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
-            <h3 style={{ margin: '0 0 20px 0', color: '#231F20' }}>{editando === 'nuevo' ? 'Nuevo Objetivo' : 'Editar Objetivo'}</h3>
+            <h3 style={{ margin: '0 0 20px 0', color: '#231F20' }}>{editando === 'nuevo' ? 'Agregar objetivo' : 'Editar Objetivo'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
                 <div>
@@ -2605,7 +2656,7 @@ function GestionUsuarios() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ margin: '0 0 4px 0', color: '#231F20' }}>👥 Gestión de Usuarios</h2>
+          <h2 style={{ margin: '0 0 4px 0', color: '#231F20' }}>Gestión de Usuarios</h2>
           <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{usuarios.length} usuarios — {usuarios.filter(function(u) { return u.activo; }).length} activos</p>
         </div>
         <button onClick={function() { setModalNuevo(true); }} style={{ ...s.btnPrimario, background: '#22c55e' }}>Nuevo Usuario</button>
@@ -2692,7 +2743,7 @@ function GestionUsuarios() {
                       padding: '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
                       background: u.activo ? '#dcfce7' : '#fee2e2',
                       color: u.activo ? '#166534' : '#dc2626'
-                    }}>{u.activo ? '✓ Activo' : '✗ Inactivo'}</button>
+                    }}>{u.activo ? 'Activo' : 'Inactivo'}</button>
                   </td>
                 </tr>
               );
@@ -2768,7 +2819,7 @@ function GestionModulos() {
 
   async function cargar() {
     var [{ data: users }, { data: mods }] = await Promise.all([
-      supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role').neq('role', 'admin_rrhh').eq('activo', true).order('full_name'),
+      supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role').or('role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com').eq('activo', true).order('full_name'),
       supabase.from('modulos_usuario').select('user_id, modulo, activo'),
     ]);
     // Armar mapa: { user_id: { modulo: true/false } }
@@ -2825,7 +2876,7 @@ function GestionModulos() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ color: '#231F20', margin: '0 0 6px 0' }}>🔧 Gestión de Módulos por Usuario</h2>
+        <h2 style={{ color: '#231F20', margin: '0 0 6px 0' }}>Gestión de Módulos por Usuario</h2>
         <p style={{ color: '#64748b', margin: 0, fontSize: 14 }}>Habilitá o deshabilitá qué módulos puede ver cada colaborador en el menú.</p>
       </div>
 
@@ -2902,8 +2953,8 @@ function GestionModulos() {
                   })}
                   <td style={{ ...td, padding: '12px 14px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                      <button onClick={function() { habilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>Todo ✓</button>
-                      <button onClick={function() { deshabilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Todo ✗</button>
+                      <button onClick={function() { habilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>Habilitar todo</button>
+                      <button onClick={function() { deshabilitarTodo(u.id); }} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: 'none', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Deshabilitar todo</button>
                     </div>
                   </td>
                 </tr>
