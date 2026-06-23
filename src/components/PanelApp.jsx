@@ -847,7 +847,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promLider || '-'}</div>
                     {clasifLider && <div style={{ fontSize: 9, color: clasifLider.color, fontWeight: 600 }}>{clasifLider.label}</div>}
                   </td>
-                  <td style={{ ...td, textAlign: 'center' }}>
                   <td style={{ ...td, textAlign: 'center', minWidth: 140 }}>
                     {d.evaluacionLider ? (
                       <div>
