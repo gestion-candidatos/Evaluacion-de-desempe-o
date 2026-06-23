@@ -890,9 +890,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                               </button>
                             )}
                           </div>
-                              </button>
-                            )}
-                          </div>
                         )}
                       </div>
                     ) : (
