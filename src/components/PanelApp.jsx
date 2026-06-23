@@ -2318,7 +2318,6 @@ function ObjetivosColaborador({ profile }) {
   );
 
   async function completarObjetivo(objId, alcance, justificacion) {
-  async function completarObjetivo(objId, alcance, justificacion) {
     await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcance, justificacion_completado: justificacion }).eq('id', objId);
     // Notificar al lider
     var { data: perfN } = await supabase.from('profiles').select('full_name, leader_id').eq('id', profile.id).single();
