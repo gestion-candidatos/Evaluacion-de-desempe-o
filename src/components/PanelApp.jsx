@@ -41,6 +41,10 @@ function RatingFinalBadge({ ratings }) {
 // =============================================
 // COMPONENTE PRINCIPAL
 // =============================================
+async function crearNotificacion(liderId, tipo, mensaje, origenId, origenNombre) {
+  if (!liderId) return;
+  await supabase.from("notificaciones").insert({ user_id: liderId, tipo: tipo, mensaje: mensaje, origen_id: origenId || null, origen_nombre: origenNombre || null });
+}
 export default function PanelApp() {
   var [profile, setProfile] = useState(null);
   var [loading, setLoading] = useState(true);
@@ -48,6 +52,8 @@ export default function PanelApp() {
   var [cicloActivo, setCicloActivo] = useState(null);
   var [vistaComoColaborador, setVistaComoColaborador] = useState(false);
   var [modulosActivos, setModulosActivos] = useState([]);
+  var [notifs, setNotifs] = useState([]);
+  var [showNotifs, setShowNotifs] = useState(false);
 
   useEffect(function() { cargarPerfil(); }, []);
 
@@ -64,9 +70,25 @@ export default function PanelApp() {
       setModulosActivos((mods || []).map(function(m) { return m.modulo; }));
     }
     setProfile(perfil); setLoading(false);
+    cargarNotifs(perfil.id);
   }
 
   async function cerrarSesion() { await supabase.auth.signOut(); window.location.href = '/'; }
+
+  async function cargarNotifs(userId) {
+    var { data } = await supabase.from("notificaciones").select("*").eq("user_id", userId).eq("leida", false).order("created_at", { ascending: false }).limit(20);
+    setNotifs(data || []);
+  }
+
+  async function marcarLeida(id) {
+    await supabase.from("notificaciones").update({ leida: true }).eq("id", id);
+    setNotifs(function(prev) { return prev.filter(function(n) { return n.id !== id; }); });
+  }
+
+  async function marcarTodasLeidas(userId) {
+    await supabase.from("notificaciones").update({ leida: true }).eq("user_id", userId).eq("leida", false);
+    setNotifs([]);
+  }
 
   if (loading) return <div style={s.centrado}><p>Cargando...</p></div>;
   if (!profile) return <div style={s.centrado}><h2>Error</h2><button onClick={cerrarSesion} style={s.btnSalir}>Volver</button></div>;
@@ -133,6 +155,38 @@ export default function PanelApp() {
                 🔧 Volver a Admin
               </button>
             )}
+            {/* Campanita de notificaciones */}
+            <div style={{ position: "relative" }}>
+              <button onClick={function() { setShowNotifs(!showNotifs); }} style={{ position: "relative", background: "transparent", border: "1px solid rgba(212,210,198,0.4)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", color: "#D4D2C6", fontSize: 18 }}>
+                🔔
+                {notifs.length > 0 && <span style={{ position: "absolute", top: -6, right: -6, background: "#dc2626", color: "white", borderRadius: "50%", width: 18, height: 18, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{notifs.length > 9 ? "9+" : notifs.length}</span>}
+              </button>
+              {showNotifs && (
+                <div style={{ position: "absolute", right: 0, top: "110%", width: 340, background: "white", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid #e8e6e0", zIndex: 1000, overflow: "hidden" }} onClick={function(e) { e.stopPropagation(); }}>
+                  <div style={{ padding: "14px 16px", borderBottom: "1px solid #e8e6e0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong style={{ color: "#231F20", fontSize: 14 }}>Notificaciones {notifs.length > 0 ? "(" + notifs.length + ")" : ""}</strong>
+                    {notifs.length > 0 && <button onClick={function() { marcarTodasLeidas(profile.id); }} style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Marcar todas como leídas</button>}
+                  </div>
+                  {notifs.length === 0 ? (
+                    <p style={{ textAlign: "center", padding: "24px 16px", color: "#94a3b8", fontSize: 13, margin: 0 }}>Sin notificaciones nuevas</p>
+                  ) : (
+                    <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                      {notifs.map(function(n) {
+                        return (
+                          <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid #f1f0ec", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: "0 0 4px 0", fontSize: 13, color: "#231F20", lineHeight: 1.4 }}>{n.mensaje}</p>
+                              <span style={{ fontSize: 11, color: "#94a3b8" }}>{new Date(n.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                            </div>
+                            <button onClick={function() { marcarLeida(n.id); }} style={{ background: "none", border: "1px solid #e8e6e0", borderRadius: 6, cursor: "pointer", padding: "4px 8px", fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>Leída</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <span style={s.badge}>{emojiRol} {profile.puesto || nombreRol}</span>
           </div>
         </header>
@@ -1499,6 +1553,11 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
     var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
     if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
     setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+    // Notificar al lider
+    var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id").eq("id", userId).single();
+    if (perfColabN && perfColabN.leader_id) {
+      await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
+    }
     setMsg('Autoevaluacion enviada correctamente');
   }
 
@@ -2259,7 +2318,13 @@ function ObjetivosColaborador({ profile }) {
   );
 
   async function completarObjetivo(objId, alcance, justificacion) {
+  async function completarObjetivo(objId, alcance, justificacion) {
     await supabase.from('objetivos').update({ status: 'completado', completado_por_colaborador: true, fecha_completado: new Date(), alcance_completado: alcance, justificacion_completado: justificacion }).eq('id', objId);
+    // Notificar al lider
+    var { data: perfN } = await supabase.from('profiles').select('full_name, leader_id').eq('id', profile.id).single();
+    if (perfN && perfN.leader_id) {
+      await crearNotificacion(perfN.leader_id, 'objetivo_completado', (perfN.full_name || 'Un colaborador') + ' registró el alcance de un objetivo (' + alcance + '%)', profile.id, perfN.full_name);
+    }
     setModalCompletar(null); cargarObjetivos();
   }
 }
