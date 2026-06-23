@@ -2531,7 +2531,7 @@ function GestionUsuarios() {
   useEffect(function() { cargar(); }, []);
 
   async function cargar() {
-    var { data } = await supabase.from('profiles').select("id, email, full_name, area, seniority, puesto, role, activo, leader_id, fecha_ingreso")').order('full_name');
+    var { data } = await supabase.from("profiles").select("id, email, full_name, area, seniority, puesto, role, activo, leader_id, fecha_ingreso").order("full_name");
     setUsuarios(data || []); setCarg(false);
   }
 
