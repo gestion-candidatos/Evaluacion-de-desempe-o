@@ -417,7 +417,7 @@ function DashboardView({ stats, colabs }) {
     if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>;
 
     var N = datos.length;
-    var CX = 260; var CY = 260; var R = 160;
+    var CX = 300; var CY = 280; var R = 150;
     var niveles = [1, 2, 3, 4, 5];
 
     function punto(idx, valor) {
@@ -434,7 +434,7 @@ function DashboardView({ stats, colabs }) {
     var poligono = datos.map(function(d, i) { var p = punto(i, d.prom); return p.x + ',' + p.y; }).join(' ');
 
     return (
-      <svg viewBox="0 0 520 520" style={{ width: "100%", maxWidth: 520 }}>
+      <svg viewBox="0 0 600 540" style={{ width: "100%", maxWidth: 600 }}>
         {/* Ejes de fondo por nivel */}
         {niveles.map(function(niv) {
           var puntos = datos.map(function(_, i) { var p = puntoEje(i, (niv / 5) * R); return p.x + ',' + p.y; }).join(' ');
@@ -459,7 +459,7 @@ function DashboardView({ stats, colabs }) {
         })}
         {/* Labels de competencias */}
         {datos.map(function(d, i) {
-          var p = puntoEje(i, R + 60);
+          var p = puntoEje(i, R + 70);
           var anchor = p.x < CX - 10 ? 'end' : p.x > CX + 10 ? 'start' : 'middle';
           // Dividir nombre en máx 2 palabras por línea
           var palabras = d.nombre.split(' ');
@@ -467,7 +467,7 @@ function DashboardView({ stats, colabs }) {
           for (var w = 0; w < palabras.length; w += 2) {
             lineas.push(palabras.slice(w, w + 2).join(' '));
           }
-          var lineH = 14;
+          var lineH = 16;
           var totalH = lineas.length * lineH;
           return (
             <g key={i}>
@@ -1982,7 +1982,7 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
       {/* Modal validar alcance reportado */}
       {modalValidarAlcance && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidarAlcance(null); }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 520, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
             <h3 style={{ marginTop: 0 }}>Validar alcance reportado</h3>
             <p style={{ fontSize: 14, color: '#231F20' }}><strong>{modalValidarAlcance.objetivo}</strong></p>
             <div style={{ background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 16 }}>
@@ -2440,7 +2440,7 @@ function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onCancelar}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 520, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
         <h3 style={{ marginTop: 0, color: '#231F20' }}>Registrar alcance</h3>
         <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}><strong>{objetivo.objetivo}</strong></p>
 
