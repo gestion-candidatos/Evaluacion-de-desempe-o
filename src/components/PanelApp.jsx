@@ -417,7 +417,7 @@ function DashboardView({ stats, colabs }) {
     if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin puntuaciones cargadas aún</p>;
 
     var N = datos.length;
-    var CX = 200; var CY = 200; var R = 130;
+    var CX = 260; var CY = 260; var R = 160;
     var niveles = [1, 2, 3, 4, 5];
 
     function punto(idx, valor) {
@@ -434,7 +434,7 @@ function DashboardView({ stats, colabs }) {
     var poligono = datos.map(function(d, i) { var p = punto(i, d.prom); return p.x + ',' + p.y; }).join(' ');
 
     return (
-      <svg viewBox="0 0 400 400" style={{ width: "100%", maxWidth: 400 }}>
+      <svg viewBox="0 0 520 520" style={{ width: "100%", maxWidth: 520 }}>
         {/* Ejes de fondo por nivel */}
         {niveles.map(function(niv) {
           var puntos = datos.map(function(_, i) { var p = puntoEje(i, (niv / 5) * R); return p.x + ',' + p.y; }).join(' ');
@@ -459,7 +459,7 @@ function DashboardView({ stats, colabs }) {
         })}
         {/* Labels de competencias */}
         {datos.map(function(d, i) {
-          var p = puntoEje(i, R + 44);
+          var p = puntoEje(i, R + 60);
           var anchor = p.x < CX - 10 ? 'end' : p.x > CX + 10 ? 'start' : 'middle';
           // Dividir nombre en máx 2 palabras por línea
           var palabras = d.nombre.split(' ');
@@ -472,15 +472,15 @@ function DashboardView({ stats, colabs }) {
           return (
             <g key={i}>
               {lineas.map(function(lin, li) {
-                return <text key={li} x={p.x} y={p.y - totalH / 2 + li * lineH + lineH / 2} fontSize="11" fill="#231F20" fontWeight="600" textAnchor={anchor}>{lin}</text>;
+                return <text key={li} x={p.x} y={p.y - totalH / 2 + li * lineH + lineH / 2} fontSize="13" fill="#231F20" fontWeight="700" textAnchor={anchor}>{lin}</text>;
               })}
-              <text x={p.x} y={p.y + totalH / 2 + 14} fontSize="12" fill="#64748b" fontWeight="700" textAnchor={anchor}>{d.prom.toFixed(1)}</text>
+              <text x={p.x} y={p.y + totalH / 2 + 14} fontSize="13" fill="#64748b" fontWeight="800" textAnchor={anchor}>{d.prom.toFixed(1)}</text>
             </g>
           );
         })}
         {/* Valores de escala */}
         {niveles.map(function(niv) {
-          return <text key={niv} x={CX + 5} y={CY - (niv / 5) * R + 4} fontSize="9" fill="#94a3b8">{niv}</text>;
+          return <text key={niv} x={CX + 5} y={CY - (niv / 5) * R + 4} fontSize="10" fill="#94a3b8">{niv}</text>;
         })}
       </svg>
     );
