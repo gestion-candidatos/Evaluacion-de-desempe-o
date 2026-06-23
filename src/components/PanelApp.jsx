@@ -862,22 +862,34 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                         {/* Botones acción — solo si no soloLectura */}
                         {!soloLectura && (
                           <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                            {/* Lápiz — abrir edición */}
+                            {/* Tilde verde — confirmar rating del lider como final */}
+                            {editandoCal !== d.colaborador.id && (
+                              <button
+                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = d.promLider; guardarCal(_evId, parseFloat(_pl), '', _pl); }}
+                                title="Confirmar rating del lider como evaluacion final"
+                                style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                ✓
+                              </button>
+                            )}
+                            {/* Lapiz — abrir edicion */}
                             {editandoCal !== d.colaborador.id && (
                               <button
                                 onClick={function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
-                                title="Editar evaluación final"
+                                title="Editar evaluacion final"
                                 style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: 'white', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 ✏
                               </button>
                             )}
-                            {/* Cancelar edición */}
+                            {/* Cancelar edicion */}
                             {editandoCal === d.colaborador.id && (
                               <button
                                 onClick={function() { setEditandoCal(null); }}
                                 title="Cancelar"
                                 style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 ✕
+                              </button>
+                            )}
+                          </div>
                               </button>
                             )}
                           </div>
