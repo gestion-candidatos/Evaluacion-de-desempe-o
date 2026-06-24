@@ -1044,7 +1044,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                         )}
                         {/* Botones acción — solo si no soloLectura */}
                         {!soloLectura && (
-                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                           <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
                             {editandoCal !== d.colaborador.id && (
                               <button
