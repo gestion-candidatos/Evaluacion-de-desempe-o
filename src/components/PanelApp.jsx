@@ -1074,7 +1074,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert('El lider aun no tiene rating promedio'); return; } guardarCal(_evId, _pl, 'Confirmado sin cambios', _pl); }}
  title="Confirmar como evaluacion final"
  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- 
+                ✓
  </button>
  )}
  {editandoCal !== d.colaborador.id && (
@@ -1082,7 +1082,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  onClick={function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
  title="Editar evaluacion final"
  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: 'white', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- 
+                ✏
  </button>
  )}
  {editandoCal === d.colaborador.id && (
@@ -1090,7 +1090,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  onClick={function() { setEditandoCal(null); }}
  title="Cancelar"
  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
- 
+                ✕
  </button>
  )}
  </div>
