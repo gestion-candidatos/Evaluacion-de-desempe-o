@@ -667,7 +667,11 @@ function EvaluacionesAdmin({ cicloId }) {
 }
 
 function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
- var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState('Todas'); var [editandoCal, setEditandoCal] = useState(null); var [calTemp, setCalTemp] = useState({ rating: '', comentario: '' });
+  var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState("Todas"); var [editandoCal, setEditandoCal] = useState(null); var [calTemp, setCalTemp] = useState({ rating: "", comentario: "" });
+  var [historial, setHistorial] = useState([]);
+  var [showHistorial, setShowHistorial] = useState(false);
+  var [nuevoComentario, setNuevoComentario] = useState("");
+  var [colaboradorHist, setColaboradorHist] = useState(null);
  useEffect(function() { cargar(); }, [cicloId]);
  async function cargar() {
  setCarg(true);
@@ -702,9 +706,44 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  }
 
  async function reabrirEvaluacion(evalId, tipo) {
+ async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
    if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
+   var motivo = window.prompt('Motivo de reapertura (opcional):') || '';
    await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
+   var { data: { session } } = await supabase.auth.getSession();
+   var tipoHist = tipo.includes('auto') ? 'reabrir_auto' : 'reabrir_lider';
+   await supabase.from('calibracion_historial').insert({
+     ciclo_id: cicloId, colaborador_id: colaboradorId, evaluacion_id: evalId,
+     tipo: tipoHist,
+     comentario: 'Reapertura de ' + tipo + (motivo ? ': ' + motivo : ''),
+     usuario_id: session.user.id,
+     usuario_nombre: session.user.email
+   });
    cargar();
+   if (showHistorial && colaboradorHist === colaboradorId) cargarHistorial(colaboradorId);
+ }
+
+ async function cargarHistorial(colaboradorId) {
+   var { data } = await supabase.from('calibracion_historial')
+     .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', colaboradorId)
+     .order('created_at', { ascending: false });
+   setHistorial(data || []);
+   setColaboradorHist(colaboradorId);
+   setShowHistorial(true);
+ }
+
+ async function agregarComentario(colaboradorId) {
+   if (!nuevoComentario.trim()) return;
+   var { data: { session } } = await supabase.auth.getSession();
+   await supabase.from('calibracion_historial').insert({
+     ciclo_id: cicloId, colaborador_id: colaboradorId,
+     tipo: 'comentario',
+     comentario: nuevoComentario,
+     usuario_id: session.user.id,
+     usuario_nombre: session.user.email
+   });
+   setNuevoComentario('');
+   cargarHistorial(colaboradorId);
  }
 
  async function generarPDFCompleto(d) {
@@ -1034,6 +1073,61 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <select value={filtro} onChange={function(e) { setFiltro(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>{areas.map(function(a) { return <option key={a} value={a}>{a}</option>; })}</select>
  </div>
  <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparacion de autoevaluacion y evaluacion del lider. Define el rating final calibrado.</p>
+      {/* Panel de historial de calibración */}
+      {showHistorial && (
+        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h4 style={{ margin: 0, color: '#231F20' }}>Historial de Calibración</h4>
+              <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                {datos.find(function(d) { return d.colaborador.id === colaboradorHist; })?.colaborador.full_name || ''}
+              </p>
+            </div>
+            <button onClick={function() { setShowHistorial(false); setHistorial([]); }} style={s.btnInfo}>Cerrar</button>
+          </div>
+
+          {/* Agregar comentario */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <input
+              value={nuevoComentario}
+              onChange={function(e) { setNuevoComentario(e.target.value); }}
+              placeholder="Agregar comentario o nota de calibración..."
+              style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13 }}
+              onKeyDown={function(e) { if (e.key === 'Enter') agregarComentario(colaboradorHist); }}
+            />
+            <button onClick={function() { agregarComentario(colaboradorHist); }} style={s.btnPrimario}>Agregar</button>
+          </div>
+
+          {/* Lista de eventos */}
+          {historial.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>Sin registros aún.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {historial.map(function(h) {
+                var colores = {
+                  reabrir_auto: { bg: '#fef3c7', border: '#fcd34d', color: '#92400e', label: 'Reapertura Auto' },
+                  reabrir_lider: { bg: '#dbeafe', border: '#93c5fd', color: '#1e40af', label: 'Reapertura Líder' },
+                  calibracion: { bg: '#dcfce7', border: '#86efac', color: '#166534', label: 'Calibración' },
+                  comentario: { bg: '#F0EDE8', border: '#D4D2C6', color: '#231F20', label: 'Comentario' },
+                };
+                var c = colores[h.tipo] || colores.comentario;
+                return (
+                  <div key={h.id} style={{ padding: '10px 14px', borderRadius: 8, background: c.bg, border: '1px solid ' + c.border, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: c.color, whiteSpace: 'nowrap', paddingTop: 2 }}>{c.label}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, color: '#231F20', lineHeight: 1.5 }}>{h.comentario}</p>
+                      <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#94a3b8' }}>
+                        {h.usuario_nombre} · {new Date(h.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
  {df.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
  <div style={{ overflowX: 'auto' }}>
  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
@@ -1140,13 +1234,13 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                   <td style={{ ...td, minWidth: 160 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {d.autoevaluacion && d.autoevaluacion.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación'); }}
+                        <button onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación', d.colaborador.id, d.colaborador.full_name); }}
                           style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fef3c7', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                           Reabrir Auto
                         </button>
                       )}
                       {d.evaluacionLider && d.evaluacionLider.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder'); }}
+                        <button onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder', d.colaborador.id, d.colaborador.full_name); }}
                           style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #93c5fd', background: '#dbeafe', color: '#1e40af', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                           Reabrir Líder
                         </button>
@@ -1154,6 +1248,11 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                       {(!d.autoevaluacion || d.autoevaluacion.estado !== 'enviado') && (!d.evaluacionLider || d.evaluacionLider.estado !== 'enviado') && (
                         <span style={{ fontSize: 11, color: '#94a3b8' }}>Sin envíos</span>
                       )}
+                      )}
+                      <button onClick={function() { cargarHistorial(d.colaborador.id); }}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #D4D2C6", background: "white", color: "#231F20", cursor: "pointer", fontSize: 11, fontWeight: 600, marginTop: 4 }}>
+                        Ver historial
+                      </button>
                     </div>
                   </td>
  </tr>
@@ -3630,6 +3729,7 @@ var sidebarStyle = {
  menuItem: { padding: '12px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 12, fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase', transition: 'all 0.15s', width: '100%' },
  subMenuItem: { padding: '9px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 400, transition: 'all 0.15s', width: '100%' },
  footer: { padding: '16px 20px', borderTop: '1px solid rgba(212,210,198,0.2)' }
+
 };
 var s = {
  centrado: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 20, background: '#F0EDE8' },
@@ -3651,4 +3751,5 @@ var s = {
  btnSecundario: { padding: '10px 22px', background: 'white', color: '#231F20', border: '1px solid #D4D2C6', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
  mensajeToast: { padding: '12px 20px', background: '#231F20', borderRadius: 8, marginBottom: 16, color: '#F0EDE8', fontWeight: 500, fontSize: 14, textAlign: 'center' },
  bannerEnviado: { padding: 16, background: '#dcfce7', borderRadius: 10, color: '#166534', fontWeight: 600, textAlign: 'center', marginTop: 16, border: '1px solid #86efac' }
+
 };
