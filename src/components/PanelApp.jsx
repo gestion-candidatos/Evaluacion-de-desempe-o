@@ -671,7 +671,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  useEffect(function() { cargar(); }, [cicloId]);
  async function cargar() {
  setCarg(true);
- var { data: evs } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+ var { data: evs } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
  var mapa = {};
  (evs || []).forEach(function(ev) {
  if (!ev.colaborador) return;
@@ -695,22 +695,17 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  }
 
  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
-
-  async function reabrirEvaluacion(evalId, tipo) {
-    if (!window.confirm("¿Reabrir esta " + tipo + " para que pueda editarse de nuevo?")) return;
-    await supabase.from("evaluaciones").update({ estado: "borrador" }).eq("id", evalId);
-    cargar();
-  }
- // Si el rating calibrado es igual al del lider, no requiere comentario
- var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
- if (rCal !== rLid && !comentario.trim()) {
- alert("Debes justificar por que el rating calibrado difiere del rating del lider.");
- return;
- }
- await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
- setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
+   var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
+   if (rCal !== rLid && !comentario.trim()) { alert('Debes justificar por que el rating calibrado difiere del rating del lider.'); return; }
+   await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
+   setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
  }
 
+ async function reabrirEvaluacion(evalId, tipo) {
+   if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
+   await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
+   cargar();
+ }
 
  async function generarPDFCompleto(d) {
  console.log('=== PDF DEBUG ===');
