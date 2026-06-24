@@ -2551,6 +2551,8 @@ function PanelAdminObjetivos({ profile }) {
   var [mostrarForm, setMostrarForm] = useState(false); var [mostrarHistorico, setMostrarHistorico] = useState(false);
   var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
   var [objetivoHistorico, setObjetivoHistorico] = useState({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' });
+  var [editandoObj, setEditandoObj] = useState(null);
+  var [formEditObj, setFormEditObj] = useState(null);
   useEffect(function() { cargarDatos(); }, []);
   async function cargarDatos() { var [{ data: objs }, { data: cols }] = await Promise.all([supabase.from('objetivos').select('*, colaborador:colaborador_id(email, full_name, area, seniority, leader_id, lider:leader_id(full_name, email)), gerente:gerente_id(email, full_name)').order('created_at', { ascending: false }), supabase.from('profiles').select('id, email, full_name, area, seniority').neq('role', 'admin_rrhh').eq('activo', true)]); setObjetivos(objs || []); setColaboradores(cols || []); setCargando(false); }
 
@@ -2588,6 +2590,17 @@ function PanelAdminObjetivos({ profile }) {
     if (!window.confirm("¿Eliminar este objetivo? Esta acción no se puede deshacer.")) return;
     await supabase.from("objetivos").delete().eq("id", objId);
     cargarDatos();
+  }
+
+  function abrirEdicionObj(obj) {
+    setEditandoObj(obj.id);
+    setFormEditObj({ objetivo: obj.objetivo || "", corporativo: obj.corporativo || "", ponderacion: obj.ponderacion || 0, status: obj.status || "pendiente", alcance_tipo: obj.alcance_tipo || "fecha", alcance_80_descripcion: obj.alcance_80_descripcion || "", alcance_80_fecha: obj.alcance_80_fecha || "", alcance_80_meta: obj.alcance_80_meta || "", alcance_100_descripcion: obj.alcance_100_descripcion || "", alcance_100_fecha: obj.alcance_100_fecha || "", alcance_100_meta: obj.alcance_100_meta || "", alcance_120_descripcion: obj.alcance_120_descripcion || "", alcance_120_fecha: obj.alcance_120_fecha || "", alcance_120_meta: obj.alcance_120_meta || "" });
+  }
+
+  async function guardarEdicionObj() {
+    if (!formEditObj.objetivo) return alert("El objetivo es obligatorio");
+    await supabase.from("objetivos").update({ objetivo: formEditObj.objetivo, corporativo: formEditObj.corporativo, ponderacion: parseFloat(formEditObj.ponderacion), status: formEditObj.status, alcance_tipo: formEditObj.alcance_tipo, alcance_80_descripcion: formEditObj.alcance_80_descripcion, alcance_80_fecha: formEditObj.alcance_80_fecha || null, alcance_80_meta: formEditObj.alcance_80_meta, alcance_100_descripcion: formEditObj.alcance_100_descripcion, alcance_100_fecha: formEditObj.alcance_100_fecha || null, alcance_100_meta: formEditObj.alcance_100_meta, alcance_120_descripcion: formEditObj.alcance_120_descripcion, alcance_120_fecha: formEditObj.alcance_120_fecha || null, alcance_120_meta: formEditObj.alcance_120_meta }).eq("id", editandoObj);
+    setEditandoObj(null); setFormEditObj(null); cargarDatos();
   }
 
   async function exportarExcel(tipo) {
@@ -2734,6 +2747,27 @@ function PanelAdminObjetivos({ profile }) {
         </div>
       )}
       {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
+      {/* Modal editar objetivo */}
+      {editandoObj && formEditObj && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }} onClick={function() { setEditandoObj(null); }}>
+          <div style={{ background: "white", borderRadius: 16, padding: 28, maxWidth: 560, width: "90%", maxHeight: "85vh", overflowY: "auto" }} onClick={function(e) { e.stopPropagation(); }}>
+            <h3 style={{ margin: "0 0 20px 0", color: "#231F20" }}>Editar Objetivo</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Objetivo *</label><textarea value={formEditObj.objetivo} onChange={function(e) { setFormEditObj({...formEditObj, objetivo: e.target.value}); }} style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #D4D2C6", fontSize: 13, fontFamily: "inherit", minHeight: 80, resize: "vertical", boxSizing: "border-box" }} /></div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Corporativo</label><input value={formEditObj.corporativo} onChange={function(e) { setFormEditObj({...formEditObj, corporativo: e.target.value}); }} style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #D4D2C6", fontSize: 13, boxSizing: "border-box" }} /></div>
+                <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Ponderación (%)</label><input type="number" value={formEditObj.ponderacion} onChange={function(e) { setFormEditObj({...formEditObj, ponderacion: e.target.value}); }} style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #D4D2C6", fontSize: 13, boxSizing: "border-box" }} /></div>
+              </div>
+              <div><label style={{ fontSize: 12, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>Status</label><select value={formEditObj.status} onChange={function(e) { setFormEditObj({...formEditObj, status: e.target.value}); }} style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #D4D2C6", fontSize: 13 }}><option value="pendiente">Pendiente</option><option value="aceptado">Aceptado</option><option value="completado">Completado</option><option value="validado">Validado</option><option value="rechazado">Rechazado</option></select></div>
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
+              <button onClick={guardarEdicionObj} style={{ ...s.btnPrimario, flex: 1 }}>Guardar cambios</button>
+              <button onClick={function() { setEditandoObj(null); }} style={s.btnSecundario}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
             <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: "#D4D2C6" }}>Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th><th style={{ ...th, color: '#D4D2C6' }}>Acciones</th></tr></thead>
