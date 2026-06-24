@@ -2161,86 +2161,131 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
  )}
 
  {/* Modal validar alcance reportado */}
+ {/* Modal validar alcance reportado */}
  {modalValidarAlcance && (
- <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidarAlcance(null); }}>
- <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
- <h3 style={{ marginTop: 0 }}>Validar alcance reportado</h3>
- <p style={{ fontSize: 14, color: '#231F20' }}><strong>{modalValidarAlcance.objetivo}</strong></p>
- <div style={{ background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 16 }}>
- <p style={{ margin: 0, fontSize: 13 }}><strong>Colaborador reportó:</strong> {modalValidarAlcance.alcance_completado}%</p>
- <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#475569' }}>{modalValidarAlcance.justificacion_completado}</p>
- </div>
- <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>¿Qué alcance validás?</p>
- <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
- {ALCANCES_VALIDAR.map(function(a) {
- var sel = alcanceLider === a.valor;
- return (
- <button key={a.valor} onClick={function() { setAlcanceLider(a.valor); }}
- style={{ padding: '14px 8px', borderRadius: 10, cursor: 'pointer', border: '2px solid', borderColor: sel ? a.color : '#e2e8f0', background: sel ? a.bg : 'white', fontWeight: 700, fontSize: 18, color: a.color }}>
- {a.label}
- </button>
- );
- })}
- </div>
- <div style={{ marginBottom: 16 }}>
- <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Comentario de validación *</label>
- <textarea value={comentValidacion} onChange={function(e) { setComentValidacion(e.target.value); }} placeholder="Justificá el alcance validado..." style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
- </div>
- <div style={{ display: 'flex', gap: 12 }}>
- <button onClick={ejecutarValidacionAlcance} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>Confirmar validacion</button>
- <button onClick={function() { setModalValidarAlcance(null); setAlcanceLider(''); setComentValidacion(''); }} style={s.btnSecundario}>Cancelar</button>
- </div>
- </div>
- </div>
+   <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={function() { setModalValidarAlcance(null); }}>
+     <div style={{ background: 'white', borderRadius: 16, padding: 32, maxWidth: 560, width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+       <h3 style={{ marginTop: 0, color: '#231F20' }}>Validar alcance</h3>
+       <p style={{ fontSize: 14, color: '#231F20', marginBottom: 12 }}><strong>{modalValidarAlcance.objetivo}</strong></p>
+
+       {/* Info del colaborador */}
+       <div style={{ background: '#F0EDE8', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 20 }}>
+         <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Colaborador reportó: {modalValidarAlcance.alcance_completado}%</p>
+         {modalValidarAlcance.justificacion_completado && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#475569' }}>{modalValidarAlcance.justificacion_completado}</p>}
+       </div>
+
+       {/* Botones rápidos */}
+       <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#231F20' }}>Alcance validado</p>
+       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
+         {[{v:'80',c:'#92400e',bg:'#fef3c7'},{v:'100',c:'#166534',bg:'#dcfce7'},{v:'120',c:'#1e40af',bg:'#dbeafe'}].map(function(a) {
+           var sel = alcanceLider === a.v;
+           return <button key={a.v} onClick={function() { setAlcanceLider(a.v); }}
+             style={{ padding: '12px 8px', borderRadius: 10, cursor: 'pointer', border: '2px solid', borderColor: sel ? a.c : '#e2e8f0', background: sel ? a.bg : 'white', fontWeight: 700, fontSize: 16, color: a.c }}>
+             {a.v}%
+           </button>;
+         })}
+       </div>
+       {/* Campo libre */}
+       <div style={{ marginBottom: 16 }}>
+         <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>O escribí un valor personalizado</label>
+         <input type="number" min="0" max="200" value={alcanceLider}
+           onChange={function(e) { setAlcanceLider(e.target.value); }}
+           placeholder="Ej: 90, 110..."
+           style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 15, fontWeight: 700, boxSizing: 'border-box' }} />
+       </div>
+
+       {/* Preview total ponderado */}
+       {alcanceLider && (function() {
+         var objsValidadosSimul = objetivos.filter(function(o) { return o.status === 'validado' && o.alcance_validado && o.id !== modalValidarAlcance.id; });
+         objsValidadosSimul = objsValidadosSimul.concat([{ ...modalValidarAlcance, alcance_validado: parseFloat(alcanceLider), status: 'validado' }]);
+         var sp = objsValidadosSimul.reduce(function(s,o) { return s + parseFloat(o.ponderacion); }, 0);
+         var sa = objsValidadosSimul.reduce(function(s,o) { return s + parseFloat(o.alcance_validado) * parseFloat(o.ponderacion); }, 0);
+         var total = sp > 0 ? (sa / sp).toFixed(1) : null;
+         return total ? (
+           <div style={{ background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+             <p style={{ margin: 0, fontSize: 13, color: '#1e40af', fontWeight: 600 }}>
+               Total alcanzado ponderado (simulación): {total}%
+             </p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#3b82f6' }}>Considera todos los objetivos validados</p>
+           </div>
+         ) : null;
+       })()}
+
+       <div style={{ marginBottom: 16 }}>
+         <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Comentario de validación</label>
+         <textarea value={comentValidacion} onChange={function(e) { setComentValidacion(e.target.value); }}
+           placeholder="Opcional — justificá el alcance validado..."
+           style={{ width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+       </div>
+       <div style={{ display: 'flex', gap: 12 }}>
+         <button onClick={ejecutarValidacionAlcance} style={{ ...s.btnPrimario, background: '#22c55e', flex: 1 }}>Confirmar validacion</button>
+         <button onClick={function() { setModalValidarAlcance(null); setAlcanceLider(''); setComentValidacion(''); }} style={s.btnSecundario}>Cancelar</button>
+       </div>
+     </div>
+   </div>
  )}
 
+
  {objetivos.length === 0 ? (
- <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p>
+   <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>Sin objetivos cargados.</p>
  ) : (
- <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
- {objetivos.map(function(obj) {
- var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#92400e', rechazado: '#dc2626', pendiente: '#64748b' };
- var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#fef3c7', rechazado: '#fee2e2', pendiente: '#f1f5f9' };
- return (
- <div key={obj.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
- <div style={{ flex: 1 }}>
- <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
- <strong style={{ fontSize: 15 }}>{obj.objetivo}</strong>
- <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#64748b' }}>{obj.status}</span>
- <span style={{ fontWeight: 700, fontSize: 13 }}>{obj.ponderacion}%</span>
- </div>
- {obj.corporativo && <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Corporativo: {obj.corporativo}</p>}
- {obj.comentario_lider && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>Tu comentario: {obj.comentario_lider}</p>}
- {obj.alcance_completado && (
- <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8 }}>
- <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#0369a1' }}>Colaborador reportó: {obj.alcance_completado}%</p>
- <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#475569' }}>{obj.justificacion_completado}</p>
- </div>
- )}
- {obj.alcance_validado && <p style={{ margin: '4px 0 0 0', fontSize: 12, fontWeight: 700, color: '#166534' }}> Alcance validado: {obj.alcance_validado}%</p>}
- </div>
- <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
- {obj.status === 'pendiente' && !obj.validado_por_gerente && (
- <button onClick={function() { setModalValidarObj(obj); setAccion(''); setComentario(''); }} style={{ ...s.btnPrimario, background: '#f59e0b', fontSize: 12, padding: '8px 14px' }}>
- Revisar objetivo
- </button>
- )}
- {obj.status === 'completado' && (
- <button onClick={function() { setModalValidarAlcance(obj); setAlcanceLider(''); setComentValidacion(''); }} style={{ ...s.btnPrimario, background: '#22c55e', fontSize: 12, padding: '8px 14px' }}>
- Validar alcance
- </button>
- )}
- </div>
- </div>
- </div>
- );
- })}
- </div>
+   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+     {objetivos.map(function(obj) {
+       var CORP_COLORES = ['#2d6a4f','#c2410c','#1d4ed8','#7c3aed','#0e7490','#92400e','#064e3b'];
+       function colorCorp(n) { if (!n) return '#64748b'; var idx = Math.abs(n.split('').reduce(function(a,c) { return a + c.charCodeAt(0); }, 0)) % CORP_COLORES.length; return CORP_COLORES[idx]; }
+       var color = colorCorp(obj.corporativo);
+       var fechaRef = obj.alcance_100_fecha || obj.alcance_80_fecha;
+       var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#f1f5f9', rechazado: '#fee2e2', pendiente: '#fef3c7' };
+       var statusColor = { validado: '#166534', completado: '#1e40af', aceptado: '#475569', rechazado: '#dc2626', pendiente: '#92400e' };
+       return (
+         <div key={obj.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid ' + color, padding: '16px 20px' }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+               <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+               <span style={{ fontSize: 12, fontWeight: 600, color: color }}>{obj.corporativo || 'Sin categoría'}</span>
+             </div>
+             <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: statusBg[obj.status] || '#f1f5f9', color: statusColor[obj.status] || '#475569' }}>
+               {obj.status ? obj.status.charAt(0).toUpperCase() + obj.status.slice(1) : '-'}
+             </span>
+           </div>
+           <p style={{ margin: '0 0 12px 0', fontSize: 14, color: '#231F20', lineHeight: 1.55, wordBreak: 'break-word' }}>{obj.objetivo}</p>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+             <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+               {fechaRef && <span style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(fechaRef).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>}
+               {obj.alcance_completado && <span style={{ fontSize: 12, color: '#0369a1', fontWeight: 600 }}>Colaborador reportó: {obj.alcance_completado}%</span>}
+               {obj.alcance_validado && <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>Alcance validado: {obj.alcance_validado}%</span>}
+               {obj.comentario_lider && <span style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{obj.comentario_lider}</span>}
+             </div>
+             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+               <span style={{ fontSize: 24, fontWeight: 800, color: '#231F20' }}>{obj.ponderacion}%</span>
+               {obj.status === 'pendiente' && !obj.validado_por_gerente && (
+                 <button onClick={function() { setModalValidarObj(obj); setAccion(''); setComentario(''); }}
+                   style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#f59e0b', color: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                   Revisar
+                 </button>
+               )}
+               {obj.status === 'completado' && (
+                 <button onClick={function() { setModalValidarAlcance(obj); setAlcanceLider(''); setComentValidacion(''); }}
+                   style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#22c55e', color: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                   Validar alcance
+                 </button>
+               )}
+             </div>
+           </div>
+           {obj.justificacion_completado && (
+             <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0f9ff', borderRadius: 8, fontSize: 12, color: '#0369a1' }}>
+               Justificación: {obj.justificacion_completado}
+             </div>
+           )}
+         </div>
+       );
+     })}
+   </div>
  )}
  </div>
  );
 }
+
 
 // Helper: componente reutilizable de formulario de objetivo
 function FormObjetivo({ valor, onChange, objetivos, editandoId, onGuardar, onCancelar, titulo }) {
@@ -3109,7 +3154,7 @@ function ObjetivosCompania({ esAdmin }) {
  {/* Botones admin */}
  {esAdmin && (
  <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 10 }}>
- <button onClick={function(e) { e.stopPropagation(); abrirForm(obj); }} style={{ background: 'rgba(255,255,255,0.85)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>️</button>
+ <button onClick={function(e) { e.stopPropagation(); abrirForm(obj); }} style={{ background: 'rgba(255,255,255,0.85)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Editar</button>
  <button onClick={function(e) { e.stopPropagation(); setConfirmBorrar(obj.id); }} style={{ background: 'rgba(220,38,38,0.85)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, color: 'white', fontWeight: 600 }}>Eliminar</button>
  </div>
  )}
@@ -3739,7 +3784,7 @@ var s = {
  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 },
  seccionTitulo: { fontSize: 13, fontWeight: 700, color: '#64748b', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #e8e6e0', textTransform: 'uppercase', letterSpacing: '0.5px' },
  competenciaCard: { background: 'white', padding: 18, borderRadius: 10, marginBottom: 12, border: '1px solid #e8e6e0', overflow: 'hidden' },
- btnInfo: { fontSize: 12, padding: '7px 14px', borderRadius: 8, border: '1px solid #D4D2C6', background: 'white', cursor: 'pointer', color: '#231F20', fontWeight: 500 },
+  btnInfo: { fontSize: 13, padding: "10px 22px", borderRadius: 8, border: "1px solid #231F20", background: "white", cursor: "pointer", color: "#231F20", fontWeight: 600 },
  ratingRow: { display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' },
  ratingBtn: { width: 40, height: 40, borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' },
  ratingInfoBox: { background: '#F0EDE8', padding: 14, borderRadius: 8, marginBottom: 12, border: '1px solid #e8e6e0' },
