@@ -274,6 +274,12 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
   async function cargarColabs() { var { data } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role').eq('activo', true).or("role.neq.admin_rrhh,email.eq.florencia.salvaneschi@grupo-fabric.com,email.eq.adrian.galvan@grupo-fabric.com"); setTodos(data || []); }
   async function crearCiclo() { if (!nom || !fIni) return alert('Nombre y fecha obligatorios'); await supabase.from('ciclos').insert({ nombre: nom, fecha_inicio: fIni, fecha_fin: fFin || null, estado: 'activo' }); setNom(''); setFIni(''); setFFin(''); setShowC(false); cargarCiclos(); }
   async function toggleCiclo(ciclo) { await supabase.from('ciclos').update({ estado: ciclo.estado === 'activo' ? 'cerrado' : 'activo' }).eq('id', ciclo.id); cargarCiclos(); }
+  async function eliminarCiclo(ciclo) {
+    if (!window.confirm("¿Eliminar el ciclo "" + ciclo.nombre + ""? Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.")) return;
+    await supabase.from("ciclo_colaboradores").delete().eq("ciclo_id", ciclo.id);
+    await supabase.from("ciclos").delete().eq("id", ciclo.id);
+    cargarCiclos();
+  }
   async function abrirGestion(ciclo) { setCGestion(ciclo.id); var { data } = await supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', ciclo.id); setParts((data || []).map(function(p) { return p.colaborador_id; })); }
   async function togglePart(cid) { if (parts.includes(cid)) { await supabase.from('ciclo_colaboradores').delete().eq('ciclo_id', cGestion).eq('colaborador_id', cid); setParts(function(p) { return p.filter(function(id) { return id !== cid; }); }); } else { await supabase.from('ciclo_colaboradores').insert({ ciclo_id: cGestion, colaborador_id: cid }); setParts(function(p) { return [...p, cid]; }); } }
   if (carg) return <p style={{ color: '#64748b', padding: 40 }}>Cargando ciclos...</p>;
@@ -296,7 +302,8 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 <button onClick={function() { onSelectCiclo(ciclo); }} style={{ ...s.btnPrimario, flex: 1, textAlign: 'center' }}>{ciclo.estado === 'cerrado' && !esAdmin ? 'Ver' : 'Entrar'}</button>
                 {esAdmin && <button onClick={function() { abrirGestion(ciclo); }} style={s.btnSecundario}>Participantes</button>}
-                {esSuperAdmin && <button onClick={function() { toggleCiclo(ciclo); }} style={{ padding: '10px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, background: abierto ? '#fee2e2' : '#dcfce7', color: abierto ? '#dc2626' : '#166534' }}>{abierto ? 'Cerrar' : 'Abrir'}</button>}
+                {esSuperAdmin && <button onClick={function() { toggleCiclo(ciclo); }} style={{ padding: "10px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 12, background: abierto ? "#fee2e2" : "#dcfce7", color: abierto ? "#dc2626" : "#166534" }}>{abierto ? "Cerrar" : "Abrir"}</button>}
+                {esSuperAdmin && <button onClick={function() { eliminarCiclo(ciclo); }} style={{ padding: "10px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 12, background: "#fee2e2", color: "#dc2626" }}>Eliminar</button>}
               </div>
             </div>
           ); })}
