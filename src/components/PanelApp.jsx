@@ -38,11 +38,6 @@ function RatingFinalBadge({ ratings }) {
  </div>
  );
 }
- btnSecundario: { padding: '10px 22px', background: 'white', color: '#231F20', border: '1px solid #D4D2C6', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 },
- mensajeToast: { padding: '12px 20px', background: '#231F20', borderRadius: 8, marginBottom: 16, color: '#F0EDE8', fontWeight: 500, fontSize: 14, textAlign: 'center' },
- bannerEnviado: { padding: 16, background: '#dcfce7', borderRadius: 10, color: '#166534', fontWeight: 600, textAlign: 'center', marginTop: 16, border: '1px solid #86efac' }
-
-};
 
 
 // =============================================
@@ -711,7 +706,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
    setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
  }
 
- async function reabrirEvaluacion(evalId, tipo) {
  async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
    if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
    var motivo = window.prompt('Motivo de reapertura (opcional):') || '';
@@ -1265,7 +1259,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  })}</tbody>
  </table>
  </div>
- )}
+  )}
  </div>
  );
 }
