@@ -334,9 +334,9 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
  {ciclo.fecha_fin && <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 12px 0' }}>Fin: {new Date(ciclo.fecha_fin).toLocaleDateString('es-AR')}</p>}
  <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
  <button onClick={function() { onSelectCiclo(ciclo); }} style={{ ...s.btnPrimario, flex: 1, textAlign: 'center' }}>{ciclo.estado === 'cerrado' && !esAdmin ? 'Ver' : 'Entrar'}</button>
- {esAdmin && <button onClick={function() { abrirGestion(ciclo); }} style={s.btnSecundario}>Participantes</button>}
- {esSuperAdmin && <button onClick={function() { toggleCiclo(ciclo); }} style={{ padding: "10px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 12, background: abierto ? "#fee2e2" : "#dcfce7", color: abierto ? "#dc2626" : "#166534" }}>{abierto ? "Cerrar" : "Abrir"}</button>}
- {esSuperAdmin && <button onClick={function() { eliminarCiclo(ciclo); }} style={{ padding: "10px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 12, background: "#fee2e2", color: "#dc2626" }}>Eliminar</button>}
+ {esAdmin && <button onClick={function() { abrirGestion(ciclo); }} style={s.btnInfo}>Participantes</button>}
+ {esSuperAdmin && <button onClick={function() { toggleCiclo(ciclo); }} style={{ ...s.btnInfo, color: abierto ? "#dc2626" : "#166534", borderColor: abierto ? "#fca5a5" : "#86efac", background: abierto ? "#fee2e2" : "#dcfce7" }}>{abierto ? "Cerrar" : "Abrir"}</button>}
+ {esSuperAdmin && <button onClick={function() { eliminarCiclo(ciclo); }} style={{ ...s.btnInfo, color: "#dc2626", borderColor: "#fca5a5", background: "#fee2e2" }}>Eliminar</button>}
  </div>
  </div>
  ); })}
