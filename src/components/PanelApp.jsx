@@ -105,14 +105,14 @@ export default function PanelApp() {
  async function marcarTodasLeidas(userId) {
  await supabase.from("notificaciones").update({ leida: true }).eq("user_id", userId).eq("leida", false);
  setNotifs([]);
-
+ }
 
   function toggleNotifsActivas() {
     var nuevo = !notifsActivas;
     setNotifsActivas(nuevo);
     try { localStorage.setItem("notifsActivas", String(nuevo)); } catch(e) {}
   }
- }
+
 
  if (loading) return <div style={s.centrado}><p>Cargando...</p></div>;
  if (!profile) return <div style={s.centrado}><h2>Error</h2><button onClick={cerrarSesion} style={s.btnSalir}>Volver</button></div>;
