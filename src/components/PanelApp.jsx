@@ -1044,16 +1044,16 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                         )}
                         {/* Botones acción — solo si no soloLectura */}
                         {!soloLectura && (
-                            {/* Tilde verde — confirmar rating del lider como final */}
+                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
                             {editandoCal !== d.colaborador.id && (
                               <button
-                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert("El lider aun no tiene rating promedio"); return; } guardarCal(_evId, _pl, "Confirmado sin cambios", _pl); }}
-                                title="Confirmar rating del lider como evaluacion final"
+                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert('El lider aun no tiene rating promedio'); return; } guardarCal(_evId, _pl, 'Confirmado sin cambios', _pl); }}
+                                title="Confirmar como evaluacion final"
                                 style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 ✓
                               </button>
                             )}
-                            {/* Lapiz — abrir edicion */}
                             {editandoCal !== d.colaborador.id && (
                               <button
                                 onClick={function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
@@ -1062,7 +1062,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                                 ✏
                               </button>
                             )}
-                            {/* Cancelar edicion */}
                             {editandoCal === d.colaborador.id && (
                               <button
                                 onClick={function() { setEditandoCal(null); }}
