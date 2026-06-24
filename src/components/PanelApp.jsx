@@ -51,7 +51,7 @@ async function enviarEmailNotificacion(toEmail, toName, subject, message) {
   try {
     await emailjs.send(
       "service_xfgapna",
-      "template_2jmtc8l",
+      "template_xs3nenc",
       { to_email: toEmail, to_name: toName, subject: subject, message: message },
       "Mc-YPiWB1XNBKfhOJ"
     );
