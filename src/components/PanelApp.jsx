@@ -695,6 +695,12 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  }
 
  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
+
+  async function reabrirEvaluacion(evalId, tipo) {
+    if (!window.confirm("¿Reabrir esta " + tipo + " para que pueda editarse de nuevo?")) return;
+    await supabase.from("evaluaciones").update({ estado: "borrador" }).eq("id", evalId);
+    cargar();
+  }
  // Si el rating calibrado es igual al del lider, no requiere comentario
  var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
  if (rCal !== rLid && !comentario.trim()) {
@@ -1036,7 +1042,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  {df.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
  <div style={{ overflowX: 'auto' }}>
  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
-<thead><tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}><th style={th}>Colaborador</th><th style={th}>Area</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Lider</th><th style={th}>Evaluación Final</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th></tr></thead>
+<thead><tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}><th style={th}>Colaborador</th><th style={th}>Area</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Lider</th><th style={th}>Evaluación Final</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Reabrir</th></tr></thead>
  <tbody>{df.map(function(d) {
  var gap = d.promAuto && d.promLider ? (parseFloat(d.promLider) - parseFloat(d.promAuto)).toFixed(1) : null;
  var clasifAuto = clasificarRating(parseFloat(d.promAuto));
@@ -1136,6 +1142,25 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </td>
  <td style={td}><button onClick={function() { onHist && onHist(d.colaborador); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>Ver</button></td>
  <td style={td}><button onClick={function() { verPDF(d); }} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Ver PDF</button></td>
+                  <td style={{ ...td, minWidth: 160 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {d.autoevaluacion && d.autoevaluacion.estado === 'enviado' && (
+                        <button onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación'); }}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fef3c7', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          Reabrir Auto
+                        </button>
+                      )}
+                      {d.evaluacionLider && d.evaluacionLider.estado === 'enviado' && (
+                        <button onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder'); }}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #93c5fd', background: '#dbeafe', color: '#1e40af', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          Reabrir Líder
+                        </button>
+                      )}
+                      {(!d.autoevaluacion || d.autoevaluacion.estado !== 'enviado') && (!d.evaluacionLider || d.evaluacionLider.estado !== 'enviado') && (
+                        <span style={{ fontSize: 11, color: '#94a3b8' }}>Sin envíos</span>
+                      )}
+                    </div>
+                  </td>
  </tr>
  );
  })}</tbody>
