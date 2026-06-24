@@ -1044,7 +1044,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                         )}
                         {/* Botones acción — solo si no soloLectura */}
                         {!soloLectura && (
-                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert("El lider aun no tiene rating promedio"); return; } guardarCal(_evId, _pl, "Confirmado sin cambios", _pl); }}
                             {/* Tilde verde — confirmar rating del lider como final */}
                             {editandoCal !== d.colaborador.id && (
                               <button
