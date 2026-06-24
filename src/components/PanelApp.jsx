@@ -298,7 +298,7 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
  async function abrirGestion(ciclo) { setCGestion(ciclo.id); var { data } = await supabase.from("ciclo_colaboradores").select("colaborador_id").eq("ciclo_id", ciclo.id); setParts((data || []).map(function(p) { return p.colaborador_id; })); }
  async function togglePart(cid) { if (parts.includes(cid)) { await supabase.from("ciclo_colaboradores").delete().eq("ciclo_id", cGestion).eq("colaborador_id", cid); setParts(function(p) { return p.filter(function(id) { return id !== cid; }); }); } else { await supabase.from("ciclo_colaboradores").insert({ ciclo_id: cGestion, colaborador_id: cid }); setParts(function(p) { return [...p, cid]; }); } }
  async function eliminarCiclo(ciclo) {
- if (!window.confirm('Eliminar el ciclo ' + ciclo.nombre + '. Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.')) return;
+ if (typeof window !== 'undefined' && !window.confirm('Eliminar el ciclo ' + ciclo.nombre + '. Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.')) return;
  var cicloId = ciclo.id;
  // 1. Puntuaciones (dependen de evaluaciones)
  var { data: evs } = await supabase.from('evaluaciones').select('id').eq('ciclo_id', cicloId);
@@ -2608,7 +2608,7 @@ function PanelAdminObjetivos({ profile }) {
  async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
 
  async function eliminarObjetivo(objId) {
- if (!window.confirm("¿Eliminar este objetivo? Esta acción no se puede deshacer.")) return;
+ if (typeof window !== 'undefined' && !window.confirm("¿Eliminar este objetivo? Esta acción no se puede deshacer.")) return;
  await supabase.from("objetivos").delete().eq("id", objId);
  cargarDatos();
  }
