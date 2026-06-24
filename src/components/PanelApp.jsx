@@ -276,12 +276,20 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
   async function toggleCiclo(ciclo) { await supabase.from('ciclos').update({ estado: ciclo.estado === 'activo' ? 'cerrado' : 'activo' }).eq('id', ciclo.id); cargarCiclos(); }
   async function eliminarCiclo(ciclo) {
     if (!window.confirm('Eliminar el ciclo ' + ciclo.nombre + '. Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.')) return;
-    await supabase.from("ciclo_colaboradores").delete().eq("ciclo_id", ciclo.id);
-    await supabase.from("ciclos").delete().eq("id", ciclo.id);
+    var cicloId = ciclo.id;
+    // 1. Puntuaciones (dependen de evaluaciones)
+    var { data: evs } = await supabase.from('evaluaciones').select('id').eq('ciclo_id', cicloId);
+    var evIds = (evs || []).map(function(e) { return e.id; });
+    if (evIds.length > 0) await supabase.from('puntuaciones').delete().in('evaluacion_id', evIds);
+    // 2. Tablas que dependen de ciclos
+    await supabase.from('evaluaciones').delete().eq('ciclo_id', cicloId);
+    await supabase.from('feedback').delete().eq('ciclo_id', cicloId);
+    await supabase.from('ciclo_colaboradores').delete().eq('ciclo_id', cicloId);
+    // 3. Ciclo
+    var { error } = await supabase.from('ciclos').delete().eq('id', cicloId);
+    if (error) { alert('Error al eliminar: ' + error.message); return; }
     cargarCiclos();
   }
-  async function abrirGestion(ciclo) { setCGestion(ciclo.id); var { data } = await supabase.from('ciclo_colaboradores').select('colaborador_id').eq('ciclo_id', ciclo.id); setParts((data || []).map(function(p) { return p.colaborador_id; })); }
-  async function togglePart(cid) { if (parts.includes(cid)) { await supabase.from('ciclo_colaboradores').delete().eq('ciclo_id', cGestion).eq('colaborador_id', cid); setParts(function(p) { return p.filter(function(id) { return id !== cid; }); }); } else { await supabase.from('ciclo_colaboradores').insert({ ciclo_id: cGestion, colaborador_id: cid }); setParts(function(p) { return [...p, cid]; }); } }
   if (carg) return <p style={{ color: '#64748b', padding: 40 }}>Cargando ciclos...</p>;
   var inp = { padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' };
   return (
@@ -2576,6 +2584,12 @@ function PanelAdminObjetivos({ profile }) {
   }
   async function agregarHistorico() { if (!colaboradorSeleccionado || !objetivoHistorico.objetivo || !objetivoHistorico.fecha_historica) return alert('Completa todos los campos'); await supabase.from('objetivos').insert({ colaborador_id: colaboradorSeleccionado, objetivo: objetivoHistorico.objetivo, corporativo: objetivoHistorico.corporativo, ponderacion: objetivoHistorico.ponderacion, status: objetivoHistorico.status, es_historico: true, fecha_historica: objetivoHistorico.fecha_historica, alcance_completado: objetivoHistorico.alcance || null, validado_por_gerente: true }); setObjetivoHistorico({ objetivo: '', corporativo: '', ponderacion: 25, fecha_historica: '', alcance: '', status: 'validado' }); setColaboradorSeleccionado(''); setMostrarHistorico(false); cargarDatos(); }
 
+  async function eliminarObjetivo(objId) {
+    if (!window.confirm("¿Eliminar este objetivo? Esta acción no se puede deshacer.")) return;
+    await supabase.from("objetivos").delete().eq("id", objId);
+    cargarDatos();
+  }
+
   async function exportarExcel(tipo) {
     var XLSX = await import('xlsx');
     var wb = XLSX.utils.book_new();
@@ -2722,7 +2736,7 @@ function PanelAdminObjetivos({ profile }) {
       {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: "#D4D2C6" }}>Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th></tr></thead>
+            <thead><tr style={{ background: '#231F20' }}><th style={{ ...th, color: '#D4D2C6' }}>Colaborador</th><th style={{ ...th, color: '#D4D2C6' }}>Area</th><th style={{ ...th, color: '#D4D2C6' }}>Seniority</th><th style={{ ...th, color: "#D4D2C6" }}>Lider</th><th style={{ ...th, color: '#D4D2C6' }}>Objetivo</th><th style={{ ...th, color: '#D4D2C6' }}>Pond.</th><th style={{ ...th, color: '#D4D2C6' }}>Status</th><th style={{ ...th, color: '#D4D2C6' }}>Alcance</th><th style={{ ...th, color: '#D4D2C6' }}>Historico</th><th style={{ ...th, color: '#D4D2C6' }}>Acciones</th></tr></thead>
             <tbody>{objetivosFiltrados.map(function(obj) { return (
               <tr key={obj.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={td}><strong>{obj.colaborador?.full_name || '-'}</strong></td>
