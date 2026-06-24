@@ -106,6 +106,7 @@ export default function PanelApp() {
  await supabase.from("notificaciones").update({ leida: true }).eq("user_id", userId).eq("leida", false);
  setNotifs([]);
 
+
   function toggleNotifsActivas() {
     var nuevo = !notifsActivas;
     setNotifsActivas(nuevo);
