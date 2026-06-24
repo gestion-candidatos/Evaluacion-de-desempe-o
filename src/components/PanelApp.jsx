@@ -275,7 +275,7 @@ function CiclosLista({ esAdmin, onSelectCiclo, profile }) {
   async function crearCiclo() { if (!nom || !fIni) return alert('Nombre y fecha obligatorios'); await supabase.from('ciclos').insert({ nombre: nom, fecha_inicio: fIni, fecha_fin: fFin || null, estado: 'activo' }); setNom(''); setFIni(''); setFFin(''); setShowC(false); cargarCiclos(); }
   async function toggleCiclo(ciclo) { await supabase.from('ciclos').update({ estado: ciclo.estado === 'activo' ? 'cerrado' : 'activo' }).eq('id', ciclo.id); cargarCiclos(); }
   async function eliminarCiclo(ciclo) {
-    if (!window.confirm("¿Eliminar el ciclo "" + ciclo.nombre + ""? Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.")) return;
+    if (!window.confirm('Eliminar el ciclo ' + ciclo.nombre + '. Se eliminarán también todos sus participantes. Esta acción no se puede deshacer.')) return;
     await supabase.from("ciclo_colaboradores").delete().eq("ciclo_id", ciclo.id);
     await supabase.from("ciclos").delete().eq("id", ciclo.id);
     cargarCiclos();
