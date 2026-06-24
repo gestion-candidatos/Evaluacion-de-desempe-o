@@ -411,7 +411,7 @@ function DashboardView({ stats, colabs }) {
   });
 
   // Gráfico 1: Distribución Bajo/Medio/Alto
-  var evalLider = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && (e.rating_calibrado || e.rating_promedio); });
+  var evalLider = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider" && e.rating_calibrado; });
   var bajo = 0; var medio = 0; var alto = 0;
   evalLider.forEach(function(e) {
     var r = parseFloat(e.rating_calibrado || e.rating_promedio);
@@ -590,7 +590,7 @@ function DashboardView({ stats, colabs }) {
             )}
           </h4>
           <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8', alignSelf: 'flex-start' }}>
-            {filtroColaborador !== 'Todos' ? 'Vista individual del colaborador' : 'Promedio general del grupo seleccionado'}
+            {filtroColaborador !== 'Todos' ? 'Vista individual del colaborador' : 'Promedio general — solo evaluaciones calibradas'}
           </p>
           <SpiderChart datos={compData} />
           {compData.length > 0 && (
@@ -672,8 +672,9 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
 
   async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
     // Si el rating calibrado es igual al del lider, no requiere comentario
-    if (parseFloat(rating) !== parseFloat(ratingLider) && !comentario.trim()) {
-      alert('Debes justificar por que el rating calibrado difiere del rating del lider.');
+    var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
+    if (rCal !== rLid && !comentario.trim()) {
+      alert("Debes justificar por que el rating calibrado difiere del rating del lider.");
       return;
     }
     await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
@@ -1043,11 +1044,11 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                         )}
                         {/* Botones acción — solo si no soloLectura */}
                         {!soloLectura && (
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert("El lider aun no tiene rating promedio"); return; } guardarCal(_evId, _pl, "Confirmado sin cambios", _pl); }}
                             {/* Tilde verde — confirmar rating del lider como final */}
                             {editandoCal !== d.colaborador.id && (
                               <button
-                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = d.promLider; guardarCal(_evId, parseFloat(_pl), '', _pl); }}
+                                onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert("El lider aun no tiene rating promedio"); return; } guardarCal(_evId, _pl, "Confirmado sin cambios", _pl); }}
                                 title="Confirmar rating del lider como evaluacion final"
                                 style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 ✓
