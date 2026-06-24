@@ -778,7 +778,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
     var COL_W = MID - MX - 3; // ancho de cada columna ~90mm
 
     function cab() {
-      try { pdf.addImage('/logo.jpg', 'JPEG', MX, 8, 28, 14); } catch(e) {}
+      try { pdf.addImage('/logo.jpg', 'JPEG', MX, 6, 20, 20); } catch(e) {}
       pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.4);
       pdf.line(MX, 25, PW - MX, 25);
     }
