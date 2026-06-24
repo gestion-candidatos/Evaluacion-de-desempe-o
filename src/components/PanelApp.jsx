@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import emailjs from "@emailjs/browser";
 import { supabase } from '../lib/supabaseClient';
 import { jsPDF } from 'jspdf';
 
@@ -44,6 +45,20 @@ function RatingFinalBadge({ ratings }) {
 async function crearNotificacion(liderId, tipo, mensaje, origenId, origenNombre) {
   if (!liderId) return;
   await supabase.from("notificaciones").insert({ user_id: liderId, tipo: tipo, mensaje: mensaje, origen_id: origenId || null, origen_nombre: origenNombre || null });
+}
+
+async function enviarEmailNotificacion(toEmail, toName, subject, message) {
+  try {
+    await emailjs.send(
+      "service_xfgapna",
+      "template_2jmtc8l",
+      { to_email: toEmail, to_name: toName, subject: subject, message: message },
+      "Mc-YPiWB1XNBKfhOJ"
+    );
+    console.log("Email enviado a", toEmail);
+  } catch (err) {
+    console.warn("Error enviando email:", err);
+  }
 }
 export default function PanelApp() {
   var [profile, setProfile] = useState(null);
@@ -1651,8 +1666,19 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
     setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
     // Notificar al lider
     var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id").eq("id", userId).single();
+    var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id, email").eq("id", userId).single();
     if (perfColabN && perfColabN.leader_id) {
       await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
+      // Email al lider
+      var { data: liderN } = await supabase.from("profiles").select("email, full_name").eq("id", perfColabN.leader_id).single();
+      if (liderN && liderN.email) {
+        await enviarEmailNotificacion(
+          liderN.email,
+          liderN.full_name || "Líder",
+          perfColabN.full_name + " envió su autoevaluación",
+          (perfColabN.full_name || "Un colaborador") + " acaba de enviar su autoevaluación de desempeño. Ingresá a la plataforma para revisarla y completar tu evaluación."
+        );
+      }
     }
     setMsg('Autoevaluacion enviada correctamente');
   }
@@ -2419,6 +2445,16 @@ function ObjetivosColaborador({ profile }) {
     var { data: perfN } = await supabase.from('profiles').select('full_name, leader_id').eq('id', profile.id).single();
     if (perfN && perfN.leader_id) {
       await crearNotificacion(perfN.leader_id, 'objetivo_completado', (perfN.full_name || 'Un colaborador') + ' registró el alcance de un objetivo (' + alcance + '%)', profile.id, perfN.full_name);
+      // Email al lider
+      var { data: liderObj } = await supabase.from('profiles').select('email, full_name').eq('id', perfN.leader_id).single();
+      if (liderObj && liderObj.email) {
+        await enviarEmailNotificacion(
+          liderObj.email,
+          liderObj.full_name || 'Líder',
+          perfN.full_name + ' registró el alcance de un objetivo',
+          (perfN.full_name || 'Un colaborador') + ' registró el alcance de su objetivo al ' + alcance + '%. Ingresá a la plataforma para revisar y validar el resultado.'
+        );
+      }
     }
     setModalCompletar(null); cargarObjetivos();
   }
