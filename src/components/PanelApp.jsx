@@ -2746,7 +2746,6 @@ function PanelAdminObjetivos({ profile }) {
           <button onClick={agregarHistorico} style={{ ...s.btnPrimario, background: '#8b5cf6', marginTop: 12 }}>Guardar Historico</button>
         </div>
       )}
-      {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
       {/* Modal editar objetivo */}
       {editandoObj && formEditObj && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }} onClick={function() { setEditandoObj(null); }}>
@@ -2767,6 +2766,7 @@ function PanelAdminObjetivos({ profile }) {
           </div>
         </div>
       )}
+      {objetivosFiltrados.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40 }}>No hay objetivos registrados.</p> : (
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
