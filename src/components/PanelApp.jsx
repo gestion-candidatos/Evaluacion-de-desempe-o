@@ -68,10 +68,11 @@ export default function PanelApp() {
  var [vistaComoColaborador, setVistaComoColaborador] = useState(false);
  var [modulosActivos, setModulosActivos] = useState([]);
  var [notifs, setNotifs] = useState([]);
-  var [notifsActivas, setNotifsActivas] = useState(function() { try { return localStorage.getItem("notifsActivas") !== "false"; } catch(e) { return true; } });
+  var [notifsActivas, setNotifsActivas] = useState(true);
  var [showNotifs, setShowNotifs] = useState(false);
 
  useEffect(function() { cargarPerfil(); }, []);
+  useEffect(function() { try { var val = localStorage.getItem("notifsActivas"); if (val === "false") setNotifsActivas(false); } catch(e) {} }, []);
 
  async function cargarPerfil() {
  var { data: { session } } = await supabase.auth.getSession();
