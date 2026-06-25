@@ -1154,7 +1154,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
 
  // ---- Setup PDF ----
  var pdf = new jsPDF();
- var PW = 210; var MX = 12; var y = 28;
+ var PW = 210; var MX = 12; var y = 32;
  // columnas: izq = auto, der = lider
  var MID = PW / 2; // 105 — línea divisoria
  var COL_L = MX; // inicio columna izquierda (auto)
@@ -1163,8 +1163,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
 
  function cab() {
  try { pdf.addImage('/logo.jpg', 'JPEG', MX, 6, 20, 20); } catch(e) {}
- pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.4);
- pdf.line(MX, 25, PW - MX, 25);
  }
  function pie() {
  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
@@ -1196,7 +1194,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
 
  // ---- ENCABEZADO ----
  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
- pdf.text('EVALUACIÓN DE DESEMPEÑO', MX, y); y += 7;
+ pdf.text('EVALUACION DE DESEMPENO', MX, y); y += 7;
  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
  pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
  pdf.text(t('Puesto: ' + (d.colaborador.puesto || d.colaborador.area || '-') + ' | Area: ' + (d.colaborador.area || '-') + ' | Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
@@ -1260,25 +1258,23 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  pdf.text('EVALUACION LIDER', COL_R + 2, yCuerpo + 4);
 
  // 5. Puntajes
+ // 5. Puntajes — sin círculo, solo texto
  var yPunt = yCuerpo + 9;
  if (autoP) {
- puntCirculo(COL_L + 5, yPunt, autoP, 35, 31, 32, 212, 210, 198);
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('' + autoP + ' / 5', COL_L + 12, yPunt + 1.5);
+   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
+   pdf.text('' + autoP + ' / 5', COL_L + 2, yPunt + 1.5);
  } else {
- pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
- pdf.text('Sin puntaje', COL_L + 2, yPunt + 1.5);
+   pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+   pdf.text('Sin puntaje', COL_L + 2, yPunt + 1.5);
  }
  if (liderP) {
- puntCirculo(COL_R + 5, yPunt, liderP, 212, 210, 198, 35, 31, 32);
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('' + liderP + ' / 5', COL_R + 12, yPunt + 1.5);
+   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
+   pdf.text('' + liderP + ' / 5', COL_R + 2, yPunt + 1.5);
  } else {
- pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
- pdf.text('Sin puntaje', COL_R + 2, yPunt + 1.5);
+   pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
+   pdf.text('Sin puntaje', COL_R + 2, yPunt + 1.5);
  }
 
- // 6. Comentarios — siempre despues de los fondos
  var yComent = yPunt + 8;
  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(FONT_COM);
  pdf.setTextColor(50, 50, 50);
