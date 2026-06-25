@@ -1193,8 +1193,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  cab();
 
  // ---- ENCABEZADO ----
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
- var _tit = 'EVALUACION DE DESEMPENO'; pdf.text(_tit, MX, y); var _px = MX + pdf.getTextWidth('EVALUACION DE DESEMPE'); pdf.text('~', _px - 0.5, y - 1.5); y += 7;
+
+ pdf.setFont('times', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32); pdf.text('EVALUACIÓN DE DESEMPEÑO', MX, y); pdf.setFont('helvetica', 'normal'); y += 7;
  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
  pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
  pdf.text(t('Puesto: ' + (d.colaborador.puesto || d.colaborador.area || '-') + ' | Area: ' + (d.colaborador.area || '-') + ' | Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
