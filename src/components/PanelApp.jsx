@@ -130,13 +130,14 @@ export default function PanelApp() {
 
  // Módulos visibles — admin ve todo, resto según tabla
  var modulosVer = esAdmin && !vistaComoColaborador
- ? ['desempeno', 'obj_individual', 'obj_compania']
+ ? ['desempeno', 'obj_individual', 'obj_compania', 'capacitaciones']
  : modulosActivos;
 
  var verDesempeno = modulosVer.includes('desempeno');
  var verObjIndividual = modulosVer.includes('obj_individual');
  var verObjCompania = modulosVer.includes('obj_compania');
  var verAlgunObj = verObjIndividual || verObjCompania;
+  var verCapacitaciones = esAdmin || modulosVer.includes('capacitaciones');
 
  return (
  <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -163,6 +164,9 @@ export default function PanelApp() {
  {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_usuarios"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_usuarios" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_usuarios" ? "#231F20" : "#D4D2C6", borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>USUARIOS</button>}
  {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_visibilidad"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_visibilidad" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_visibilidad" ? "#231F20" : "#D4D2C6", fontWeight: 600 }}>VISIBILIDAD</button>}
  {esSuperAdmin && !vistaComoColaborador && <button onClick={function() { setMenuActivo("gestion_modulos"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "gestion_modulos" ? "#D4D2C6" : "transparent", color: menuActivo === "gestion_modulos" ? "#231F20" : "#D4D2C6", marginTop: 8, borderTop: "1px solid rgba(212,210,198,0.2)", fontWeight: 600 }}>MODULOS</button>}
+          {verCapacitaciones && (
+            <button onClick={function() { setMenuActivo("capacitaciones"); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === "capacitaciones" ? "#D4D2C6" : "transparent", color: menuActivo === "capacitaciones" ? "#231F20" : "#D4D2C6" }}>CAPACITACIONES</button>
+          )}
  </nav>
   <div style={sidebarStyle.footer}>
     {esSuperAdmin && (
@@ -243,6 +247,7 @@ export default function PanelApp() {
  {menuActivo === 'misobjetivos' && verObjIndividual && <ObjetivosColaborador profile={profile} />}
  {menuActivo === 'miequipo_obj' && verObjIndividual && <ObjetivosGerente profile={profile} />}
  {menuActivo === 'compania_obj' && verObjCompania && <ObjetivosCompania esAdmin={esAdmin && !vistaComoColaborador} />}
+          {menuActivo === "capacitaciones" && verCapacitaciones && <ModuloCapacitaciones profile={profileEfectivo} esAdmin={esAdmin && !vistaComoColaborador} />}
  {menuActivo === 'admin_obj' && !vistaComoColaborador && esSuperAdmin && <PanelAdminObjetivos profile={profile} />}
  {menuActivo === 'gestion_modulos' && !vistaComoColaborador && esSuperAdmin && <GestionModulos />}
  {menuActivo === 'gestion_visibilidad' && !vistaComoColaborador && esSuperAdmin && <GestionVisibilidad />}
@@ -3608,6 +3613,397 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
 // =============================================
 // OBJETIVOS COMPAÑIA — lee de Supabase, editable por admin
 // =============================================
+// =============================================
+// MÓDULO CAPACITACIONES
+// =============================================
+function ModuloCapacitaciones({ profile, esAdmin }) {
+  var [vista, setVista] = useState('lista'); // lista | detalle | nueva
+  var [capSeleccionada, setCapSeleccionada] = useState(null);
+  var [capacitaciones, setCapacitaciones] = useState([]);
+  var [misParticipaciones, setMisParticipaciones] = useState([]);
+  var [cargando, setCargando] = useState(true);
+  var [form, setForm] = useState({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' });
+  var [colabs, setColabs] = useState([]);
+  var [participantes, setParticipantes] = useState([]);
+  var [seleccionados, setSeleccionados] = useState([]);
+  var [busquedaColab, setBusquedaColab] = useState('');
+  var [guardando, setGuardando] = useState(false);
+
+  useEffect(function() { cargar(); }, []);
+
+  async function cargar() {
+    setCargando(true);
+    if (esAdmin) {
+      var [{ data: caps }, { data: perfiles }] = await Promise.all([
+        supabase.from('capacitaciones').select('*, capacitacion_participantes(id, colaborador_id, fecha_completado, aprobado, nota, observaciones, profiles:colaborador_id(full_name, area, puesto))').eq('activo', true).order('fecha', { ascending: false }),
+        supabase.from('profiles').select('id, full_name, area, puesto, seniority').eq('activo', true).order('full_name'),
+      ]);
+      setCapacitaciones(caps || []);
+      setColabs(perfiles || []);
+    } else {
+      var { data: parts } = await supabase.from('capacitacion_participantes').select('*, capacitacion:capacitacion_id(id, nombre, descripcion, fecha, duracion_horas, instructor)').eq('colaborador_id', profile.id);
+      setMisParticipaciones(parts || []);
+    }
+    setCargando(false);
+  }
+
+  async function abrirDetalle(cap) {
+    setCapSeleccionada(cap);
+    setParticipantes(cap.capacitacion_participantes || []);
+    setSeleccionados((cap.capacitacion_participantes || []).map(function(p) { return p.colaborador_id; }));
+    setVista('detalle');
+  }
+
+  async function guardarCapacitacion() {
+    if (!form.nombre.trim()) return alert('El nombre es obligatorio');
+    if (!form.fecha) return alert('La fecha es obligatoria');
+    setGuardando(true);
+    var { data: { session } } = await supabase.auth.getSession();
+    var { data: nueva } = await supabase.from('capacitaciones').insert({
+      nombre: form.nombre, descripcion: form.descripcion, fecha: form.fecha,
+      duracion_horas: form.duracion_horas ? parseFloat(form.duracion_horas) : null,
+      instructor: form.instructor, created_by: session.user.id
+    }).select().single();
+    if (nueva && seleccionados.length > 0) {
+      await supabase.from('capacitacion_participantes').insert(
+        seleccionados.map(function(cid) { return { capacitacion_id: nueva.id, colaborador_id: cid, fecha_completado: form.fecha }; })
+      );
+    }
+    setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' });
+    setSeleccionados([]);
+    setGuardando(false);
+    setVista('lista');
+    cargar();
+  }
+
+  async function agregarQuitarParticipante(colabId) {
+    if (!capSeleccionada) return;
+    var yaEsta = seleccionados.includes(colabId);
+    if (yaEsta) {
+      await supabase.from('capacitacion_participantes').delete().eq('capacitacion_id', capSeleccionada.id).eq('colaborador_id', colabId);
+      setSeleccionados(function(p) { return p.filter(function(id) { return id !== colabId; }); });
+    } else {
+      await supabase.from('capacitacion_participantes').insert({ capacitacion_id: capSeleccionada.id, colaborador_id: colabId, fecha_completado: capSeleccionada.fecha });
+      setSeleccionados(function(p) { return [...p, colabId]; });
+    }
+    cargar();
+  }
+
+  async function eliminarCapacitacion(capId) {
+    if (!window.confirm('¿Eliminar esta capacitación? Se eliminarán todos los participantes.')) return;
+    await supabase.from('capacitaciones').update({ activo: false }).eq('id', capId);
+    cargar();
+  }
+
+  function generarCertificadoPDF(part, cap) {
+    var capData = cap || part.capacitacion;
+    var { jsPDF } = window.jspdf;
+    var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    var W = 297; var H = 210;
+
+    // Fondo arena suave
+    pdf.setFillColor(240, 237, 232);
+    pdf.rect(0, 0, W, H, 'F');
+
+    // Borde doble elegante
+    pdf.setDrawColor(35, 31, 32);
+    pdf.setLineWidth(1.5);
+    pdf.rect(8, 8, W - 16, H - 16);
+    pdf.setLineWidth(0.4);
+    pdf.rect(11, 11, W - 22, H - 22);
+
+    // Logo
+    try { pdf.addImage('/logo.jpg', 'JPEG', 20, 18, 28, 28); } catch(e) {}
+
+    // Nombre empresa
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text('FABRIC GROUP', W - 20, 28, { align: 'right' });
+
+    // Título
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(28);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text('Certificado de Participación', W / 2, 62, { align: 'center' });
+
+    // Línea decorativa
+    pdf.setDrawColor(212, 210, 198);
+    pdf.setLineWidth(0.8);
+    pdf.line(W / 2 - 80, 68, W / 2 + 80, 68);
+
+    // Texto principal
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(71, 85, 105);
+    pdf.text('Se certifica que', W / 2, 82, { align: 'center' });
+
+    // Nombre colaborador
+    var nombreColab = '';
+    if (part.profiles) nombreColab = part.profiles.full_name || '';
+    else if (profile) nombreColab = profile.full_name || profile.email || '';
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(22);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text(nombreColab, W / 2, 96, { align: 'center' });
+
+    // Descripción
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(71, 85, 105);
+    pdf.text('ha completado satisfactoriamente la capacitación', W / 2, 110, { align: 'center' });
+
+    // Nombre capacitación
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(17);
+    pdf.setTextColor(35, 31, 32);
+    var nombreCap = capData?.nombre || '';
+    var linesCap = pdf.splitTextToSize(nombreCap, W - 80);
+    pdf.text(linesCap, W / 2, 122, { align: 'center' });
+
+    // Detalles
+    var yDet = 138;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 116, 139);
+    var detalles = [];
+    if (capData?.fecha) detalles.push('Fecha: ' + new Date(capData.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }));
+    if (capData?.duracion_horas) detalles.push('Duración: ' + capData.duracion_horas + ' horas');
+    if (capData?.instructor) detalles.push('Instructor: ' + capData.instructor);
+    pdf.text(detalles.join('   |   '), W / 2, yDet, { align: 'center' });
+
+    // Línea firma
+    pdf.setDrawColor(212, 210, 198);
+    pdf.setLineWidth(0.5);
+    pdf.line(W / 2 - 50, H - 35, W / 2 + 50, H - 35);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text('Recursos Humanos — Fabric Group', W / 2, H - 29, { align: 'center' });
+
+    var nombreArchivo = 'Certificado_' + (nombreColab || 'colaborador').replace(/\s+/g, '_') + '_' + (nombreCap || '').replace(/\s+/g, '_') + '.pdf';
+    pdf.save(nombreArchivo);
+  }
+
+  var inputStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' };
+  var labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 };
+
+  if (cargando) return <p style={{ padding: 40, color: '#64748b' }}>Cargando...</p>;
+
+  // ── VISTA COLABORADOR ──
+  if (!esAdmin) {
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        <div style={{ background: '#231F20', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+          <h2 style={{ margin: 0, color: '#F0EDE8', fontSize: 22, fontWeight: 700 }}>Mis Capacitaciones</h2>
+          <p style={{ margin: '6px 0 0 0', fontSize: 13, color: '#94a3b8' }}>{misParticipaciones.length} capacitación{misParticipaciones.length !== 1 ? 'es' : ''} completada{misParticipaciones.length !== 1 ? 's' : ''}</p>
+        </div>
+        {misParticipaciones.length === 0 ? (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 40, textAlign: 'center' }}>
+            <p style={{ color: '#94a3b8', fontSize: 14 }}>Todavía no tenés capacitaciones registradas.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {misParticipaciones.map(function(part) {
+              var cap = part.capacitacion;
+              return (
+                <div key={part.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid #231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#231F20' }}>{cap?.nombre}</p>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
+                      {cap?.fecha && <span style={{ fontSize: 12, color: '#64748b' }}>{new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
+                      {cap?.duracion_horas && <span style={{ fontSize: 12, color: '#64748b' }}>{cap.duracion_horas} hs</span>}
+                      {cap?.instructor && <span style={{ fontSize: 12, color: '#64748b' }}>Instructor: {cap.instructor}</span>}
+                    </div>
+                    {cap?.descripcion && <p style={{ margin: '6px 0 0 0', fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{cap.descripcion}</p>}
+                  </div>
+                  <button onClick={function() { generarCertificadoPDF(part, null); }}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#231F20', color: '#F0EDE8', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    Descargar Certificado
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── VISTA ADMIN — NUEVA CAPACITACIÓN ──
+  if (vista === 'nueva') {
+    var colabsFiltrados = colabs.filter(function(c) {
+      if (!busquedaColab) return true;
+      return (c.full_name || '').toLowerCase().includes(busquedaColab.toLowerCase()) || (c.area || '').toLowerCase().includes(busquedaColab.toLowerCase());
+    });
+    return (
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <button onClick={function() { setVista('lista'); setSeleccionados([]); }} style={s.btnInfo}>Volver</button>
+          <h2 style={{ margin: 0, color: '#231F20', fontSize: 20, fontWeight: 700 }}>Nueva Capacitación</h2>
+        </div>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          {/* Formulario */}
+          <div style={{ flex: 1, minWidth: 280, background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <h3 style={{ margin: 0, color: '#231F20', fontSize: 15 }}>Datos de la capacitación</h3>
+            <div><label style={labelStyle}>Nombre *</label><input value={form.nombre} onChange={function(e) { setForm({...form, nombre: e.target.value}); }} style={inputStyle} placeholder="Ej: Escuela de Sushi" /></div>
+            <div><label style={labelStyle}>Descripción</label><textarea value={form.descripcion} onChange={function(e) { setForm({...form, descripcion: e.target.value}); }} style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} placeholder="Descripción de la capacitación..." /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div><label style={labelStyle}>Fecha *</label><input type="date" value={form.fecha} onChange={function(e) { setForm({...form, fecha: e.target.value}); }} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Duración (horas)</label><input type="number" value={form.duracion_horas} onChange={function(e) { setForm({...form, duracion_horas: e.target.value}); }} style={inputStyle} placeholder="Ej: 8" /></div>
+            </div>
+            <div><label style={labelStyle}>Instructor</label><input value={form.instructor} onChange={function(e) { setForm({...form, instructor: e.target.value}); }} style={inputStyle} placeholder="Nombre del instructor" /></div>
+          </div>
+
+          {/* Selector de participantes */}
+          <div style={{ flex: 1, minWidth: 280, background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 24 }}>
+            <h3 style={{ margin: '0 0 12px 0', color: '#231F20', fontSize: 15 }}>Participantes ({seleccionados.length})</h3>
+            <input value={busquedaColab} onChange={function(e) { setBusquedaColab(e.target.value); }} placeholder="Buscar colaborador o área..." style={{ ...inputStyle, marginBottom: 12 }} />
+            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {colabsFiltrados.map(function(c) {
+                var sel = seleccionados.includes(c.id);
+                return (
+                  <div key={c.id} onClick={function() { setSeleccionados(function(p) { return sel ? p.filter(function(id) { return id !== c.id; }) : [...p, c.id]; }); }}
+                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: sel ? '#231F20' : '#F0EDE8', border: '1px solid ' + (sel ? '#231F20' : '#e8e6e0') }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: sel ? '#F0EDE8' : '#231F20' }}>{c.full_name}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: sel ? '#94a3b8' : '#64748b' }}>{c.area}{c.puesto ? ' · ' + c.puesto : ''}</p>
+                    </div>
+                    {sel && <span style={{ fontSize: 12, color: '#86efac', fontWeight: 700 }}>✓</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+          <button onClick={guardarCapacitacion} disabled={guardando} style={{ ...s.btnPrimario, opacity: guardando ? 0.6 : 1 }}>{guardando ? 'Guardando...' : 'Guardar capacitación'}</button>
+          <button onClick={function() { setVista('lista'); setSeleccionados([]); }} style={s.btnSecundario}>Cancelar</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── VISTA ADMIN — DETALLE ──
+  if (vista === 'detalle' && capSeleccionada) {
+    var colabsFiltradosD = colabs.filter(function(c) {
+      if (!busquedaColab) return true;
+      return (c.full_name || '').toLowerCase().includes(busquedaColab.toLowerCase()) || (c.area || '').toLowerCase().includes(busquedaColab.toLowerCase());
+    });
+    return (
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <button onClick={function() { setVista('lista'); setBusquedaColab(''); cargar(); }} style={s.btnInfo}>Volver</button>
+          <h2 style={{ margin: 0, color: '#231F20', fontSize: 20, fontWeight: 700 }}>{capSeleccionada.nombre}</h2>
+        </div>
+        {/* Info */}
+        <div style={{ background: '#231F20', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {capSeleccionada.fecha && <span style={{ fontSize: 13, color: '#D4D2C6' }}>{new Date(capSeleccionada.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
+          {capSeleccionada.duracion_horas && <span style={{ fontSize: 13, color: '#D4D2C6' }}>{capSeleccionada.duracion_horas} horas</span>}
+          {capSeleccionada.instructor && <span style={{ fontSize: 13, color: '#D4D2C6' }}>Instructor: {capSeleccionada.instructor}</span>}
+          <span style={{ fontSize: 13, color: '#86efac', fontWeight: 700 }}>{seleccionados.length} participantes</span>
+        </div>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          {/* Lista participantes actuales */}
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#231F20' }}>Participantes</h4>
+            {seleccionados.length === 0 ? <p style={{ color: '#94a3b8', fontSize: 13 }}>Sin participantes aún.</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {colabs.filter(function(c) { return seleccionados.includes(c.id); }).map(function(c) {
+                  return (
+                    <div key={c.id} style={{ background: 'white', borderRadius: 10, border: '1px solid #e8e6e0', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#231F20' }}>{c.full_name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{c.area}</p>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={function() { var _c = c; var _cap = capSeleccionada; generarCertificadoPDF({ profiles: _c }, _cap); }}
+                          style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: '#F0EDE8', color: '#231F20', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          PDF
+                        </button>
+                        <button onClick={function() { agregarQuitarParticipante(c.id); }}
+                          style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          Quitar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {/* Agregar participantes */}
+          <div style={{ flex: 1, minWidth: 280, background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20 }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#231F20' }}>Agregar participante</h4>
+            <input value={busquedaColab} onChange={function(e) { setBusquedaColab(e.target.value); }} placeholder="Buscar..." style={{ ...inputStyle, marginBottom: 10 }} />
+            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {colabsFiltradosD.filter(function(c) { return !seleccionados.includes(c.id); }).map(function(c) {
+                return (
+                  <div key={c.id} onClick={function() { agregarQuitarParticipante(c.id); }}
+                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: '#F0EDE8', border: '1px solid #e8e6e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#231F20' }}>{c.full_name}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{c.area}</p>
+                    </div>
+                    <span style={{ fontSize: 18, color: '#231F20' }}>+</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── VISTA ADMIN — LISTA ──
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#231F20', fontSize: 22, fontWeight: 700 }}>Capacitaciones</h2>
+          <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{capacitaciones.length} capacitación{capacitaciones.length !== 1 ? 'es' : ''} registrada{capacitaciones.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' }); }} style={s.btnPrimario}>
+          + Nueva capacitación
+        </button>
+      </div>
+      {capacitaciones.length === 0 ? (
+        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 60, textAlign: 'center' }}>
+          <p style={{ color: '#94a3b8', fontSize: 14, margin: 0 }}>No hay capacitaciones cargadas aún.</p>
+          <p style={{ color: '#64748b', fontSize: 13, margin: '8px 0 0 0' }}>Hacé clic en "Nueva capacitación" para comenzar.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {capacitaciones.map(function(cap) {
+            var nPart = (cap.capacitacion_participantes || []).length;
+            return (
+              <div key={cap.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid #231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#231F20' }}>{cap.nombre}</p>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: '#F0EDE8', color: '#231F20' }}>{nPart} participante{nPart !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {cap.fecha && <span style={{ fontSize: 12, color: '#64748b' }}>{new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
+                    {cap.duracion_horas && <span style={{ fontSize: 12, color: '#64748b' }}>{cap.duracion_horas} hs</span>}
+                    {cap.instructor && <span style={{ fontSize: 12, color: '#64748b' }}>Instructor: {cap.instructor}</span>}
+                  </div>
+                  {cap.descripcion && <p style={{ margin: '6px 0 0 0', fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{cap.descripcion}</p>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={function() { abrirDetalle(cap); }} style={s.btnInfo}>Ver / Editar</button>
+                  <button onClick={function() { eliminarCapacitacion(cap.id); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5', background: '#fee2e2' }}>Eliminar</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ObjetivosCompania({ esAdmin }) {
  var [objetivos, setObjetivos] = useState([]);
  var [carg, setCarg] = useState(true);
