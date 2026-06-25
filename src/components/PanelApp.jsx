@@ -1504,7 +1504,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  {/* Botones acción — solo si no soloLectura */}
  {!soloLectura && (
  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
- {editandoCal !== d.colaborador.id && (
+ {editandoCal !== d.colaborador.id && !d.ratingFinal && (
  <button
    onClick={async function() {
      var _evId = d.evaluacionLider.id;
@@ -1581,7 +1581,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </div>
  ) : (
  <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
- {d.comentarioCalibracion || (parseFloat(d.ratingFinal) === parseFloat(d.promLider) ? 'Sin cambios — igual al líder' : '—')}
+ {d.comentarioCalibracion ? (parseFloat(d.ratingFinal) !== parseFloat(d.promLider) ? 'Evaluacion tuvo modificaciones — ver historial' : d.comentarioCalibracion) : (d.ratingFinal ? 'Confirmado sin cambios' : '—')}
  </span>
  )}
  </td>
