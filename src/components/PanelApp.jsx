@@ -1056,6 +1056,32 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  lJ.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
  }
 
+ // Historial de calibración
+ try {
+   var { data: hist } = await supabase.from('calibracion_historial')
+     .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', d.colaborador.id)
+     .order('created_at', { ascending: true });
+   if (hist && hist.length > 0) {
+     chk(20);
+     pdf.setFillColor(240, 237, 232);
+     pdf.rect(MX, y, PW - MX * 2, 8, 'F');
+     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
+     pdf.text(t('HISTORIAL DE CALIBRACION'), MX + 4, y + 5); y += 10;
+     hist.forEach(function(h) {
+       chk(16);
+       var tipoLabel = { calibracion: 'Calibracion', reabrir_auto: 'Reapertura Auto', reabrir_lider: 'Reapertura Lider', comentario: 'Comentario' };
+       var fecha = new Date(h.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+       pdf.text(t((tipoLabel[h.tipo] || h.tipo) + ' — ' + fecha + ' — ' + (h.usuario_nombre || '')), MX, y); y += 4;
+       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
+       var lines = pdf.splitTextToSize(t(h.comentario || ''), PW - MX * 2);
+       lines.forEach(function(l) { chk(5); pdf.text(t(l), MX + 4, y); y += 4; });
+       y += 2;
+     });
+   }
+ } catch(e) {}
+
+
  pie();
  return pdf;
  }
@@ -1166,10 +1192,27 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
  {editandoCal !== d.colaborador.id && (
  <button
- onClick={function() { var _evId = d.evaluacionLider.id; var _pl = parseFloat(d.promLider) || 0; if (!_pl) { alert('El lider aun no tiene rating promedio'); return; } guardarCal(_evId, _pl, 'Confirmado sin cambios', _pl); }}
- title="Confirmar como evaluacion final"
- style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ✓
+ <button
+   onClick={async function() {
+     var _evId = d.evaluacionLider.id;
+     var _pl = parseFloat(d.promLider) || 0;
+     if (!_pl) { alert('El lider aun no tiene rating promedio'); return; }
+     await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
+     // Registrar en historial
+     var { data: { session } } = await supabase.auth.getSession();
+     await supabase.from('calibracion_historial').insert({
+       ciclo_id: cicloId,
+       colaborador_id: d.colaborador.id,
+       evaluacion_id: _evId,
+       tipo: 'calibracion',
+       comentario: 'Rating calibrado confirmado: ' + _pl + ' (igual al rating del lider, sin cambios)',
+       usuario_id: session.user.id,
+       usuario_nombre: session.user.email
+     });
+   }}
+   title="Confirmar como evaluacion final"
+   style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+   ✓
  </button>
  )}
  {editandoCal !== d.colaborador.id && (
