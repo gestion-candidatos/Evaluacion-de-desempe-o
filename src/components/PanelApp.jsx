@@ -540,18 +540,18 @@ function DashboardGlobal() {
   // Spider chart inline
   function SpiderMini({ datos }) {
     if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20, fontSize: 12 }}>Sin datos</p>;
-    var N = datos.length; var CX = 200; var CY = 200; var R = 140;
+    var N = datos.length; var CX = 260; var CY = 260; var R = 150;
     function pt(idx, val) { var a = (Math.PI * 2 * idx / N) - Math.PI / 2; var r = (val / 5) * R; return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) }; }
     function pte(idx, r) { var a = (Math.PI * 2 * idx / N) - Math.PI / 2; return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) }; }
     var poly = datos.map(function(d, i) { var p = pt(i, d.prom); return p.x + ',' + p.y; }).join(' ');
     return (
-      <svg viewBox="0 0 400 400" style={{ width: '100%', maxWidth: 400 }}>
+      <svg viewBox="0 0 520 520" style={{ width: "100%", maxWidth: 520 }}>
         {[1,2,3,4,5].map(function(n) { return <polygon key={n} points={datos.map(function(_,i) { var p = pte(i,(n/5)*R); return p.x+','+p.y; }).join(' ')} fill="none" stroke={n===5?'#D4D2C6':'#e8e6e0'} strokeWidth={n===5?1.5:1} />; })}
         {datos.map(function(_,i) { var p = pte(i,R); return <line key={i} x1={CX} y1={CY} x2={p.x} y2={p.y} stroke="#e8e6e0" strokeWidth="1" />; })}
         <polygon points={poly} fill="rgba(35,31,32,0.12)" stroke="#231F20" strokeWidth="2" />
         {datos.map(function(d,i) { var p = pt(i,d.prom); return <circle key={i} cx={p.x} cy={p.y} r="4" fill="#231F20" />; })}
         {datos.map(function(d,i) {
-          var p = pte(i,R+40); var anchor = p.x < CX-10 ? 'end' : p.x > CX+10 ? 'start' : 'middle';
+          var p = pte(i,R+60); var anchor = p.x < CX-10 ? 'end' : p.x > CX+10 ? 'start' : 'middle';
           var words = d.nombre.split(' '); var lines = [];
           for (var w=0;w<words.length;w+=2) lines.push(words.slice(w,w+2).join(' '));
           return <g key={i}>{lines.map(function(l,li) { return <text key={li} x={p.x} y={p.y-lines.length*7+li*14} fontSize="11" fill="#231F20" fontWeight="600" textAnchor={anchor}>{l}</text>; })}<text x={p.x} y={p.y+lines.length*7+6} fontSize="12" fill="#64748b" fontWeight="700" textAnchor={anchor}>{d.prom.toFixed(1)}</text></g>;
