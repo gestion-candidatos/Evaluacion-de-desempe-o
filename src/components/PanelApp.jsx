@@ -1192,7 +1192,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
  {editandoCal !== d.colaborador.id && (
  <button
- <button
    onClick={async function() {
      var _evId = d.evaluacionLider.id;
      var _pl = parseFloat(d.promLider) || 0;
