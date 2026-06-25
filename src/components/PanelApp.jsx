@@ -992,7 +992,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  setCarg(true);
  var [{ data: evs }, { data: historial }] = await Promise.all([
    supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']),
-   supabase.from('calibracion_historial').select('colaborador_id, tipo').eq('ciclo_id', cicloId).eq('tipo', 'reabrir_lider')
+   supabase.from('calibracion_historial').select('colaborador_id, tipo').eq('ciclo_id', cicloId).in('tipo', ['reabrir_lider', 'comentario', 'calibracion'])
  ]);
  // Set de colaboradores con reapertura de lider
  var reabiertos = new Set((historial || []).map(function(h) { return h.colaborador_id; }));
@@ -1590,7 +1590,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </span>
  )}
  </td>
- <td style={td}><button onClick={function() { onHist && onHist(d.colaborador); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>Ver</button></td>
+ <td style={td}><button onClick={function() { cargarHistorial(d.colaborador.id); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>Ver</button></td>
  <td style={td}><button onClick={function() { verPDF(d); }} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Ver PDF</button></td>
                   <td style={{ ...td, minWidth: 160 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
