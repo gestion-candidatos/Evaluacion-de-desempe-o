@@ -2359,7 +2359,6 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
      })}
    </div>
  )}
- )}
 
  {/* Alcance Anual del Colaborador */}
  {objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length > 0 && (
@@ -2420,6 +2419,8 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
  )}
 
  </div>
+  );
+}
 
 
 
