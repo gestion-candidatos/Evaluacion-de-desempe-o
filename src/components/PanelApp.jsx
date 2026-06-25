@@ -2420,7 +2420,6 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
  )}
 
  </div>
- );
 
 
 
