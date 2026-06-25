@@ -2067,6 +2067,10 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
  var [comentValidacion, setComentValidacion] = useState('');
  var [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
  var [formObj, setFormObj] = useState(null);
+  var [alcanceAnualColab, setAlcanceAnualColab] = useState(null);
+  var [editandoAlcanceAnual, setEditandoAlcanceAnual] = useState(false);
+  var [alcanceAnualTemp, setAlcanceAnualTemp] = useState("");
+  var [justAlcanceAnual, setJustAlcanceAnual] = useState("");
 
  var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
  
@@ -2074,12 +2078,43 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
  alcance_100_descripcion: '', alcance_100_fecha: '', alcance_100_meta: '',
  alcance_120_descripcion: '', alcance_120_fecha: '', alcance_120_meta: '' };
 
- useEffect(function() { cargarObjetivos(); }, []);
+  useEffect(function() { cargarObjetivos(); cargarAlcanceAnualColab(); }, []);
 
  async function cargarObjetivos() {
  var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', colaborador.id).order('created_at', { ascending: false });
  setObjetivos(data || []); setCargando(false);
  }
+
+  async function cargarAlcanceAnualColab() {
+    var { data } = await supabase.from("alcance_anual").select("*").eq("colaborador_id", colaborador.id).is("ciclo_id", null).maybeSingle();
+    setAlcanceAnualColab(data || null);
+  }
+
+  async function guardarAlcanceAnual() {
+    if (!alcanceAnualTemp) return alert("Ingresá el alcance final");
+    if (!justAlcanceAnual.trim()) return alert("La justificación es obligatoria");
+    var { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("alcance_anual").upsert({
+      colaborador_id: colaborador.id,
+      ciclo_id: null,
+      alcance_final: parseFloat(alcanceAnualTemp),
+      justificacion_lider: justAlcanceAnual,
+      validado_por_lider: true,
+      lider_id: session.user.id,
+      fecha_validacion: new Date(),
+    }, { onConflict: "colaborador_id,ciclo_id" });
+    // Registrar en calibracion_historial
+    await supabase.from("calibracion_historial").insert({
+      colaborador_id: colaborador.id,
+      tipo: "comentario",
+      comentario: "Alcance anual validado por lider: " + alcanceAnualTemp + "%. Justificacion: " + justAlcanceAnual,
+      usuario_id: session.user.id,
+      usuario_nombre: session.user.email
+    });
+    setEditandoAlcanceAnual(false);
+    setAlcanceAnualTemp(""); setJustAlcanceAnual("");
+    cargarAlcanceAnualColab();
+  }
 
  // Validar objetivo (aprobar definicion o rechazar)
  async function ejecutarValidacionObj() {
@@ -2324,9 +2359,69 @@ function GestionObjetivosLider({ colaborador, profile, onVolver }) {
      })}
    </div>
  )}
+ )}
+
+ {/* Alcance Anual del Colaborador */}
+ {objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length > 0 && (
+   <div style={{ marginTop: 24, background: '#231F20', borderRadius: 14, padding: '20px 24px', color: '#F0EDE8' }}>
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+       <div>
+         <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alcance Anual — {colaborador.full_name}</p>
+         <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#64748b' }}>
+           Promedio de {objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length} objetivos con alcance reportado
+         </p>
+       </div>
+       <div style={{ textAlign: 'right' }}>
+         {alcanceAnualColab?.validado_por_lider ? (
+           <div>
+             <p style={{ margin: 0, fontSize: 36, fontWeight: 800, color: '#86efac' }}>{alcanceAnualColab.alcance_final}%</p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#86efac' }}>Validado</p>
+             {alcanceAnualColab.justificacion_lider && <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>{alcanceAnualColab.justificacion_lider}</p>}
+           </div>
+         ) : (
+           <div>
+             <p style={{ margin: 0, fontSize: 36, fontWeight: 800, color: '#D4D2C6' }}>
+               {(objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).reduce(function(s,o) { return s + parseFloat(o.alcance_completado); }, 0) / objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length).toFixed(1)}%
+             </p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>Calculado — pendiente de validacion</p>
+           </div>
+         )}
+       </div>
+     </div>
+
+     {/* Editor del lider */}
+     {!editandoAlcanceAnual ? (
+       <button onClick={function() {
+         setEditandoAlcanceAnual(true);
+         setAlcanceAnualTemp(alcanceAnualColab?.alcance_final || (objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).reduce(function(s,o) { return s + parseFloat(o.alcance_completado); }, 0) / objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length).toFixed(1));
+         setJustAlcanceAnual(alcanceAnualColab?.justificacion_lider || '');
+       }}
+         style={{ marginTop: 16, padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(212,210,198,0.4)', background: 'transparent', color: '#D4D2C6', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+         {alcanceAnualColab?.validado_por_lider ? 'Editar validacion' : 'Validar alcance anual'}
+       </button>
+     ) : (
+       <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 16 }}>
+         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+           <label style={{ fontSize: 12, color: '#D4D2C6', fontWeight: 600, whiteSpace: 'nowrap' }}>Alcance final (%)</label>
+           <input type="number" min="0" max="200" value={alcanceAnualTemp}
+             onChange={function(e) { setAlcanceAnualTemp(e.target.value); }}
+             style={{ width: 80, padding: '8px 10px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 16, fontWeight: 700, textAlign: 'center', background: 'white', color: '#231F20' }} />
+         </div>
+         <textarea value={justAlcanceAnual} onChange={function(e) { setJustAlcanceAnual(e.target.value); }}
+           placeholder="Justificacion del alcance final (obligatoria)..."
+           style={{ width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid rgba(212,210,198,0.4)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', background: 'rgba(255,255,255,0.08)', color: '#F0EDE8' }} />
+         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+           <button onClick={guardarAlcanceAnual} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#22c55e', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Confirmar</button>
+           <button onClick={function() { setEditandoAlcanceAnual(false); }} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(212,210,198,0.4)', background: 'transparent', color: '#D4D2C6', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+         </div>
+       </div>
+     )}
+   </div>
+ )}
+
  </div>
  );
-}
+
 
 
 // Helper: componente reutilizable de formulario de objetivo
@@ -2464,6 +2559,8 @@ function ObjetivosColaborador({ profile }) {
  var [editandoId, setEditandoId] = useState(null);
  var [formObj, setFormObj] = useState(null);
  var [modalCompletar, setModalCompletar] = useState(null);
+  var [alcanceAnual, setAlcanceAnual] = useState(null);
+  var [loadingAlcance, setLoadingAlcance] = useState(false);
 
  var FORM_VACIO = { objetivo: '', corporativo: '', ponderacion: '', alcance_tipo: 'fecha',
  alcance_80_descripcion: '', alcance_80_fecha: '', alcance_80_meta: '',
@@ -2478,7 +2575,7 @@ function ObjetivosColaborador({ profile }) {
  return CORP_COLORES[idx];
  }
 
- useEffect(function() { cargarObjetivos(); }, []);
+ useEffect(function() { cargarObjetivos(); cargarAlcanceAnual(); }, []);
 
  async function cargarObjetivos() {
  var { data } = await supabase.from('objetivos').select('*').eq('colaborador_id', profile.id).order('created_at', { ascending: false });
@@ -2611,7 +2708,7 @@ function ObjetivosColaborador({ profile }) {
  )}
 
  {modalCompletar && (
- <ModalCompletar objetivo={objetivos.find(function(o) { return o.id === modalCompletar; })}
+ <ModalCompletar todos={objetivos} objetivo={objetivos.find(function(o) { return o.id === modalCompletar; })}
  onConfirmar={completarObjetivo} onCancelar={function() { setModalCompletar(null); }} />
  )}
 
@@ -2678,6 +2775,39 @@ function ObjetivosColaborador({ profile }) {
  })}
  </div>
  )}
+
+ {/* Alcance Anual */}
+ {objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length > 0 && (
+   <div style={{ marginTop: 24, background: '#231F20', borderRadius: 14, padding: '20px 24px', color: '#F0EDE8' }}>
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+       <div>
+         <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alcance Anual</p>
+         <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#64748b' }}>
+           Promedio de {objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length} objetivos con alcance reportado
+         </p>
+       </div>
+       <div style={{ textAlign: 'right' }}>
+         {alcanceAnual?.validado_por_lider ? (
+           <div>
+             <p style={{ margin: 0, fontSize: 36, fontWeight: 800, color: '#86efac' }}>{alcanceAnual.alcance_final}%</p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#86efac' }}>Validado por el lider</p>
+           </div>
+         ) : (
+           <div>
+             <p style={{ margin: 0, fontSize: 36, fontWeight: 800, color: '#D4D2C6' }}>
+               {(objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).reduce(function(s,o) { return s + parseFloat(o.alcance_completado); }, 0) / objetivos.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; }).length).toFixed(1)}%
+             </p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>Pendiente de validacion del lider</p>
+           </div>
+         )}
+         {alcanceAnual?.justificacion_lider && (
+           <p style={{ margin: '6px 0 0 0', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>{alcanceAnual.justificacion_lider}</p>
+         )}
+       </div>
+     </div>
+   </div>
+ )}
+
  </div>
  );
 
@@ -2699,10 +2829,35 @@ function ObjetivosColaborador({ profile }) {
  }
  }
  setModalCompletar(null); cargarObjetivos();
+  setModalCompletar(null); 
+  // Calcular alcance anual automático
+  var objsActualizados = objetivos.map(function(o) { return o.id === objId ? { ...o, alcance_completado: alcance, status: 'completado' } : o; });
+  var objsConAlcance = objsActualizados.filter(function(o) { return o.alcance_completado && o.status !== 'rechazado'; });
+  if (objsConAlcance.length > 0) {
+    var sumaAlcances = objsConAlcance.reduce(function(s, o) { return s + parseFloat(o.alcance_completado); }, 0);
+    var alcanceCalc = (sumaAlcances / objsConAlcance.length).toFixed(1);
+    // Guardar o actualizar alcance anual (sin ciclo_id — usamos año actual)
+    var año = new Date().getFullYear();
+    await supabase.from('alcance_anual').upsert({
+      colaborador_id: profile.id,
+      ciclo_id: null,
+      alcance_calculado: parseFloat(alcanceCalc),
+      alcance_final: parseFloat(alcanceCalc),
+      lider_id: perfN?.leader_id || null,
+    }, { onConflict: 'colaborador_id,ciclo_id' });
+    setAlcanceAnual({ alcance_calculado: alcanceCalc, alcance_final: alcanceCalc });
+  }
+  cargarObjetivos();
  }
+
+ async function cargarAlcanceAnual() {
+   var { data } = await supabase.from('alcance_anual').select('*').eq('colaborador_id', profile.id).is('ciclo_id', null).maybeSingle();
+   setAlcanceAnual(data || null);
+ }
+
 }
 
-function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
+function ModalCompletar({ objetivo, onConfirmar, onCancelar, todos }) {
  var [alcance, setAlcance] = useState('');
  var [justificacion, setJustificacion] = useState('');
  if (!objetivo) return null;
@@ -2741,6 +2896,25 @@ function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
  })}
  </div>
 
+ {/* Campo libre para % personalizado */}
+ <div style={{ marginBottom: 16 }}>
+   <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>O ingresá otro porcentaje</label>
+   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+     <input
+       type="number" min="0" max="200"
+       value={['80','100','120'].includes(alcance) ? '' : alcance}
+       onChange={function(e) { setAlcance(e.target.value); }}
+       placeholder="Ej: 65, 90, 110..."
+       style={{ width: 120, padding: '10px 12px', borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 15, fontWeight: 700, textAlign: 'center' }}
+     />
+     <span style={{ fontSize: 20, fontWeight: 700, color: '#231F20' }}>%</span>
+     {alcance && !['80','100','120'].includes(alcance) && (
+       <span style={{ fontSize: 13, color: '#64748b' }}>Valor personalizado seleccionado</span>
+     )}
+   </div>
+ </div>
+
+
  {alcance && defAlcance && (
  <div style={{ background: '#f8fafc', border: '1px solid #D4D2C6', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#475569' }}>
  <strong>Definicion del nivel:</strong> {defAlcance}
@@ -2753,6 +2927,45 @@ function ModalCompletar({ objetivo, onConfirmar, onCancelar }) {
  placeholder="Explicá el resultado alcanzado, qué hiciste, qué resultados obtuviste..."
  style={{ width: '100%', minHeight: 90, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
  </div>
+
+ {/* Alcance anual simulado */}
+ {(function() {
+   var todosActivos = (todos || []).filter(function(o) { return o.status !== 'rechazado' && o.id !== objetivo.id; });
+   var completados = todosActivos.filter(function(o) { return o.alcance_completado; });
+   var alcanceActual = parseFloat(alcance) || 0;
+   if (!alcanceActual) return null;
+
+   // Suma de alcances de todos los objetivos (completados + el actual)
+   var sumAlcances = completados.reduce(function(s, o) { return s + parseFloat(o.alcance_completado); }, 0) + alcanceActual;
+   var cantObjetivos = completados.length + 1 + todosActivos.filter(function(o) { return !o.alcance_completado; }).length;
+   var alcanceAnual = (sumAlcances / cantObjetivos).toFixed(1);
+
+   // Versión ponderada
+   var spond = completados.reduce(function(s,o) { return s + parseFloat(o.ponderacion||0); }, 0) + parseFloat(objetivo.ponderacion||0);
+   var sapond = completados.reduce(function(s,o) { return s + parseFloat(o.alcance_completado) * parseFloat(o.ponderacion||0); }, 0) + alcanceActual * parseFloat(objetivo.ponderacion||0);
+   var alcancePond = spond > 0 ? (sapond / spond).toFixed(1) : null;
+
+   return (
+     <div style={{ background: '#F0EDE8', border: '1px solid #D4D2C6', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+       <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alcance anual estimado</p>
+       <div style={{ display: 'flex', gap: 24 }}>
+         <div>
+           <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>Promedio simple</p>
+           <p style={{ margin: '2px 0 0 0', fontSize: 28, fontWeight: 800, color: '#231F20' }}>{alcanceAnual}%</p>
+           <p style={{ margin: 0, fontSize: 10, color: '#94a3b8' }}>Suma de alcances / {cantObjetivos} objetivos</p>
+         </div>
+         {alcancePond && (
+           <div style={{ borderLeft: '1px solid #D4D2C6', paddingLeft: 24 }}>
+             <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>Promedio ponderado</p>
+             <p style={{ margin: '2px 0 0 0', fontSize: 28, fontWeight: 800, color: '#231F20' }}>{alcancePond}%</p>
+             <p style={{ margin: 0, fontSize: 10, color: '#94a3b8' }}>Considera la ponderación de cada objetivo</p>
+           </div>
+         )}
+       </div>
+     </div>
+   );
+ })()}
+
 
  <div style={{ display: 'flex', gap: 12 }}>
  <button
