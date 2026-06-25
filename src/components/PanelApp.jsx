@@ -3701,89 +3701,135 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     var W = 297; var H = 210;
 
-    // Fondo arena suave
-    pdf.setFillColor(240, 237, 232);
+    // Fondo arena
+    pdf.setFillColor(220, 217, 210);
     pdf.rect(0, 0, W, H, 'F');
 
-    // Borde doble elegante
-    pdf.setDrawColor(35, 31, 32);
-    pdf.setLineWidth(1.5);
-    pdf.rect(8, 8, W - 16, H - 16);
-    pdf.setLineWidth(0.4);
-    pdf.rect(11, 11, W - 22, H - 22);
+    // Borde exterior redondeado (simulado con rect)
+    pdf.setDrawColor(180, 170, 155);
+    pdf.setLineWidth(3);
+    pdf.roundedRect(6, 6, W - 12, H - 12, 8, 8, 'S');
 
-    // Logo
-    try { pdf.addImage('/logo.jpg', 'JPEG', 20, 18, 28, 28); } catch(e) {}
+    // Borde interior fino
+    pdf.setLineWidth(0.6);
+    pdf.setDrawColor(160, 150, 135);
+    pdf.roundedRect(10, 10, W - 20, H - 20, 6, 6, 'S');
 
-    // Nombre empresa
+    // Nombre empresa arriba izquierda
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(9);
-    pdf.setTextColor(35, 31, 32);
-    pdf.text('FABRIC GROUP', W - 20, 28, { align: 'right' });
+    pdf.setFontSize(8);
+    pdf.setTextColor(80, 75, 65);
+    pdf.text('FABRIC GROUP', 20, 22);
 
-    // Título
-    pdf.setFont('times', 'bold');
-    pdf.setFontSize(28);
-    pdf.setTextColor(35, 31, 32);
-    pdf.text('Certificado de Participación', W / 2, 62, { align: 'center' });
-
-    // Línea decorativa
-    pdf.setDrawColor(212, 210, 198);
-    pdf.setLineWidth(0.8);
-    pdf.line(W / 2 - 80, 68, W / 2 + 80, 68);
-
-    // Texto principal
-    pdf.setFont('helvetica', 'normal');
+    // Año arriba izquierda (círculo decorativo)
+    var anio = capData?.fecha ? new Date(capData.fecha + 'T12:00:00').getFullYear() : new Date().getFullYear();
+    pdf.setFillColor(60, 55, 50);
+    pdf.circle(26, 42, 14, 'F');
+    pdf.setFillColor(80, 75, 70);
+    pdf.circle(26, 42, 12, 'F');
+    pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
-    pdf.setTextColor(71, 85, 105);
-    pdf.text('Se certifica que', W / 2, 82, { align: 'center' });
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(String(anio), 26, 45.5, { align: 'center' });
 
-    // Nombre colaborador
+    // Logo centrado en la parte superior
+    pdf.setDrawColor(180, 170, 155);
+    pdf.setLineWidth(0.5);
+    pdf.line(W/2 - 60, 32, W/2 - 22, 32);
+    pdf.line(W/2 + 22, 32, W/2 + 60, 32);
+    try {
+      pdf.addImage('/logo.jpg', 'JPEG', W/2 - 18, 18, 36, 28);
+    } catch(e) {
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.setTextColor(35,31,32);
+      pdf.text('FABRIC GROUP', W/2, 32, { align: 'center' });
+    }
+
+    // CERTIFICADO — título grande
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(52);
+    pdf.setTextColor(25, 22, 20);
+    pdf.text('CERTIFICADO', W/2, 58, { align: 'center' });
+
+    // Línea bajo título
+    pdf.setDrawColor(160, 150, 135);
+    pdf.setLineWidth(0.5);
+    pdf.line(W/2 - 90, 63, W/2 + 90, 63);
+
+    // Nombre del colaborador — grande en cursiva
     var nombreColab = '';
     if (part.profiles) nombreColab = part.profiles.full_name || '';
     else if (profile) nombreColab = profile.full_name || profile.email || '';
-    pdf.setFont('times', 'bold');
-    pdf.setFontSize(22);
-    pdf.setTextColor(35, 31, 32);
-    pdf.text(nombreColab, W / 2, 96, { align: 'center' });
 
-    // Descripción
+    pdf.setFont('times', 'bolditalic');
+    pdf.setFontSize(26);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text(nombreColab, W/2, 88, { align: 'center' });
+
+    // Línea bajo nombre
+    pdf.setDrawColor(35, 31, 32);
+    pdf.setLineWidth(0.8);
+    var nombreAncho = Math.min(pdf.getTextWidth(nombreColab) + 20, W - 80);
+    pdf.line(W/2 - nombreAncho/2, 92, W/2 + nombreAncho/2, 92);
+
+    // Texto descriptivo
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(11);
-    pdf.setTextColor(71, 85, 105);
-    pdf.text('ha completado satisfactoriamente la capacitación', W / 2, 110, { align: 'center' });
+    pdf.setTextColor(70, 65, 55);
+    pdf.text('Se extiende el siguiente certificado por haber completado', W/2, 104, { align: 'center' });
+    pdf.text('exitosamente la capacitacion:', W/2, 111, { align: 'center' });
 
-    // Nombre capacitación
-    pdf.setFont('times', 'bold');
-    pdf.setFontSize(17);
-    pdf.setTextColor(35, 31, 32);
+    // Nombre capacitación — destacado
     var nombreCap = capData?.nombre || '';
-    var linesCap = pdf.splitTextToSize(nombreCap, W - 80);
-    pdf.text(linesCap, W / 2, 122, { align: 'center' });
+    pdf.setFont('times', 'bold');
+    pdf.setFontSize(15);
+    pdf.setTextColor(25, 22, 20);
+    var linesCap = pdf.splitTextToSize(nombreCap, W - 100);
+    pdf.text(linesCap, W/2, 122, { align: 'center' });
 
     // Detalles
-    var yDet = 138;
+    var yDet = 130 + (linesCap.length - 1) * 6;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 95, 85);
+    var detalles = [];
+    if (capData?.fecha) detalles.push(new Date(capData.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }));
+    if (capData?.duracion_horas) detalles.push(capData.duracion_horas + ' horas');
+    if (capData?.instructor) detalles.push('Instructor: ' + capData.instructor);
+    if (detalles.length > 0) pdf.text(detalles.join('  ·  '), W/2, yDet + 4, { align: 'center' });
+
+    // Dos firmas al pie
+    var yFirma = H - 40;
+
+    // Firma izquierda — Adrián Galván
+    pdf.setDrawColor(160, 150, 135);
+    pdf.setLineWidth(0.6);
+    pdf.line(W/4 - 35, yFirma, W/4 + 35, yFirma);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text('Adrian Galvan', W/4, yFirma + 7, { align: 'center' });
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
-    pdf.setTextColor(100, 116, 139);
-    var detalles = [];
-    if (capData?.fecha) detalles.push('Fecha: ' + new Date(capData.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }));
-    if (capData?.duracion_horas) detalles.push('Duración: ' + capData.duracion_horas + ' horas');
-    if (capData?.instructor) detalles.push('Instructor: ' + capData.instructor);
-    pdf.text(detalles.join('   |   '), W / 2, yDet, { align: 'center' });
+    pdf.setTextColor(100, 95, 85);
+    pdf.text('Gerente de Recursos Humanos', W/4, yFirma + 13, { align: 'center' });
 
-    // Línea firma
-    pdf.setDrawColor(212, 210, 198);
-    pdf.setLineWidth(0.5);
-    pdf.line(W / 2 - 50, H - 35, W / 2 + 50, H - 35);
+    // Firma derecha — Florencia Salvaneschi
+    pdf.setDrawColor(160, 150, 135);
+    pdf.setLineWidth(0.6);
+    pdf.line(W * 3/4 - 35, yFirma, W * 3/4 + 35, yFirma);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(35, 31, 32);
+    pdf.text('Florencia Salvaneschi', W * 3/4, yFirma + 7, { align: 'center' });
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(100, 116, 139);
-    pdf.text('Recursos Humanos — Fabric Group', W / 2, H - 29, { align: 'center' });
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 95, 85);
+    pdf.text('HRBP Operaciones', W * 3/4, yFirma + 13, { align: 'center' });
 
-    var nombreArchivo = 'Certificado_' + (nombreColab || 'colaborador').replace(/\s+/g, '_') + '_' + (nombreCap || '').replace(/\s+/g, '_') + '.pdf';
+    var nombreArchivo = 'Certificado_' + (nombreColab || 'colaborador').replace(/\s+/g, '_') + '.pdf';
     pdf.save(nombreArchivo);
   }
+
 
   var inputStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' };
   var labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 };
