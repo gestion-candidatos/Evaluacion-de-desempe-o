@@ -450,7 +450,7 @@ function DashboardView({ stats, colabs }) {
  ];
 
  // Gráfico 2: Promedio por competencia (para araña)
- var evalIdsFiltrados = evalFiltradas.map(function(e) { return e.id; });
+  var evalIdsFiltrados = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider"; }).map(function(e) { return e.id; });
  var compMap = {};
  puntuaciones.forEach(function(p) {
  if (!evalIdsFiltrados.includes(p.evaluacion_id)) return;
@@ -546,9 +546,9 @@ function DashboardView({ stats, colabs }) {
  {/* KPI Cards */}
  <div style={s.grid}>
  <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Participantes</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{perfilesFiltrados.length}</p></div>
- <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.length}</p></div>
- <div style={{ ...s.tarjetaStat, borderTop: '3px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Completadas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.estado === 'enviado'; }).length}</p></div>
- <div style={{ ...s.tarjetaStat, borderTop: '3px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Pendientes</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.estado !== 'enviado'; }).length}</p></div>
+ <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider"; }).length}</p></div>
+ <div style={{ ...s.tarjetaStat, borderTop: '3px solid #231F20' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Completadas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider" && e.estado === "enviado"'; }).length}</p></div>
+ <div style={{ ...s.tarjetaStat, borderTop: '3px solid #D4D2C6' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Pendientes</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider" && e.estado !== "enviado"'; }).length}</p></div>
  </div>
 
  {/* Filtros */}
