@@ -370,7 +370,6 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
  return (
  <div>
  <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
- <button onClick={function() { setVista('dashboard'); }} style={vista === 'dashboard' ? s.btnPrimario : s.btnInfo}>Dashboard</button>
  <button onClick={function() { setVista('evaluaciones'); }} style={vista === 'evaluaciones' ? s.btnPrimario : s.btnInfo}>Ver Evaluaciones</button>
  <button onClick={function() { setVista('calibracion'); }} style={vista === 'calibracion' ? s.btnPrimario : s.btnInfo}> Calibracion</button>
  <button onClick={function() { setVista('feedback'); }} style={vista === 'feedback' ? s.btnPrimario : s.btnInfo}> Feedback</button>
@@ -379,7 +378,6 @@ function PanelAdminConEquipo({ profile, cicloId, tieneAutoevaluacion, cicloEstad
  <button onClick={function() { setVista('colaboradores'); }} style={vista === 'colaboradores' ? s.btnPrimario : s.btnInfo}>Participantes</button>
  <button onClick={function() { setVista('modulos'); }} style={vista === 'modulos' ? s.btnPrimario : s.btnInfo}>Modulos</button>
  </div>
- {vista === 'dashboard' && <DashboardView stats={stats} colabs={colabs} />}
  {vista === 'evaluaciones' && <EvaluacionesAdmin cicloId={cicloId} />}
  {vista === 'calibracion' && <PanelCalibracion cicloId={cicloId} colabs={colabs} onHist={setHist} soloLectura={cicloEstado === 'cerrado'} />}
  {vista === 'feedback' && <FeedbackAdmin cicloId={cicloId} />}
@@ -410,6 +408,10 @@ function DashboardGlobal() {
   var [filtroAreaObj, setFiltroAreaObj] = useState('Todas');
   var [filtroColabObj, setFiltroColabObj] = useState('Todos');
   var [cargando, setCargando] = useState(true);
+  var [filtroAreaDesemp, setFiltroAreaDesemp] = useState("Todas");
+  var [filtroSeniorityDesemp, setFiltroSeniorityDesemp] = useState("Todos");
+  var [filtroColabDesemp, setFiltroColabDesemp] = useState("Todos");
+  var [filtroCicloDesemp, setFiltroCicloDesemp] = useState("Todos");
 
   useEffect(function() { cargarTodo(); }, []);
 
@@ -437,11 +439,32 @@ function DashboardGlobal() {
 
   if (cargando) return <p style={{ padding: 40, color: '#64748b' }}>Cargando dashboard...</p>;
 
-  // Datos para gráfico araña — promedio de competencias (evaluaciones lider calibradas)
+  // Opciones de filtro para desempeño
+  var areasDesemp = ['Todas'].concat([...new Set(colabs.map(function(c) { return c.area; }).filter(Boolean))].sort());
+  var senioritiesDesemp = ['Todos'].concat([...new Set(colabs.map(function(c) { return c.seniority; }).filter(Boolean))].sort());
+  var ciclosOpts = [{ id: 'Todos', nombre: 'Todos los ciclos' }].concat(ciclos);
+
+  // Perfiles filtrados para desempeño
+  var colabsFiltradosDesemp = colabs.filter(function(c) {
+    if (filtroAreaDesemp !== 'Todas' && c.area !== filtroAreaDesemp) return false;
+    if (filtroSeniorityDesemp !== 'Todos' && c.seniority !== filtroSeniorityDesemp) return false;
+    if (filtroColabDesemp !== 'Todos' && c.id !== filtroColabDesemp) return false;
+    return true;
+  });
+  var idsDesemp = colabsFiltradosDesemp.map(function(c) { return c.id; });
+
+  // Evaluaciones filtradas
+  var evsFiltradas = (statsDesempeno.evaluaciones || []).filter(function(e) {
+    if (!idsDesemp.includes(e.colaborador_id)) return false;
+    if (filtroCicloDesemp !== 'Todos' && String(e.ciclo_id) !== String(filtroCicloDesemp)) return false;
+    return true;
+  });
+
+  // Gráfico araña — solo evaluaciones filtradas del líder
   var compMap = {};
+  var evsLiderIds = evsFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider'; }).map(function(e) { return e.id; });
   (statsDesempeno.puntuaciones || []).forEach(function(p) {
-    var ev = (statsDesempeno.evaluaciones || []).find(function(e) { return e.id === p.evaluacion_id; });
-    if (!ev || ev.tipo_evaluacion !== 'evaluacion_lider') return;
+    if (!evsLiderIds.includes(p.evaluacion_id)) return;
     var nombre = p.competencias?.nombre;
     if (!nombre || !p.rating) return;
     if (!compMap[nombre]) compMap[nombre] = { sum: 0, count: 0 };
@@ -450,8 +473,8 @@ function DashboardGlobal() {
   });
   var compData = Object.entries(compMap).map(function(e) { return { nombre: e[0], prom: e[1].sum / e[1].count }; }).sort(function(a,b) { return b.prom - a.prom; });
 
-  // Distribución desempeño
-  var evalLider = (statsDesempeno.evaluaciones || []).filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && e.rating_calibrado; });
+  // Distribución desempeño — filtrada
+  var evalLider = evsFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && e.rating_calibrado; });
   var bajo = 0; var medio = 0; var alto = 0;
   evalLider.forEach(function(e) {
     var r = parseFloat(e.rating_calibrado);
@@ -549,6 +572,26 @@ function DashboardGlobal() {
       {tabActivo === 'desempeno' && (
         <div>
           <h2 style={{ color: '#231F20', margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Desempeño — Vista general</h2>
+          {/* Filtros desempeño */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center", background: "white", padding: "12px 16px", borderRadius: 10, border: "1px solid #e8e6e0" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Filtrar:</span>
+            <select value={filtroAreaDesemp} onChange={function(e) { setFiltroAreaDesemp(e.target.value); setFiltroColabDesemp("Todos"); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white" }}>
+              {areasDesemp.map(function(a) { return <option key={a} value={a}>{a === "Todas" ? "Todas las áreas" : a}</option>; })}
+            </select>
+            <select value={filtroSeniorityDesemp} onChange={function(e) { setFiltroSeniorityDesemp(e.target.value); setFiltroColabDesemp("Todos"); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white" }}>
+              {senioritiesDesemp.map(function(s) { return <option key={s} value={s}>{s === "Todos" ? "Todos los seniority" : s}</option>; })}
+            </select>
+            <select value={filtroColabDesemp} onChange={function(e) { setFiltroColabDesemp(e.target.value); setFiltroAreaDesemp("Todas"); setFiltroSeniorityDesemp("Todos"); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white", minWidth: 180 }}>
+              <option value="Todos">Todos los colaboradores</option>
+              {colabs.sort(function(a,b) { return (a.full_name||"").localeCompare(b.full_name||""); }).map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email}</option>; })}
+            </select>
+            <select value={filtroCicloDesemp} onChange={function(e) { setFiltroCicloDesemp(e.target.value); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white" }}>
+              {ciclosOpts.map(function(c) { return <option key={c.id} value={c.id}>{c.nombre}</option>; })}
+            </select>
+            {(filtroAreaDesemp !== "Todas" || filtroSeniorityDesemp !== "Todos" || filtroColabDesemp !== "Todos" || filtroCicloDesemp !== "Todos") && (
+              <button onClick={function() { setFiltroAreaDesemp("Todas"); setFiltroSeniorityDesemp("Todos"); setFiltroColabDesemp("Todos"); setFiltroCicloDesemp("Todos"); }} style={{ fontSize: 12, padding: "7px 12px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontWeight: 600 }}>Limpiar</button>
+            )}
+          </div>
           <div style={s.grid}>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones lider</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalLider.length}</p></div>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Calibradas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{totalG1}</p></div>
