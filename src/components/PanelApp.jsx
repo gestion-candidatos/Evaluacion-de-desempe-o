@@ -3952,6 +3952,41 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     );
   }
 
+  function exportarExcelCapacitaciones() {
+    var rows = [['Capacitación', 'Descripción', 'Fecha', 'Duración (hs)', 'Instructor', 'Cantidad Participantes', 'Participantes']];
+    capacitaciones.forEach(function(cap) {
+      var parts = (cap.capacitacion_participantes || []);
+      var nombres = parts.map(function(p) { return p.profiles ? p.profiles.full_name : ''; }).filter(Boolean).join(', ');
+      var fecha = cap.fecha ? new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '';
+      rows.push([
+        cap.nombre || '',
+        cap.descripcion || '',
+        fecha,
+        cap.duracion_horas || '',
+        cap.instructor || '',
+        parts.length,
+        nombres
+      ]);
+    });
+
+    // Construir CSV con BOM para Excel
+    var bom = '\uFEFF';
+    var csv = bom + rows.map(function(row) {
+      return row.map(function(cell) {
+        var val = String(cell).replace(/"/g, '""');
+        return '"' + val + '"';
+      }).join(';');
+    }).join('\r\n');
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'Capacitaciones_Fabric_' + new Date().toLocaleDateString('es-AR').replace(/\//g,'-') + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── VISTA ADMIN — LISTA ──
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -3959,6 +3994,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
         <div>
           <h2 style={{ margin: 0, color: '#231F20', fontSize: 22, fontWeight: 700 }}>Capacitaciones</h2>
           <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{capacitaciones.length} capacitación{capacitaciones.length !== 1 ? 'es' : ''} registrada{capacitaciones.length !== 1 ? 's' : ''}</p>
+        <button onClick={exportarExcelCapacitaciones} style={{ ...s.btnInfo, display: "flex", alignItems: "center", gap: 6 }}>Exportar Excel</button>
         </div>
         <button onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' }); }} style={s.btnPrimario}>
           + Nueva capacitación
