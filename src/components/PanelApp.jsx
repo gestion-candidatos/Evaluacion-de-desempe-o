@@ -145,7 +145,8 @@ export default function PanelApp() {
  <nav style={sidebarStyle.nav}>
  {/* DESEMPEÑO */}
  {verDesempeno && (
- <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>DESEMPEÑO</button>
+          <button onClick={function() { setMenuActivo('dashboard_global'); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'dashboard_global' ? '#D4D2C6' : 'transparent', color: menuActivo === 'dashboard_global' ? '#231F20' : '#D4D2C6' }}>DASHBOARD</button>
+          <button onClick={function() { setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ ...sidebarStyle.menuItem, background: menuActivo === 'desempeno' ? '#D4D2C6' : 'transparent', color: menuActivo === 'desempeno' ? '#231F20' : '#D4D2C6' }}>DESEMPEÑO</button>
  )}
  {/* OBJETIVOS */}
  {verAlgunObj && (
@@ -238,6 +239,7 @@ export default function PanelApp() {
 
  <main style={{ padding: 24 }}>
  {menuActivo === 'desempeno' && verDesempeno && <DesempenoView profile={profileEfectivo} cicloActivo={cicloActivo} setCicloActivo={setCicloActivo} />}
+          {menuActivo === "dashboard_global" && esSuperAdmin && !vistaComoColaborador && <DashboardGlobal />}
  {menuActivo === 'misobjetivos' && verObjIndividual && <ObjetivosColaborador profile={profile} />}
  {menuActivo === 'miequipo_obj' && verObjIndividual && <ObjetivosGerente profile={profile} />}
  {menuActivo === 'compania_obj' && verObjCompania && <ObjetivosCompania esAdmin={esAdmin && !vistaComoColaborador} />}
@@ -397,6 +399,275 @@ function PanelColaboradorConEquipo({ userId, seniority, cicloId, profile, soloLe
 }
 
 // =============================================
+function DashboardGlobal() {
+  var [tabActivo, setTabActivo] = useState('desempeno');
+  var [statsDesempeno, setStatsDesempeno] = useState({ evaluaciones: [], puntuaciones: [], perfiles: [] });
+  var [colabs, setColabs] = useState([]);
+  var [ciclos, setCiclos] = useState([]);
+  // Objetivos
+  var [objetivosData, setObjetivosData] = useState([]);
+  var [anioFiltro, setAnioFiltro] = useState(new Date().getFullYear());
+  var [filtroAreaObj, setFiltroAreaObj] = useState('Todas');
+  var [filtroColabObj, setFiltroColabObj] = useState('Todos');
+  var [cargando, setCargando] = useState(true);
+
+  useEffect(function() { cargarTodo(); }, []);
+
+  async function cargarTodo() {
+    setCargando(true);
+    var [
+      { data: perfiles },
+      { data: evs },
+      { data: punts },
+      { data: cics },
+      { data: objs },
+    ] = await Promise.all([
+      supabase.from('profiles').select('id, email, full_name, area, seniority').eq('activo', true),
+      supabase.from('evaluaciones').select('id, colaborador_id, ciclo_id, tipo_evaluacion, rating_promedio, rating_calibrado, estado'),
+      supabase.from('puntuaciones').select('evaluacion_id, rating, competencias(nombre)'),
+      supabase.from('ciclos').select('id, nombre').order('fecha_inicio', { ascending: false }),
+      supabase.from('objetivos').select('id, colaborador_id, corporativo, ponderacion, status, alcance_completado, alcance_validado, anio').order('created_at'),
+    ]);
+    setStatsDesempeno({ evaluaciones: evs || [], puntuaciones: punts || [], perfiles: perfiles || [] });
+    setColabs(perfiles || []);
+    setCiclos(cics || []);
+    setObjetivosData(objs || []);
+    setCargando(false);
+  }
+
+  if (cargando) return <p style={{ padding: 40, color: '#64748b' }}>Cargando dashboard...</p>;
+
+  // Datos para gráfico araña — promedio de competencias (evaluaciones lider calibradas)
+  var compMap = {};
+  (statsDesempeno.puntuaciones || []).forEach(function(p) {
+    var ev = (statsDesempeno.evaluaciones || []).find(function(e) { return e.id === p.evaluacion_id; });
+    if (!ev || ev.tipo_evaluacion !== 'evaluacion_lider') return;
+    var nombre = p.competencias?.nombre;
+    if (!nombre || !p.rating) return;
+    if (!compMap[nombre]) compMap[nombre] = { sum: 0, count: 0 };
+    compMap[nombre].sum += parseFloat(p.rating);
+    compMap[nombre].count++;
+  });
+  var compData = Object.entries(compMap).map(function(e) { return { nombre: e[0], prom: e[1].sum / e[1].count }; }).sort(function(a,b) { return b.prom - a.prom; });
+
+  // Distribución desempeño
+  var evalLider = (statsDesempeno.evaluaciones || []).filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && e.rating_calibrado; });
+  var bajo = 0; var medio = 0; var alto = 0;
+  evalLider.forEach(function(e) {
+    var r = parseFloat(e.rating_calibrado);
+    if (r < 3) bajo++; else if (r <= 3.5) medio++; else alto++;
+  });
+  var totalG1 = bajo + medio + alto;
+
+  // OBJETIVOS — filtrar por año, área y colaborador
+  var areas = ['Todas'].concat([...new Set(colabs.map(function(c) { return c.area; }).filter(Boolean))].sort());
+  var anios = [...new Set(objetivosData.map(function(o) { return o.anio; }).filter(Boolean))].sort(function(a,b) { return b - a; });
+  if (!anios.includes(anioFiltro)) anios.unshift(anioFiltro);
+
+  var colabsFiltradosObj = colabs.filter(function(c) {
+    if (filtroAreaObj !== 'Todas' && c.area !== filtroAreaObj) return false;
+    if (filtroColabObj !== 'Todos' && c.id !== filtroColabObj) return false;
+    return true;
+  });
+  var idsColabsObj = colabsFiltradosObj.map(function(c) { return c.id; });
+
+  var objsFiltrados = objetivosData.filter(function(o) {
+    if (String(o.anio) !== String(anioFiltro)) return false;
+    if (!idsColabsObj.includes(o.colaborador_id)) return false;
+    return true;
+  });
+
+  // Gráfico 1 objetivos: Alcance promedio por área
+  var alcancePorArea = {};
+  objsFiltrados.forEach(function(o) {
+    var colab = colabs.find(function(c) { return c.id === o.colaborador_id; });
+    var area = colab?.area || 'Sin área';
+    var alcance = parseFloat(o.alcance_validado || o.alcance_completado || 0);
+    if (!alcancePorArea[area]) alcancePorArea[area] = { sum: 0, count: 0 };
+    if (alcance > 0) { alcancePorArea[area].sum += alcance; alcancePorArea[area].count++; }
+  });
+  var alcanceAreaData = Object.entries(alcancePorArea)
+    .filter(function(e) { return e[1].count > 0; })
+    .map(function(e) { return { area: e[0], prom: (e[1].sum / e[1].count).toFixed(1) }; })
+    .sort(function(a,b) { return parseFloat(b.prom) - parseFloat(a.prom); });
+
+  // Gráfico 2 objetivos: Ranking alcance anual por colaborador
+  var alcancePorColab = {};
+  objsFiltrados.forEach(function(o) {
+    var colab = colabs.find(function(c) { return c.id === o.colaborador_id; });
+    if (!colab) return;
+    var nombre = colab.full_name || colab.email;
+    var alcance = parseFloat(o.alcance_validado || o.alcance_completado || 0);
+    if (!alcancePorColab[nombre]) alcancePorColab[nombre] = { sum: 0, count: 0, area: colab.area };
+    if (alcance > 0) { alcancePorColab[nombre].sum += alcance; alcancePorColab[nombre].count++; }
+  });
+  var rankingData = Object.entries(alcancePorColab)
+    .filter(function(e) { return e[1].count > 0; })
+    .map(function(e) { return { nombre: e[0], prom: (e[1].sum / e[1].count).toFixed(1), area: e[1].area }; })
+    .sort(function(a,b) { return parseFloat(b.prom) - parseFloat(a.prom); });
+
+  var AREA_COLORS = ['#2d6a4f','#c2410c','#1d4ed8','#7c3aed','#0e7490','#92400e','#064e3b','#be123c'];
+  function areaColor(area) {
+    var idx = Math.abs((area||'').split('').reduce(function(a,c) { return a + c.charCodeAt(0); }, 0)) % AREA_COLORS.length;
+    return AREA_COLORS[idx];
+  }
+
+  var selectStyle = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', color: '#231F20', cursor: 'pointer', fontWeight: 500 };
+
+  // Spider chart inline
+  function SpiderMini({ datos }) {
+    if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20, fontSize: 12 }}>Sin datos</p>;
+    var N = datos.length; var CX = 200; var CY = 200; var R = 140;
+    function pt(idx, val) { var a = (Math.PI * 2 * idx / N) - Math.PI / 2; var r = (val / 5) * R; return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) }; }
+    function pte(idx, r) { var a = (Math.PI * 2 * idx / N) - Math.PI / 2; return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) }; }
+    var poly = datos.map(function(d, i) { var p = pt(i, d.prom); return p.x + ',' + p.y; }).join(' ');
+    return (
+      <svg viewBox="0 0 400 400" style={{ width: '100%', maxWidth: 400 }}>
+        {[1,2,3,4,5].map(function(n) { return <polygon key={n} points={datos.map(function(_,i) { var p = pte(i,(n/5)*R); return p.x+','+p.y; }).join(' ')} fill="none" stroke={n===5?'#D4D2C6':'#e8e6e0'} strokeWidth={n===5?1.5:1} />; })}
+        {datos.map(function(_,i) { var p = pte(i,R); return <line key={i} x1={CX} y1={CY} x2={p.x} y2={p.y} stroke="#e8e6e0" strokeWidth="1" />; })}
+        <polygon points={poly} fill="rgba(35,31,32,0.12)" stroke="#231F20" strokeWidth="2" />
+        {datos.map(function(d,i) { var p = pt(i,d.prom); return <circle key={i} cx={p.x} cy={p.y} r="4" fill="#231F20" />; })}
+        {datos.map(function(d,i) {
+          var p = pte(i,R+40); var anchor = p.x < CX-10 ? 'end' : p.x > CX+10 ? 'start' : 'middle';
+          var words = d.nombre.split(' '); var lines = [];
+          for (var w=0;w<words.length;w+=2) lines.push(words.slice(w,w+2).join(' '));
+          return <g key={i}>{lines.map(function(l,li) { return <text key={li} x={p.x} y={p.y-lines.length*7+li*14} fontSize="11" fill="#231F20" fontWeight="600" textAnchor={anchor}>{l}</text>; })}<text x={p.x} y={p.y+lines.length*7+6} fontSize="12" fill="#64748b" fontWeight="700" textAnchor={anchor}>{d.prom.toFixed(1)}</text></g>;
+        })}
+      </svg>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
+        <button onClick={function() { setTabActivo('desempeno'); }} style={tabActivo === 'desempeno' ? s.btnPrimario : s.btnInfo}>Desempeño</button>
+        <button onClick={function() { setTabActivo('objetivos'); }} style={tabActivo === 'objetivos' ? s.btnPrimario : s.btnInfo}>Objetivos</button>
+      </div>
+
+      {/* ===== SECCIÓN DESEMPEÑO ===== */}
+      {tabActivo === 'desempeno' && (
+        <div>
+          <h2 style={{ color: '#231F20', margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Desempeño — Vista general</h2>
+          <div style={s.grid}>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones lider</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalLider.length}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Calibradas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{totalG1}</p></div>
+            <div style={{ ...s.tarjetaStat, borderTop: '3px solid #166534' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Alto desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#166534', margin: '6px 0' }}>{alto}</p></div>
+            <div style={{ ...s.tarjetaStat, borderTop: '3px solid #dc2626' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Bajo desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#dc2626', margin: '6px 0' }}>{bajo}</p></div>
+          </div>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 20 }}>
+            {/* Distribución */}
+            <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 260 }}>
+              <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Distribución de Desempeño</h4>
+              <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Solo evaluaciones calibradas</p>
+              {totalG1 === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin datos calibrados</p> : (
+                [{ label: 'Alto', valor: alto, color: '#166534', rango: '3.6–5' }, { label: 'Medio', valor: medio, color: '#92400e', rango: '3–3.5' }, { label: 'Bajo', valor: bajo, color: '#dc2626', rango: '1–2.9' }].map(function(g) {
+                  var pct = Math.round(g.valor / totalG1 * 100);
+                  return <div key={g.label} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8' }}>({g.rango})</span></span><span style={{ fontSize: 13, fontWeight: 700 }}>{g.valor} ({pct}%)</span></div>
+                    <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}><div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6 }} /></div>
+                  </div>;
+                })
+              )}
+            </div>
+            {/* Araña */}
+            <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <h4 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 14, fontWeight: 700, alignSelf: 'flex-start' }}>Promedio por Competencia</h4>
+              <p style={{ margin: '0 0 12px 0', fontSize: 11, color: '#94a3b8', alignSelf: 'flex-start' }}>Evaluaciones del líder calibradas</p>
+              <SpiderMini datos={compData} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== SECCIÓN OBJETIVOS ===== */}
+      {tabActivo === 'objetivos' && (
+        <div>
+          <h2 style={{ color: '#231F20', margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Objetivos — Vista general</h2>
+
+          {/* Filtros */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center', background: 'white', padding: '14px 16px', borderRadius: 10, border: '1px solid #e8e6e0' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Filtrar:</span>
+            <select value={anioFiltro} onChange={function(e) { setAnioFiltro(parseInt(e.target.value)); }} style={selectStyle}>
+              {anios.map(function(a) { return <option key={a} value={a}>{a}</option>; })}
+            </select>
+            <select value={filtroAreaObj} onChange={function(e) { setFiltroAreaObj(e.target.value); setFiltroColabObj('Todos'); }} style={selectStyle}>
+              {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+            </select>
+            <select value={filtroColabObj} onChange={function(e) { setFiltroColabObj(e.target.value); setFiltroAreaObj('Todas'); }} style={{ ...selectStyle, minWidth: 180 }}>
+              <option value="Todos">Todos los colaboradores</option>
+              {colabs.sort(function(a,b) { return (a.full_name||'').localeCompare(b.full_name||''); }).map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email}</option>; })}
+            </select>
+            {(filtroAreaObj !== 'Todas' || filtroColabObj !== 'Todos') && (
+              <button onClick={function() { setFiltroAreaObj('Todas'); setFiltroColabObj('Todos'); }} style={{ fontSize: 12, padding: '7px 12px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}>Limpiar</button>
+            )}
+          </div>
+
+          {/* KPI Objetivos */}
+          <div style={{ ...s.grid, marginBottom: 24 }}>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Objetivos {anioFiltro}</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{objsFiltrados.length}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Validados</p><p style={{ fontSize: 32, fontWeight: 800, color: '#166534', margin: '6px 0' }}>{objsFiltrados.filter(function(o) { return o.status === 'validado'; }).length}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Con alcance</p><p style={{ fontSize: 32, fontWeight: 800, color: '#1d4ed8', margin: '6px 0' }}>{objsFiltrados.filter(function(o) { return o.alcance_completado || o.alcance_validado; }).length}</p></div>
+            <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Alcance promedio</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{rankingData.length > 0 ? (rankingData.reduce(function(s,r) { return s + parseFloat(r.prom); }, 0) / rankingData.length).toFixed(1) + '%' : '—'}</p></div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            {/* Gráfico 1: Alcance promedio por área */}
+            <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
+              <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Alcance promedio por área</h4>
+              {alcanceAreaData.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin alcances registrados</p> : (
+                alcanceAreaData.map(function(d) {
+                  var color = areaColor(d.area);
+                  var pct = Math.min(parseFloat(d.prom), 120);
+                  return <div key={d.area} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>{d.area}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: color }}>{d.prom}%</span>
+                    </div>
+                    <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}>
+                      <div style={{ background: color, height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6 }} />
+                    </div>
+                  </div>;
+                })
+              )}
+            </div>
+
+            {/* Gráfico 2: Ranking alcance anual por colaborador */}
+            <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 320 }}>
+              <h4 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Ranking — Alcance anual por colaborador</h4>
+              <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Promedio de alcances reportados/validados</p>
+              {rankingData.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin alcances registrados para {anioFiltro}</p> : (
+                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                  {rankingData.map(function(d, idx) {
+                    var color = areaColor(d.area);
+                    var pct = Math.min(parseFloat(d.prom), 120);
+                    var medal = idx === 0 ? '1' : idx === 1 ? '2' : idx === 2 ? '3' : String(idx + 1);
+                    return <div key={d.nombre} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: idx < 3 ? color : '#94a3b8', minWidth: 24, textAlign: 'center' }}>#{medal}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{d.nombre}</span>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ fontSize: 10, color: color, fontWeight: 600, padding: '1px 6px', background: color + '20', borderRadius: 4 }}>{d.area}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#92400e' : '#dc2626' }}>{d.prom}%</span>
+                          </div>
+                        </div>
+                        <div style={{ background: '#f1f5f9', borderRadius: 6, height: 18, overflow: 'hidden' }}>
+                          <div style={{ background: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#f59e0b' : '#dc2626', height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6, transition: 'width 0.4s' }} />
+                        </div>
+                      </div>
+                    </div>;
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // DASHBOARD Y TABLAS ADMIN
 // =============================================
 function DashboardView({ stats, colabs }) {
@@ -2559,6 +2830,7 @@ function ObjetivosColaborador({ profile }) {
  var [editandoId, setEditandoId] = useState(null);
  var [formObj, setFormObj] = useState(null);
  var [modalCompletar, setModalCompletar] = useState(null);
+  var [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
   var [alcanceAnual, setAlcanceAnual] = useState(null);
   var [loadingAlcance, setLoadingAlcance] = useState(false);
 
@@ -2604,7 +2876,7 @@ function ObjetivosColaborador({ profile }) {
  if (editandoId) {
  await supabase.from('objetivos').update({ ...datos, editado_por_colaborador: true, fecha_edicion: new Date() }).eq('id', editandoId);
  } else {
- var { error: insErr } = await supabase.from('objetivos').insert({ ...datos, colaborador_id: profile.id, status: 'pendiente' });
+ var { error: insErr } = await supabase.from('objetivos').insert({ ...datos, colaborador_id: profile.id, status: 'pendiente', anio: new Date().getFullYear() });
  if (insErr) { alert('Error al guardar: ' + insErr.message); return; }
  }
  setMostrarForm(false); setFormObj(null); setEditandoId(null); cargarObjetivos();
@@ -2616,7 +2888,8 @@ function ObjetivosColaborador({ profile }) {
  }
 
  // Stats
- var objActivos = objetivos.filter(function(o) { return o.status !== 'rechazado'; });
+  var objetivosFiltradosPorAnio = objetivos.filter(function(o) { return !o.anio || String(o.anio) === String(anioSeleccionado); });
+ var objActivos = objetivosFiltradosPorAnio.filter(function(o) { return o.status !== 'rechazado'; });
  var totalPond = objActivos.reduce(function(s, o) { return s + (parseFloat(o.ponderacion) || 0); }, 0);
  var proxVenc = objetivos.filter(function(o) { return o.alcance_100_fecha || o.alcance_80_fecha; }).map(function(o) { return o.alcance_100_fecha || o.alcance_80_fecha; }).sort()[0];
  var objValidados = objetivos.filter(function(o) { return o.status === 'validado' && o.alcance_validado; });
@@ -2651,7 +2924,7 @@ function ObjetivosColaborador({ profile }) {
  </div>
  <div>
  <h2 style={{ margin: 0, color: '#F0EDE8', fontSize: 22, fontWeight: 700 }}>Objetivos — {profile.full_name || profile.email}</h2>
- <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>{profile.area || ''}{profile.area && ' · '}ciclo 2026</p>
+ <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>{profile.area || ''}{profile.area && ' · '}{profile.area && ' · '}ciclo {anioSeleccionado}</p>
  </div>
  </div>
  <button onClick={abrirNuevo} disabled={totalPond >= 100}
@@ -2660,6 +2933,16 @@ function ObjetivosColaborador({ profile }) {
  </button>
  </div>
 
+      {/* Selector de año */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#64748b" }}>Año:</span>
+        {[2024, 2025, 2026, 2027].map(function(a) {
+          return <button key={a} onClick={function() { setAnioSeleccionado(a); }}
+            style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid " + (anioSeleccionado === a ? "#231F20" : "#e8e6e0"), background: anioSeleccionado === a ? "#231F20" : "white", color: anioSeleccionado === a ? "#F0EDE8" : "#231F20", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            {a}
+          </button>;
+        })}
+      </div>
  {/* KPI Cards */}
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
  <div style={{ background: '#F0EDE8', borderRadius: 12, padding: '16px 20px', border: '1px solid #e2e0db' }}>
@@ -2719,7 +3002,7 @@ function ObjetivosColaborador({ profile }) {
  </div>
  ) : (
  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
- {objetivos.map(function(obj) {
+ {objetivosFiltradosPorAnio.map(function(obj) {
  var color = colorCorp(obj.corporativo);
  var fechaRef = obj.alcance_100_fecha || obj.alcance_80_fecha;
  var statusBg = { validado: '#dcfce7', completado: '#dbeafe', aceptado: '#f1f5f9', rechazado: '#fee2e2', pendiente: '#fef3c7' };
@@ -3013,7 +3296,7 @@ function PanelAdminObjetivos({ profile }) {
  if (usada + parseFloat(datosForm.ponderacion) > 100) return alert('La ponderacion supera el 100%. Disponible: ' + (100 - usada) + '%');
  var { data: { session } } = await supabase.auth.getSession();
  var { error: insertErr } = await supabase.from('objetivos').insert({
- gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente',
+ gerente_id: session.user.id, colaborador_id: colaboradorSeleccionado, status: 'pendiente', anio: new Date().getFullYear(),
  leader_id: (colaboradores.find(function(c) { return c.id === colaboradorSeleccionado; }) || {}).leader_id || null,
  objetivo: datosForm.objetivo, corporativo: datosForm.corporativo,
  ponderacion: parseFloat(datosForm.ponderacion), alcance_tipo: datosForm.alcance_tipo,
