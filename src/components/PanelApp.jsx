@@ -990,21 +990,25 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  useEffect(function() { cargar(); }, [cicloId]);
  async function cargar() {
  setCarg(true);
- var { data: evs } = await supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']);
+ var [{ data: evs }, { data: historial }] = await Promise.all([
+   supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']),
+   supabase.from('calibracion_historial').select('colaborador_id, tipo').eq('ciclo_id', cicloId).eq('tipo', 'reabrir_lider')
+ ]);
+ // Set de colaboradores con reapertura de lider
+ var reabiertos = new Set((historial || []).map(function(h) { return h.colaborador_id; }));
  var mapa = {};
  (evs || []).forEach(function(ev) {
  if (!ev.colaborador) return;
- if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null };
+ if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null, liderReabierto: false };
  if (ev.tipo_evaluacion === 'autoevaluacion') { mapa[ev.colaborador_id].autoevaluacion = ev; mapa[ev.colaborador_id].promAuto = ev.rating_promedio; }
  if (ev.tipo_evaluacion === 'evaluacion_lider') {
  mapa[ev.colaborador_id].evaluacionLider = ev;
  mapa[ev.colaborador_id].promLider = ev.rating_promedio;
  mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
- // Default: calibrado = rating del lider si no fue editado aun
+ mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
  var cal = ev.rating_calibrado;
  if (!cal && ev.rating_promedio) {
  cal = ev.rating_promedio;
- // Guardar el default en la base de datos
  supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
  }
  mapa[ev.colaborador_id].ratingFinal = cal;
@@ -1012,6 +1016,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  });
  setDatos(Object.values(mapa)); setCarg(false);
  }
+
 
  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
    var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
@@ -1581,7 +1586,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </div>
  ) : (
  <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
- {parseFloat(d.ratingFinal) && parseFloat(d.ratingFinal) !== parseFloat(d.promLider) ? 'Evaluacion lider con cambios — ver historial' : d.ratingFinal ? 'Confirmado sin cambios' : '—'}
+ {d.liderReabierto ? 'Cambio la evaluacion del lider — ver historial' : d.ratingFinal ? 'Confirmado sin cambios' : '—'}
  </span>
  )}
  </td>
