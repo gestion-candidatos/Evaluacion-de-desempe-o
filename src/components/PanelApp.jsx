@@ -1581,7 +1581,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </div>
  ) : (
  <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
- {d.comentarioCalibracion ? (parseFloat(d.ratingFinal) !== parseFloat(d.promLider) ? 'Evaluacion tuvo modificaciones — ver historial' : d.comentarioCalibracion) : (d.ratingFinal ? 'Confirmado sin cambios' : '—')}
+ {parseFloat(d.ratingFinal) && parseFloat(d.ratingFinal) !== parseFloat(d.promLider) ? 'Evaluacion lider con cambios — ver historial' : d.ratingFinal ? 'Confirmado sin cambios' : '—'}
  </span>
  )}
  </td>
