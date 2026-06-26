@@ -4620,6 +4620,7 @@ function GestionModulos() {
  { id: 'desempeno', label: ' Desempeño', desc: 'Evaluaciones y ciclos' },
  { id: 'obj_individual', label: ' Objetivos Individuales', desc: 'Mis objetivos y equipo' },
  { id: 'obj_compania', label: ' Objetivos Compañía', desc: 'Objetivos estratégicos' },
+ { id: 'capacitaciones', label: ' Capacitaciones', desc: 'Mis capacitaciones y certificados' },
  ];
 
  useEffect(function() { cargar(); }, []);
@@ -4658,7 +4659,7 @@ function GestionModulos() {
  }
  setModulos(function(prev) {
  var nuevo = { ...prev };
- nuevo[userId] = { desempeño: true, obj_individual: true, obj_compania: true };
+ nuevo[userId] = { desempeño: true, obj_individual: true, obj_compania: true, capacitaciones: true };
  return nuevo;
  });
  }
@@ -4669,7 +4670,7 @@ function GestionModulos() {
  }
  setModulos(function(prev) {
  var nuevo = { ...prev };
- nuevo[userId] = { desempeño: false, obj_individual: false, obj_compania: false };
+ nuevo[userId] = { desempeño: false, obj_individual: false, obj_compania: false, capacitaciones: false };
  return nuevo;
  });
  }
