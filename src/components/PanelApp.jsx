@@ -138,7 +138,7 @@ export default function PanelApp() {
  var verObjIndividual = modulosVer.includes('obj_individual');
  var verObjCompania = modulosVer.includes('obj_compania');
  var verAlgunObj = verObjIndividual || verObjCompania;
-  var verCapacitaciones = modulosVer.includes("capacitaciones");
+  var verCapacitaciones = !esAdmin ? modulosActivos.includes("capacitaciones") : (!vistaComoColaborador);
 
  return (
  <div style={{ display: 'flex', minHeight: '100vh' }}>
