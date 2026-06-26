@@ -4644,7 +4644,7 @@ function GestionModulos() {
  async function toggleModulo(userId, moduloId, valorActual) {
  setGuardando(userId + moduloId);
  var nuevoValor = !valorActual;
- await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: moduloId, activo: nuevoValor, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+ await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: moduloId, activo: nuevoValor, updated_at: new Date() }, { onConflict: 'user_id,modulo' });
  setModulos(function(prev) {
  var nuevo = { ...prev };
  nuevo[userId] = { ...nuevo[userId], [moduloId]: nuevoValor };
@@ -4655,7 +4655,7 @@ function GestionModulos() {
 
  async function habilitarTodo(userId) {
  for (var mod of MODULOS_DISPONIBLES) {
- await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: true, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+ await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: true, updated_at: new Date() }, { onConflict: 'user_id,modulo' });
  }
  setModulos(function(prev) {
  var nuevo = { ...prev };
@@ -4666,7 +4666,7 @@ function GestionModulos() {
 
  async function deshabilitarTodo(userId) {
  for (var mod of MODULOS_DISPONIBLES) {
- await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: false, updated_at: new Date() }, { onConflict: 'user_id, modulo' });
+ await supabase.from('modulos_usuario').upsert({ user_id: userId, modulo: mod.id, activo: false, updated_at: new Date() }, { onConflict: 'user_id,modulo' });
  }
  setModulos(function(prev) {
  var nuevo = { ...prev };
