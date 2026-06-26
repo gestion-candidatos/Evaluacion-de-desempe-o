@@ -67,6 +67,7 @@ export default function PanelApp() {
  var [menuActivo, setMenuActivo] = useState('desempeno');
  var [cicloActivo, setCicloActivo] = useState(null);
  var [vistaComoColaborador, setVistaComoColaborador] = useState(false);
+ var [modulosVistaColab, setModulosVistaColab] = useState([]);
  var [modulosActivos, setModulosActivos] = useState([]);
  var [notifs, setNotifs] = useState([]);
   var [notifsActivas, setNotifsActivas] = useState(true);
@@ -138,7 +139,7 @@ export default function PanelApp() {
  var verObjIndividual = modulosVer.includes('obj_individual');
  var verObjCompania = modulosVer.includes('obj_compania');
  var verAlgunObj = verObjIndividual || verObjCompania;
-  var verCapacitaciones = !esAdmin ? modulosActivos.includes("capacitaciones") : (!vistaComoColaborador);
+  var verCapacitaciones = !esAdmin ? modulosActivos.includes("capacitaciones") : (vistaComoColaborador ? modulosVistaColab.includes("capacitaciones") : true);
 
  return (
  <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -188,7 +189,7 @@ export default function PanelApp() {
  <h1 style={{ fontSize: 18, fontWeight: 600, color: '#D4D2C6', margin: 0 }}>Fabric Group</h1>
  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
  {esAdmin && !vistaComoColaborador && (
- <button onClick={function() { setVistaComoColaborador(true); setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ padding: '6px 14px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+ <button onClick={async function() { var { data: mods } = await supabase.from('modulos_usuario').select('modulo').eq('user_id', profile.id).eq('activo', true); setModulosVistaColab((mods || []).map(function(m) { return m.modulo; })); setVistaComoColaborador(true); setMenuActivo('desempeno'); setCicloActivo(null); }} style={{ padding: '6px 14px', background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
  Ver como Colaborador
  </button>
  )}
