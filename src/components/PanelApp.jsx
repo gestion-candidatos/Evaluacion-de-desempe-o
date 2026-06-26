@@ -80,13 +80,14 @@ export default function PanelApp() {
  if (!session) { window.location.href = '/'; return; }
  var { data: perfil } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, role, activo, leader_id').eq('id', session.user.id).single();
  if (perfil && perfil.activo === false) { await supabase.auth.signOut(); alert('Cuenta desactivada.'); window.location.href = '/'; return; }
- // Admin ve todo siempre
- if (perfil.role === 'admin_rrhh') {
- setModulosActivos(['desempeno', 'obj_individual', 'obj_compania']);
- } else {
+ // Cargar módulos desde BD para todos
  var { data: mods } = await supabase.from('modulos_usuario').select('modulo').eq('user_id', perfil.id).eq('activo', true);
- setModulosActivos((mods || []).map(function(m) { return m.modulo; }));
+ var modulosCargados = (mods || []).map(function(m) { return m.modulo; });
+ // Si admin y no tiene módulos en BD, darle todos por defecto
+ if (perfil.role === 'admin_rrhh' && modulosCargados.length === 0) {
+   modulosCargados = ['desempeno', 'obj_individual', 'obj_compania', 'capacitaciones'];
  }
+ setModulosActivos(modulosCargados);
  setProfile(perfil); setLoading(false);
  cargarNotifs(perfil.id);
  }
@@ -130,7 +131,7 @@ export default function PanelApp() {
 
  // Módulos visibles — admin ve todo, resto según tabla
  var modulosVer = esAdmin && !vistaComoColaborador
- ? ['desempeno', 'obj_individual', 'obj_compania', 'capacitaciones']
+ ? ['desempeno', 'obj_individual', 'obj_compania', 'capacitaciones', 'dashboard_global']
  : modulosActivos;
 
  var verDesempeno = modulosVer.includes('desempeno');
