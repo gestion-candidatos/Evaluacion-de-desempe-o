@@ -1636,6 +1636,7 @@ function HistorialAdmin({ colaborador, onVolver }) { var [hist, setHist] = useSt
 function EquipoLider({ cicloId, profile, soloLectura }) {
  var [equipo, setEquipo] = useState([]);
  var [colSel, setColSel] = useState(null);
+ var [soloLecturaColSel, setSoloLecturaColSel] = useState(false); // CAMBIO 2: controla si el colaborador seleccionado es solo lectura
  var [fbVis, setFbVis] = useState(null);
  var [busqueda, setBusqueda] = useState('');
  var [filtroArea, setFiltroArea] = useState('Todas');
@@ -1644,131 +1645,176 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
  useEffect(function() { cargar(); }, [cicloId]);
 
  async function cargar() {
- var { data: { session } } = await supabase.auth.getSession();
- if (!session) return;
- var uid = session.user.id;
+   var { data: { session } } = await supabase.auth.getSession();
+   if (!session) return;
+   var uid = session.user.id;
 
- // Ver configuración de visibilidad ampliada
- var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+   var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+   var todosLosColabs = [];
 
- var todosLosColabs = [];
+   if (visibilidad && visibilidad.length > 0) {
+     var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
+     if (esTodos) {
+       var { data: todos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
+       todosLosColabs = todos || [];
+     } else {
+       var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
+       var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+       var queries = [];
+       if (areas.length > 0) {
+         var { data: porArea } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
+         queries = queries.concat(porArea || []);
+       }
+       if (usuarios.length > 0) {
+         var { data: porUsuario } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
+         queries = queries.concat(porUsuario || []);
+       }
+       var vistos = {};
+       todosLosColabs = queries.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
+     }
+   }
 
- if (visibilidad && visibilidad.length > 0) {
- var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
- if (esTodos) {
- // Ve toda la compañía
- var { data: todos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
- todosLosColabs = todos || [];
- } else {
- // Ve áreas específicas
- var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
- var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+   // Siempre agregar reportes directos
+   var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
+   (directos || []).forEach(function(c) {
+     if (!todosLosColabs.find(function(x) { return x.id === c.id; })) todosLosColabs.push(c);
+   });
 
- var queries = [];
- if (areas.length > 0) {
- var { data: porArea } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
- queries = queries.concat(porArea || []);
- }
- if (usuarios.length > 0) {
- var { data: porUsuario } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
- queries = queries.concat(porUsuario || []);
- }
- // Deduplicar
- var vistos = {};
- todosLosColabs = queries.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
- }
- }
-
- // Siempre agregar reportes directos
- var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
- (directos || []).forEach(function(c) {
- if (!todosLosColabs.find(function(x) { return x.id === c.id; })) todosLosColabs.push(c);
- });
-
- todosLosColabs.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
- setEquipo(todosLosColabs);
- setCargando(false);
+   todosLosColabs.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+   setEquipo(todosLosColabs);
+   setCargando(false);
  }
 
- if (colSel) return <EvaluacionLider colaborador={colSel} cicloId={cicloId} onVolver={function() { setColSel(null); cargar(); }} soloLectura={soloLectura} />;
+ // CAMBIO 2: al seleccionar un colaborador se guarda si es solo lectura o no
+ if (colSel) return (
+   <EvaluacionLider
+     colaborador={colSel}
+     cicloId={cicloId}
+     onVolver={function() { setColSel(null); setSoloLecturaColSel(false); cargar(); }}
+     soloLectura={soloLecturaColSel}
+   />
+ );
+
  if (fbVis) return <FeedbackForm feedback={fbVis} cicloId={cicloId} onVolver={function() { setFbVis(null); cargar(); }} />;
 
- // Filtros
  var areas = ['Todas'].concat([...new Set(equipo.map(function(c) { return c.area; }).filter(Boolean))].sort());
  var equipoFiltrado = equipo.filter(function(c) {
- if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
- if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
- return true;
+   if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
+   if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
+   return true;
  });
 
  if (cargando) return <p style={{ color: '#64748b', padding: 20 }}>Cargando equipo...</p>;
 
  return (
- <div>
- {/* Header */}
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
- <div>
- <h2 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 20, fontWeight: 700 }}>Mi Equipo</h2>
- <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
- </div>
- </div>
+   <div>
+     {/* Header */}
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+       <div>
+         <h2 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 20, fontWeight: 700 }}>Mi Equipo</h2>
+         <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
+       </div>
+     </div>
 
- {/* Buscador y filtros */}
- <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
- <input
- value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
- placeholder="Buscar por nombre o puesto..."
- style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
- <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }}
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}>
- {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
- </select>
- {(busqueda || filtroArea !== 'Todas') && (
- <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
- )}
- </div>
+     {/* Buscador y filtros */}
+     <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+       <input
+         value={busqueda}
+         onChange={function(e) { setBusqueda(e.target.value); }}
+         placeholder="Buscar por nombre o puesto..."
+         style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }}
+       />
+       <select
+         value={filtroArea}
+         onChange={function(e) { setFiltroArea(e.target.value); }}
+         style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}
+       >
+         {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+       </select>
+       {(busqueda || filtroArea !== 'Todas') && (
+         <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
+       )}
+     </div>
 
- {/* Lista */}
- {equipoFiltrado.length === 0 ? (
- <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
- {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados para los filtros seleccionados.'}
- </div>
- ) : (
- <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
- {equipoFiltrado.map(function(c) {
- var iniciales = (c.full_name || c.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
- var esDirecto = c.leader_id === profile.id;
- return (
- <div key={c.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px' }}>
- <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
- <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
- {iniciales}
- </div>
- <div style={{ flex: 1, minWidth: 0 }}>
- <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
- <strong style={{ fontSize: 14, color: '#231F20' }}>{c.full_name || c.email}</strong>
- {!esDirecto && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>}
- </div>
- <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.puesto || c.area}</p>
- <p style={{ margin: '1px 0 0 0', fontSize: 11, color: '#94a3b8' }}>{c.area}</p>
- </div>
- </div>
- <div style={{ display: 'flex', gap: 8 }}>
- <button onClick={function() { setColSel(c); }} style={{ ...s.btnPrimario, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center' }}>
- {soloLectura ? 'Ver evaluación' : 'Evaluar'}
- </button>
- {esDirecto && (
- <button onClick={function() { setFbVis(c); }} style={{ ...s.btnSecundario, fontSize: 12, padding: '8px 12px' }}>
- Feedback
- </button>
- )}
- </div>
- </div>
- );
- })}
- </div>
- )}
- </div>
+     {/* Lista */}
+     {equipoFiltrado.length === 0 ? (
+       <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
+         {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados para los filtros seleccionados.'}
+       </div>
+     ) : (
+       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+         {equipoFiltrado.map(function(c) {
+           var iniciales = (c.full_name || c.email || 'U').split(' ').slice(0, 2).map(function(p) { return p[0]; }).join('').toUpperCase();
+
+           // ── CAMBIO 2 ────────────────────────────────────────────────────────
+           // esDirecto determina qué botón mostrar y si puede editar o no
+           var esDirecto = c.leader_id === profile.id;
+           // ── FIN CAMBIO 2 ────────────────────────────────────────────────────
+
+           return (
+             <div key={c.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px' }}>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+                 <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+                   {iniciales}
+                 </div>
+                 <div style={{ flex: 1, minWidth: 0 }}>
+                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                     <strong style={{ fontSize: 14, color: '#231F20' }}>{c.full_name || c.email}</strong>
+                     {/* CAMBIO 2: badge "Indirecto" para los que no son reportes directos */}
+                     {!esDirecto && (
+                       <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>
+                         Indirecto
+                       </span>
+                     )}
+                   </div>
+                   <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.puesto || c.area}</p>
+                   <p style={{ margin: '1px 0 0 0', fontSize: 11, color: '#94a3b8' }}>{c.area}</p>
+                 </div>
+               </div>
+
+               <div style={{ display: 'flex', gap: 8 }}>
+                 {/* ── CAMBIO 2 ────────────────────────────────────────────────
+                     Directo   → botón "Evaluar" (editable) o "Ver evaluación" si ciclo cerrado
+                     Indirecto → botón "Visualizar" (siempre solo lectura, no evalúa)
+                 ── FIN CAMBIO 2 ──────────────────────────────────────────── */}
+                 {esDirecto ? (
+                   <button
+                     onClick={function() {
+                       setSoloLecturaColSel(soloLectura); // hereda el soloLectura del ciclo
+                       setColSel(c);
+                     }}
+                     style={{ ...s.btnPrimario, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center' }}
+                   >
+                     {soloLectura ? 'Ver evaluación' : 'Evaluar'}
+                   </button>
+                 ) : (
+                   <button
+                     onClick={function() {
+                       setSoloLecturaColSel(true); // indirecto siempre es solo lectura
+                       setColSel(c);
+                     }}
+                     style={{ ...s.btnInfo, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center', background: '#F0EDE8' }}
+                   >
+                     Visualizar
+                   </button>
+                 )}
+
+                 {/* CAMBIO 2: Feedback solo para reportes directos */}
+                 {esDirecto && (
+                   <button
+                     onClick={function() { setFbVis(c); }}
+                     style={{ ...s.btnSecundario, fontSize: 12, padding: '8px 12px' }}
+                   >
+                     Feedback
+                   </button>
+                 )}
+               </div>
+             </div>
+           );
+         })}
+       </div>
+     )}
+   </div>
  );
 }
 
