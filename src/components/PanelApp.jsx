@@ -1549,7 +1549,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
  )}
  <button
- onClick={function() {
+ onClick={async function() {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
