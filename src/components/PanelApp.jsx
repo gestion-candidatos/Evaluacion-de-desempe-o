@@ -1491,7 +1491,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
      var _evId = d.evaluacionLider.id;
      var _pl = parseFloat(d.promLider) || 0;
      if (!_pl) { alert('El lider aun no tiene rating promedio'); return; }
-     await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
+     var ok = await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
+      if (!ok) return;
      // Registrar en historial
      var { data: { session } } = await supabase.auth.getSession();
      await supabase.from('calibracion_historial').insert({
@@ -1503,7 +1504,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
        usuario_id: session.user.id,
        usuario_nombre: session.user.email
      });
-   }}
+      setEditandoCal(null);
+    }}
    title="Confirmar como evaluacion final"
    style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
    ✓
