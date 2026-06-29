@@ -2356,6 +2356,20 @@ function ObjetivosGerente({ profile }) {
  var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
  (directos || []).forEach(function(c) { if (!todos.find(function(x) { return x.id === c.id; })) todos.push(c); });
  todos.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+
+ // Filtrar solo colaboradores que tienen obj_individual activo
+ if (todos.length > 0) {
+   var idsEquipo = todos.map(function(c) { return c.id; });
+   var { data: modsActivos } = await supabase
+     .from('modulos_usuario')
+     .select('user_id')
+     .in('user_id', idsEquipo)
+     .eq('modulo', 'obj_individual')
+     .eq('activo', true);
+   var idsConModulo = new Set((modsActivos || []).map(function(m) { return m.user_id; }));
+   todos = todos.filter(function(c) { return idsConModulo.has(c.id); });
+ }
+
  setEquipo(todos);
  setCargando(false);
  }
@@ -2374,7 +2388,7 @@ function ObjetivosGerente({ profile }) {
  <div>
  <div style={{ marginBottom: 20 }}>
  <h2 style={{ color: '#231F20', margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Objetivos de Mi Equipo</h2>
- <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
+ <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores con módulo activo</p>
  </div>
 
  <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -2391,7 +2405,7 @@ function ObjetivosGerente({ profile }) {
 
  {equipoFiltrado.length === 0 ? (
  <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
- {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados.'}
+ {equipo.length === 0 ? 'Ningún colaborador de tu equipo tiene el módulo de objetivos activo.' : 'Sin resultados.'}
  </div>
  ) : (
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
@@ -2402,7 +2416,9 @@ function ObjetivosGerente({ profile }) {
  <div key={col.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px', cursor: 'pointer' }}
  onClick={function() { setColaboradorSeleccionado(col); }}>
  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
- <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>{iniciales}</div>
+ <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+ {iniciales}
+ </div>
  <div>
  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
  <strong style={{ fontSize: 13, color: '#231F20' }}>{col.full_name || col.email}</strong>
@@ -2411,7 +2427,9 @@ function ObjetivosGerente({ profile }) {
  <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>{col.puesto || col.area}</p>
  </div>
  </div>
- <button style={{ ...s.btnPrimario, width: '100%', fontSize: 12, padding: '8px', textAlign: 'center' }}>Ver Objetivos</button>
+ <button style={{ ...s.btnPrimario, width: '100%', fontSize: 12, padding: '8px', textAlign: 'center' }}>
+ Ver Objetivos
+ </button>
  </div>
  );
  })}
