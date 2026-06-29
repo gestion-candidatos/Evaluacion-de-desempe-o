@@ -1376,31 +1376,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  lJ.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
  }
 
- // Historial de calibración
- try {
-   var { data: hist } = await supabase.from('calibracion_historial')
-     .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', d.colaborador.id)
-     .order('created_at', { ascending: true });
-   if (hist && hist.length > 0) {
-     chk(20);
-     pdf.setFillColor(240, 237, 232);
-     pdf.rect(MX, y, PW - MX * 2, 8, 'F');
-     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-     pdf.text(t('HISTORIAL DE CALIBRACION'), MX + 4, y + 5); y += 10;
-     hist.forEach(function(h) {
-       chk(16);
-       var tipoLabel = { calibracion: 'Calibracion', reabrir_auto: 'Reapertura Auto', reabrir_lider: 'Reapertura Lider', comentario: 'Comentario' };
-       var fecha = new Date(h.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
-       pdf.text(t((tipoLabel[h.tipo] || h.tipo) + ' — ' + fecha + ' — ' + (h.usuario_nombre || '')), MX, y); y += 4;
-       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
-       var lines = pdf.splitTextToSize(t(h.comentario || ''), PW - MX * 2);
-       lines.forEach(function(l) { chk(5); pdf.text(t(l), MX + 4, y); y += 4; });
-       y += 2;
-     });
-   }
- } catch(e) {}
-
 
  pie();
  return pdf;
@@ -1578,8 +1553,19 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
- guardarCal(_evId, _r, _c, _pl);
- setEditandoCal(null);
+ var ok = await guardarCal(_evId, _r, _c, _pl);
+  if (!ok) return;
+  var { data: { session } } = await supabase.auth.getSession();
+  await supabase.from('calibracion_historial').insert({
+    ciclo_id: cicloId,
+    colaborador_id: d.colaborador.id,
+    evaluacion_id: _evId,
+    tipo: 'calibracion',
+    comentario: 'Rating calibrado: ' + _r + (_c ? '. Justificacion: ' + _c : ''),
+    usuario_id: session.user.id,
+    usuario_nombre: session.user.email
+  });
+  setEditandoCal(null);
  }}
  style={{ ...s.btnPrimario, background: '#166534', padding: '8px 16px', fontSize: 12 }}>
  Confirmar
@@ -1587,7 +1573,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  </div>
  ) : (
  <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
- {d.liderReabierto ? 'Cambio la evaluacion del lider — ver historial' : d.ratingFinal ? 'Confirmado sin cambios' : '—'}
+ {d.liderReabierto ? 'Cambio la evaluacion del lider — ver historial' : d.ratingFinal ? (d.comentarioCalibracion || 'Confirmado sin cambios') : '—'}
  </span>
  )}
  </td>
