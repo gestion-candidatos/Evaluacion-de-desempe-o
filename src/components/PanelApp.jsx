@@ -1025,10 +1025,11 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
 
  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
    var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
-   if (rCal !== rLid && !comentario.trim()) { alert('Debes justificar por que el rating calibrado difiere del rating del lider.'); return; }
+   if (rCal !== rLid && !comentario.trim()) { alert('Debes justificar por que el rating calibrado difiere del rating del lider.'); return false; }
    await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
    setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
- }
+    return true;
+  }
 
  async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
    if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
@@ -1491,7 +1492,8 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
      var _evId = d.evaluacionLider.id;
      var _pl = parseFloat(d.promLider) || 0;
      if (!_pl) { alert('El lider aun no tiene rating promedio'); return; }
-     await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
+     var ok = await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
+      if (!ok) return;
      // Registrar en historial
      var { data: { session } } = await supabase.auth.getSession();
      await supabase.from('calibracion_historial').insert({
@@ -1511,7 +1513,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  )}
  {editandoCal !== d.colaborador.id && (
  <button
- onClick={function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
+ onClick={async function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
  title="Editar evaluacion final"
  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: 'white', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 ✏
