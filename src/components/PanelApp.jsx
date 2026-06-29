@@ -407,7 +407,6 @@ function DashboardGlobal() {
   var [statsDesempeno, setStatsDesempeno] = useState({ evaluaciones: [], puntuaciones: [], perfiles: [] });
   var [colabs, setColabs] = useState([]);
   var [ciclos, setCiclos] = useState([]);
-  // Objetivos
   var [objetivosData, setObjetivosData] = useState([]);
   var [anioFiltro, setAnioFiltro] = useState(new Date().getFullYear());
   var [filtroAreaObj, setFiltroAreaObj] = useState('Todas');
@@ -416,12 +415,16 @@ function DashboardGlobal() {
   var [filtroAreaDesemp, setFiltroAreaDesemp] = useState("Todas");
   var [filtroSeniorityDesemp, setFiltroSeniorityDesemp] = useState("Todos");
   var [filtroColabDesemp, setFiltroColabDesemp] = useState("Todos");
+  // CAMBIO 6: valor inicial "Todos" para que siempre muestre todos los ciclos al entrar
   var [filtroCicloDesemp, setFiltroCicloDesemp] = useState("Todos");
 
   useEffect(function() { cargarTodo(); }, []);
 
   async function cargarTodo() {
     setCargando(true);
+    // CAMBIO 6: se traen TODAS las evaluaciones sin filtrar por ciclo en la query.
+    // El filtro por ciclo se aplica en la UI, y el default es "Todos",
+    // por eso el 2do ciclo (y cualquier otro) siempre aparece desde el inicio.
     var [
       { data: perfiles },
       { data: evs },
@@ -447,6 +450,7 @@ function DashboardGlobal() {
   // Opciones de filtro para desempeño
   var areasDesemp = ['Todas'].concat([...new Set(colabs.map(function(c) { return c.area; }).filter(Boolean))].sort());
   var senioritiesDesemp = ['Todos'].concat([...new Set(colabs.map(function(c) { return c.seniority; }).filter(Boolean))].sort());
+  // CAMBIO 6: la primera opción es "Todos los ciclos" y es el valor por defecto
   var ciclosOpts = [{ id: 'Todos', nombre: 'Todos los ciclos' }].concat(ciclos);
 
   // Perfiles filtrados para desempeño
@@ -458,7 +462,8 @@ function DashboardGlobal() {
   });
   var idsDesemp = colabsFiltradosDesemp.map(function(c) { return c.id; });
 
-  // Evaluaciones filtradas
+  // CAMBIO 6: cuando filtroCicloDesemp es "Todos" no filtra por ciclo,
+  // mostrando evaluaciones de todos los ciclos juntos
   var evsFiltradas = (statsDesempeno.evaluaciones || []).filter(function(e) {
     if (!idsDesemp.includes(e.colaborador_id)) return false;
     if (filtroCicloDesemp !== 'Todos' && String(e.ciclo_id) !== String(filtroCicloDesemp)) return false;
@@ -487,7 +492,7 @@ function DashboardGlobal() {
   });
   var totalG1 = bajo + medio + alto;
 
-  // OBJETIVOS — filtrar por año, área y colaborador
+  // Objetivos
   var areas = ['Todas'].concat([...new Set(colabs.map(function(c) { return c.area; }).filter(Boolean))].sort());
   var anios = [...new Set(objetivosData.map(function(o) { return o.anio; }).filter(Boolean))].sort(function(a,b) { return b - a; });
   if (!anios.includes(anioFiltro)) anios.unshift(anioFiltro);
@@ -505,7 +510,6 @@ function DashboardGlobal() {
     return true;
   });
 
-  // Gráfico 1 objetivos: Alcance promedio por área
   var alcancePorArea = {};
   objsFiltrados.forEach(function(o) {
     var colab = colabs.find(function(c) { return c.id === o.colaborador_id; });
@@ -519,7 +523,6 @@ function DashboardGlobal() {
     .map(function(e) { return { area: e[0], prom: (e[1].sum / e[1].count).toFixed(1) }; })
     .sort(function(a,b) { return parseFloat(b.prom) - parseFloat(a.prom); });
 
-  // Gráfico 2 objetivos: Ranking alcance anual por colaborador
   var alcancePorColab = {};
   objsFiltrados.forEach(function(o) {
     var colab = colabs.find(function(c) { return c.id === o.colaborador_id; });
@@ -542,7 +545,6 @@ function DashboardGlobal() {
 
   var selectStyle = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', color: '#231F20', cursor: 'pointer', fontWeight: 500 };
 
-  // Spider chart inline
   function SpiderMini({ datos }) {
     if (!datos || datos.length === 0) return <p style={{ color: '#94a3b8', textAlign: 'center', padding: 20, fontSize: 12 }}>Sin datos</p>;
     var N = datos.length; var CX = 350; var CY = 350; var R = 160;
@@ -567,6 +569,7 @@ function DashboardGlobal() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
         <button onClick={function() { setTabActivo('desempeno'); }} style={tabActivo === 'desempeno' ? s.btnPrimario : s.btnInfo}>Desempeño</button>
@@ -577,7 +580,8 @@ function DashboardGlobal() {
       {tabActivo === 'desempeno' && (
         <div>
           <h2 style={{ color: '#231F20', margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Desempeño — Vista general</h2>
-          {/* Filtros desempeño */}
+
+          {/* Filtros */}
           <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center", background: "white", padding: "12px 16px", borderRadius: 10, border: "1px solid #e8e6e0" }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Filtrar:</span>
             <select value={filtroAreaDesemp} onChange={function(e) { setFiltroAreaDesemp(e.target.value); setFiltroColabDesemp("Todos"); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white" }}>
@@ -590,35 +594,50 @@ function DashboardGlobal() {
               <option value="Todos">Todos los colaboradores</option>
               {colabs.sort(function(a,b) { return (a.full_name||"").localeCompare(b.full_name||""); }).map(function(c) { return <option key={c.id} value={c.id}>{c.full_name || c.email}</option>; })}
             </select>
+            {/* CAMBIO 6: selector de ciclo — default "Todos los ciclos" */}
             <select value={filtroCicloDesemp} onChange={function(e) { setFiltroCicloDesemp(e.target.value); }} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #e8e6e0", fontSize: 13, background: "white" }}>
               {ciclosOpts.map(function(c) { return <option key={c.id} value={c.id}>{c.nombre}</option>; })}
             </select>
             {(filtroAreaDesemp !== "Todas" || filtroSeniorityDesemp !== "Todos" || filtroColabDesemp !== "Todos" || filtroCicloDesemp !== "Todos") && (
-              <button onClick={function() { setFiltroAreaDesemp("Todas"); setFiltroSeniorityDesemp("Todos"); setFiltroColabDesemp("Todos"); setFiltroCicloDesemp("Todos"); }} style={{ fontSize: 12, padding: "7px 12px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontWeight: 600 }}>Limpiar</button>
+              <button
+                onClick={function() { setFiltroAreaDesemp("Todas"); setFiltroSeniorityDesemp("Todos"); setFiltroColabDesemp("Todos"); setFiltroCicloDesemp("Todos"); }}
+                style={{ fontSize: 12, padding: "7px 12px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontWeight: 600 }}
+              >
+                Limpiar
+              </button>
             )}
           </div>
+
+          {/* KPIs */}
           <div style={s.grid}>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones lider</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalLider.length}</p></div>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Calibradas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{totalG1}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '3px solid #166534' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Alto desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#166534', margin: '6px 0' }}>{alto}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '3px solid #dc2626' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Bajo desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#dc2626', margin: '6px 0' }}>{bajo}</p></div>
           </div>
+
+          {/* Gráficos */}
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 20 }}>
-            {/* Distribución */}
             <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 260 }}>
               <h4 style={{ margin: '0 0 6px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Distribución de Desempeño</h4>
               <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Solo evaluaciones calibradas</p>
               {totalG1 === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin datos calibrados</p> : (
                 [{ label: 'Alto', valor: alto, color: '#166534', rango: '3.6–5' }, { label: 'Medio', valor: medio, color: '#92400e', rango: '3–3.5' }, { label: 'Bajo', valor: bajo, color: '#dc2626', rango: '1–2.9' }].map(function(g) {
                   var pct = Math.round(g.valor / totalG1 * 100);
-                  return <div key={g.label} style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8' }}>({g.rango})</span></span><span style={{ fontSize: 13, fontWeight: 700 }}>{g.valor} ({pct}%)</span></div>
-                    <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}><div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6 }} /></div>
-                  </div>;
+                  return (
+                    <div key={g.label} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.label} <span style={{ fontSize: 11, color: '#94a3b8' }}>({g.rango})</span></span>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{g.valor} ({pct}%)</span>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}>
+                        <div style={{ background: g.color, height: '100%', width: pct + '%', borderRadius: 6 }} />
+                      </div>
+                    </div>
+                  );
                 })
               )}
             </div>
-            {/* Araña */}
             <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <h4 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 14, fontWeight: 700, alignSelf: 'flex-start' }}>Promedio por Competencia</h4>
               <p style={{ margin: '0 0 12px 0', fontSize: 11, color: '#94a3b8', alignSelf: 'flex-start' }}>Evaluaciones del líder calibradas</p>
@@ -633,7 +652,6 @@ function DashboardGlobal() {
         <div>
           <h2 style={{ color: '#231F20', margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Objetivos — Vista general</h2>
 
-          {/* Filtros */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center', background: 'white', padding: '14px 16px', borderRadius: 10, border: '1px solid #e8e6e0' }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Filtrar:</span>
             <select value={anioFiltro} onChange={function(e) { setAnioFiltro(parseInt(e.target.value)); }} style={selectStyle}>
@@ -651,7 +669,6 @@ function DashboardGlobal() {
             )}
           </div>
 
-          {/* KPI Objetivos */}
           <div style={{ ...s.grid, marginBottom: 24 }}>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Objetivos {anioFiltro}</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{objsFiltrados.length}</p></div>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Validados</p><p style={{ fontSize: 32, fontWeight: 800, color: '#166534', margin: '6px 0' }}>{objsFiltrados.filter(function(o) { return o.status === 'validado'; }).length}</p></div>
@@ -660,27 +677,26 @@ function DashboardGlobal() {
           </div>
 
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {/* Gráfico 1: Alcance promedio por área */}
             <div style={{ ...s.tarjetaStat, flex: 1, minWidth: 280 }}>
               <h4 style={{ margin: '0 0 16px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Alcance promedio por área</h4>
               {alcanceAreaData.length === 0 ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 40, fontSize: 13 }}>Sin alcances registrados</p> : (
                 alcanceAreaData.map(function(d) {
                   var color = areaColor(d.area);
                   var pct = Math.min(parseFloat(d.prom), 120);
-                  return <div key={d.area} style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>{d.area}</span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: color }}>{d.prom}%</span>
+                  return (
+                    <div key={d.area} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>{d.area}</span>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: color }}>{d.prom}%</span>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}>
+                        <div style={{ background: color, height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6 }} />
+                      </div>
                     </div>
-                    <div style={{ background: '#f1f5f9', borderRadius: 6, height: 22, overflow: 'hidden' }}>
-                      <div style={{ background: color, height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6 }} />
-                    </div>
-                  </div>;
+                  );
                 })
               )}
             </div>
-
-            {/* Gráfico 2: Ranking alcance anual por colaborador */}
             <div style={{ ...s.tarjetaStat, flex: 2, minWidth: 320 }}>
               <h4 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 14, fontWeight: 700 }}>Ranking — Alcance anual por colaborador</h4>
               <p style={{ margin: '0 0 16px 0', fontSize: 11, color: '#94a3b8' }}>Promedio de alcances reportados/validados</p>
@@ -690,21 +706,23 @@ function DashboardGlobal() {
                     var color = areaColor(d.area);
                     var pct = Math.min(parseFloat(d.prom), 120);
                     var medal = idx === 0 ? '1' : idx === 1 ? '2' : idx === 2 ? '3' : String(idx + 1);
-                    return <div key={d.nombre} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: idx < 3 ? color : '#94a3b8', minWidth: 24, textAlign: 'center' }}>#{medal}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{d.nombre}</span>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: color, fontWeight: 600, padding: '1px 6px', background: color + '20', borderRadius: 4 }}>{d.area}</span>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#92400e' : '#dc2626' }}>{d.prom}%</span>
+                    return (
+                      <div key={d.nombre} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: idx < 3 ? color : '#94a3b8', minWidth: 24, textAlign: 'center' }}>#{medal}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                            <span style={{ fontSize: 13, color: '#231F20', fontWeight: 500 }}>{d.nombre}</span>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span style={{ fontSize: 10, color: color, fontWeight: 600, padding: '1px 6px', background: color + '20', borderRadius: 4 }}>{d.area}</span>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#92400e' : '#dc2626' }}>{d.prom}%</span>
+                            </div>
+                          </div>
+                          <div style={{ background: '#f1f5f9', borderRadius: 6, height: 18, overflow: 'hidden' }}>
+                            <div style={{ background: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#f59e0b' : '#dc2626', height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6, transition: 'width 0.4s' }} />
                           </div>
                         </div>
-                        <div style={{ background: '#f1f5f9', borderRadius: 6, height: 18, overflow: 'hidden' }}>
-                          <div style={{ background: parseFloat(d.prom) >= 100 ? '#166534' : parseFloat(d.prom) >= 80 ? '#f59e0b' : '#dc2626', height: '100%', width: (pct / 120 * 100) + '%', borderRadius: 6, transition: 'width 0.4s' }} />
-                        </div>
                       </div>
-                    </div>;
+                    );
                   })}
                 </div>
               )}
@@ -987,439 +1005,335 @@ function EvaluacionesAdmin({ cicloId }) {
 }
 
 function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
-  var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState("Todas"); var [editandoCal, setEditandoCal] = useState(null); var [calTemp, setCalTemp] = useState({ rating: "", comentario: "" });
+  var [datos, setDatos] = useState([]);
+  var [carg, setCarg] = useState(true);
+  var [filtro, setFiltro] = useState("Todas");
+  var [editandoCal, setEditandoCal] = useState(null);
+  var [calTemp, setCalTemp] = useState({ rating: "", comentario: "" });
   var [historial, setHistorial] = useState([]);
   var [showHistorial, setShowHistorial] = useState(false);
   var [nuevoComentario, setNuevoComentario] = useState("");
   var [colaboradorHist, setColaboradorHist] = useState(null);
- useEffect(function() { cargar(); }, [cicloId]);
- async function cargar() {
- setCarg(true);
- var [{ data: evs }, { data: historial }] = await Promise.all([
-   supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']),
-   supabase.from('calibracion_historial').select('colaborador_id, tipo').eq('ciclo_id', cicloId).in('tipo', ['reabrir_lider', 'comentario', 'calibracion'])
- ]);
- // Set de colaboradores con reapertura de lider
- var reabiertos = new Set((historial || []).map(function(h) { return h.colaborador_id; }));
- var mapa = {};
- (evs || []).forEach(function(ev) {
- if (!ev.colaborador) return;
- if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null, liderReabierto: false };
- if (ev.tipo_evaluacion === 'autoevaluacion') { mapa[ev.colaborador_id].autoevaluacion = ev; mapa[ev.colaborador_id].promAuto = ev.rating_promedio; }
- if (ev.tipo_evaluacion === 'evaluacion_lider') {
- mapa[ev.colaborador_id].evaluacionLider = ev;
- mapa[ev.colaborador_id].promLider = ev.rating_promedio;
- mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
- mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
- var cal = ev.rating_calibrado;
- if (!cal && ev.rating_promedio) {
- cal = ev.rating_promedio;
- supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
- }
- mapa[ev.colaborador_id].ratingFinal = cal;
- }
- });
- setDatos(Object.values(mapa)); setCarg(false);
- }
 
+  useEffect(function() { cargar(); }, [cicloId]);
 
- async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
-   var rCal = parseFloat(rating) || 0; var rLid = parseFloat(ratingLider) || 0;
-   if (rCal !== rLid && !comentario.trim()) { alert('Debes justificar por que el rating calibrado difiere del rating del lider.'); return; }
-   await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
-   setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
- }
+  async function cargar() {
+    setCarg(true);
+    var [{ data: evs }, { data: historialData }] = await Promise.all([
+      supabase.from('evaluaciones').select('id, colaborador_id, tipo_evaluacion, evaluador_id, estado, rating_promedio, rating_calibrado, comentario_calibracion, puntuaciones(rating, competencia_id, comentario, competencias(nombre)), colaborador:colaborador_id(id, email, full_name, area, seniority, puesto)').eq('ciclo_id', cicloId).in('tipo_evaluacion', ['autoevaluacion', 'evaluacion_lider']),
+      supabase.from('calibracion_historial').select('colaborador_id, tipo').eq('ciclo_id', cicloId).in('tipo', ['reabrir_lider', 'comentario', 'calibracion'])
+    ]);
+    var reabiertos = new Set((historialData || []).map(function(h) { return h.colaborador_id; }));
+    var mapa = {};
+    (evs || []).forEach(function(ev) {
+      if (!ev.colaborador) return;
+      if (!mapa[ev.colaborador_id]) mapa[ev.colaborador_id] = { colaborador: ev.colaborador, autoevaluacion: null, evaluacionLider: null, ratingFinal: null, comentarioCalibracion: null, promAuto: null, promLider: null, liderReabierto: false };
+      if (ev.tipo_evaluacion === 'autoevaluacion') {
+        mapa[ev.colaborador_id].autoevaluacion = ev;
+        mapa[ev.colaborador_id].promAuto = ev.rating_promedio;
+      }
+      if (ev.tipo_evaluacion === 'evaluacion_lider') {
+        mapa[ev.colaborador_id].evaluacionLider = ev;
+        mapa[ev.colaborador_id].promLider = ev.rating_promedio;
+        mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
+        mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
+        var cal = ev.rating_calibrado;
+        if (!cal && ev.rating_promedio) {
+          cal = ev.rating_promedio;
+          supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
+        }
+        mapa[ev.colaborador_id].ratingFinal = cal;
+      }
+    });
+    setDatos(Object.values(mapa));
+    setCarg(false);
+  }
 
- async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
-   if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
-   var motivo = window.prompt('Motivo de reapertura (opcional):') || '';
-   await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
-   var { data: { session } } = await supabase.auth.getSession();
-   var tipoHist = tipo.includes('auto') ? 'reabrir_auto' : 'reabrir_lider';
-   await supabase.from('calibracion_historial').insert({
-     ciclo_id: cicloId, colaborador_id: colaboradorId, evaluacion_id: evalId,
-     tipo: tipoHist,
-     comentario: 'Reapertura de ' + tipo + (motivo ? ': ' + motivo : ''),
-     usuario_id: session.user.id,
-     usuario_nombre: session.user.email
-   });
-   cargar();
-   if (showHistorial && colaboradorHist === colaboradorId) cargarHistorial(colaboradorId);
- }
+  // ── CAMBIO 3 ────────────────────────────────────────────────────────────────
+  // guardarCal ahora actualiza el estado local correctamente para que
+  // el valor nuevo se vea sin necesidad de recargar
+  async function guardarCal(evaluacionId, rating, comentario, ratingLider) {
+    var rCal = parseFloat(rating) || 0;
+    var rLid = parseFloat(ratingLider) || 0;
+    if (rCal !== rLid && !comentario.trim()) {
+      alert('Debes justificar por qué el rating calibrado difiere del rating del líder.');
+      return false; // indica que no se guardó
+    }
+    await supabase.from('evaluaciones').update({ rating_calibrado: rating, comentario_calibracion: comentario }).eq('id', evaluacionId);
+    // Actualizar estado local para reflejar el cambio sin recargar
+    setDatos(function(prev) {
+      return prev.map(function(d) {
+        if (d.evaluacionLider?.id === evaluacionId) {
+          return { ...d, ratingFinal: rating, comentarioCalibracion: comentario };
+        }
+        return d;
+      });
+    });
+    return true; // indica que se guardó correctamente
+  }
+  // ── FIN CAMBIO 3 (guardarCal) ────────────────────────────────────────────────
 
- async function cargarHistorial(colaboradorId) {
-   var { data } = await supabase.from('calibracion_historial')
-     .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', colaboradorId)
-     .order('created_at', { ascending: false });
-   setHistorial(data || []);
-   setColaboradorHist(colaboradorId);
-   setShowHistorial(true);
- }
+  async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
+    if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
+    var motivo = window.prompt('Motivo de reapertura (opcional):') || '';
+    await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
+    var { data: { session } } = await supabase.auth.getSession();
+    var tipoHist = tipo.includes('auto') ? 'reabrir_auto' : 'reabrir_lider';
+    await supabase.from('calibracion_historial').insert({
+      ciclo_id: cicloId, colaborador_id: colaboradorId, evaluacion_id: evalId,
+      tipo: tipoHist,
+      comentario: 'Reapertura de ' + tipo + (motivo ? ': ' + motivo : ''),
+      usuario_id: session.user.id,
+      usuario_nombre: session.user.email
+    });
+    cargar();
+    if (showHistorial && colaboradorHist === colaboradorId) cargarHistorial(colaboradorId);
+  }
 
- async function agregarComentario(colaboradorId) {
-   if (!nuevoComentario.trim()) return;
-   var { data: { session } } = await supabase.auth.getSession();
-   await supabase.from('calibracion_historial').insert({
-     ciclo_id: cicloId, colaborador_id: colaboradorId,
-     tipo: 'comentario',
-     comentario: nuevoComentario,
-     usuario_id: session.user.id,
-     usuario_nombre: session.user.email
-   });
-   setNuevoComentario('');
-   cargarHistorial(colaboradorId);
- }
+  async function cargarHistorial(colaboradorId) {
+    var { data } = await supabase.from('calibracion_historial')
+      .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', colaboradorId)
+      .order('created_at', { ascending: false });
+    setHistorial(data || []);
+    setColaboradorHist(colaboradorId);
+    setShowHistorial(true);
+  }
 
- async function generarPDFCompleto(d) {
- console.log('=== PDF DEBUG ===');
- console.log('d.autoevaluacion:', d.autoevaluacion);
- console.log('d.evaluacionLider:', d.evaluacionLider);
- console.log('punts auto embebidas:', d.autoevaluacion?.puntuaciones);
- console.log('punts lider embebidas:', d.evaluacionLider?.puntuaciones);
+  async function agregarComentario(colaboradorId) {
+    if (!nuevoComentario.trim()) return;
+    var { data: { session } } = await supabase.auth.getSession();
+    await supabase.from('calibracion_historial').insert({
+      ciclo_id: cicloId, colaborador_id: colaboradorId,
+      tipo: 'comentario',
+      comentario: nuevoComentario,
+      usuario_id: session.user.id,
+      usuario_nombre: session.user.email
+    });
+    setNuevoComentario('');
+    cargarHistorial(colaboradorId);
+  }
 
- var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsOrden = [];
- var autoComentFin = '', liderComentFin = '';
- var promAuto = d.promAuto || null;
- var promLider = d.promLider || null;
+  async function generarPDFCompleto(d) {
+    var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsOrden = [];
+    var autoComentFin = '', liderComentFin = '';
+    var promAuto = d.promAuto || null;
+    var promLider = d.promLider || null;
 
- // Siempre hacer queries frescos — no confiar en datos embebidos
- if (d.autoevaluacion?.id) {
- var { data: aev, error: aevErr } = await supabase
- .from('evaluaciones')
- .select('comentarios_finales, rating_promedio')
- .eq('id', d.autoevaluacion.id)
- .single();
- console.log('aev:', aev, 'error:', aevErr);
- autoComentFin = aev?.comentarios_finales || '';
- if (!promAuto) promAuto = aev?.rating_promedio || null;
+    if (d.autoevaluacion?.id) {
+      var { data: aev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.autoevaluacion.id).single();
+      autoComentFin = aev?.comentarios_finales || '';
+      if (!promAuto) promAuto = aev?.rating_promedio || null;
+      var { data: ap } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', d.autoevaluacion.id);
+      (ap || []).forEach(function(p) { autoPunts[p.competencia_id] = p.rating; autoComs[p.competencia_id] = p.comentario || ''; });
+    }
 
- var { data: ap, error: apErr } = await supabase
- .from('puntuaciones')
- .select('rating, competencia_id, comentario')
- .eq('evaluacion_id', d.autoevaluacion.id);
- console.log('punts auto fresh:', ap, 'error:', apErr);
- (ap || []).forEach(function(p) {
- autoPunts[p.competencia_id] = p.rating;
- autoComs[p.competencia_id] = p.comentario || '';
- });
- }
+    if (d.evaluacionLider?.id) {
+      var { data: lev } = await supabase.from('evaluaciones').select('comentarios_finales, rating_promedio').eq('id', d.evaluacionLider.id).single();
+      liderComentFin = lev?.comentarios_finales || '';
+      if (!promLider) promLider = lev?.rating_promedio || null;
+      var { data: lp } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', d.evaluacionLider.id);
+      (lp || []).forEach(function(p) { liderPunts[p.competencia_id] = p.rating; liderComs[p.competencia_id] = p.comentario || ''; });
+    }
 
- if (d.evaluacionLider?.id) {
- var { data: lev, error: levErr } = await supabase
- .from('evaluaciones')
- .select('comentarios_finales, rating_promedio')
- .eq('id', d.evaluacionLider.id)
- .single();
- console.log('lev:', lev, 'error:', levErr);
- liderComentFin = lev?.comentarios_finales || '';
- if (!promLider) promLider = lev?.rating_promedio || null;
+    var todasIds = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
+    if (todasIds.length > 0) {
+      var { data: compsData } = await supabase.from('competencias').select('id, nombre').in('id', todasIds);
+      (compsData || []).forEach(function(c) { compsOrden.push({ id: c.id, nombre: c.nombre }); });
+    }
 
- var { data: lp, error: lpErr } = await supabase
- .from('puntuaciones')
- .select('rating, competencia_id, comentario')
- .eq('evaluacion_id', d.evaluacionLider.id);
- console.log('punts lider fresh:', lp, 'error:', lpErr);
- (lp || []).forEach(function(p) {
- liderPunts[p.competencia_id] = p.rating;
- liderComs[p.competencia_id] = p.comentario || '';
- });
- }
+    if (compsOrden.length === 0) {
+      var sen = d.colaborador?.seniority || 'Analista';
+      var { data: cFB } = await supabase.from('competencias').select('id, nombre').eq('aplica_a', sen);
+      if (!cFB || cFB.length === 0) { var { data: cAll } = await supabase.from('competencias').select('id, nombre'); cFB = cAll || []; }
+      compsOrden = (cFB || []).map(function(c) { return { id: c.id, nombre: c.nombre }; });
+    }
 
- // Cargar competencias con sus nombres
- var todasIds = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
- console.log('competencia IDs encontrados:', todasIds);
+    var pdf = new jsPDF();
+    var PW = 210; var MX = 12; var y = 32;
+    var MID = PW / 2;
+    var COL_L = MX;
+    var COL_R = MID + 3;
+    var COL_W = MID - MX - 3;
 
- if (todasIds.length > 0) {
- var { data: compsData, error: compsErr } = await supabase
- .from('competencias')
- .select('id, nombre')
- .in('id', todasIds);
- console.log('compsData:', compsData, 'error:', compsErr);
- (compsData || []).forEach(function(c) {
- compsOrden.push({ id: c.id, nombre: c.nombre });
- });
- }
+    function cab() { try { pdf.addImage('/logo.jpg', 'JPEG', MX, 6, 20, 20); } catch(e) {} }
+    function pie() { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184); pdf.text('Fabric Group | ' + new Date().toLocaleDateString('es-AR'), MX, 291); }
+    function nuevaPag() { pie(); pdf.addPage(); cab(); y = 30; }
+    function chk(h) { if (y + h > 278) nuevaPag(); }
+    function t(str) {
+      return (str || '').replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u')
+        .replace(/[ÁÀÄÂ]/g,'A').replace(/[ÉÈËÊ]/g,'E').replace(/[ÍÌÏÎ]/g,'I').replace(/[ÓÒÖÔ]/g,'O').replace(/[ÚÙÜÛ]/g,'U')
+        .replace(/[ñ]/g,'n').replace(/[Ñ]/g,'N').replace(/[^\x00-\x7E]/g,'?');
+    }
 
- // Fallback si no hay puntuaciones todavía
- if (compsOrden.length === 0) {
- var sen = d.colaborador?.seniority || 'Analista';
- var { data: cFB } = await supabase.from('competencias').select('id, nombre').eq('aplica_a', sen);
- if (!cFB || cFB.length === 0) {
- var { data: cAll } = await supabase.from('competencias').select('id, nombre');
- cFB = cAll || [];
- }
- compsOrden = (cFB || []).map(function(c) { return { id: c.id, nombre: c.nombre }; });
- }
+    cab();
 
- console.log('=== FINAL compsOrden:', compsOrden);
- console.log('autoPunts:', autoPunts);
- console.log('liderPunts:', liderPunts);
- console.log('autoComs:', autoComs);
- console.log('liderComs:', liderComs);
+    pdf.setFont('times', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
+    pdf.text('EVALUACIÓN DE DESEMPEÑO', MX, y); y += 7;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
+    pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
+    pdf.text(t('Puesto: ' + (d.colaborador.puesto || d.colaborador.area || '-') + ' | Area: ' + (d.colaborador.area || '-') + ' | Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
 
- // ---- Setup PDF ----
- var pdf = new jsPDF();
- var PW = 210; var MX = 12; var y = 32;
- // columnas: izq = auto, der = lider
- var MID = PW / 2; // 105 — línea divisoria
- var COL_L = MX; // inicio columna izquierda (auto)
- var COL_R = MID + 3; // inicio columna derecha (lider)
- var COL_W = MID - MX - 3; // ancho de cada columna ~90mm
+    chk(12);
+    pdf.setFillColor(35, 31, 32);
+    pdf.rect(MX, y, COL_W, 8, 'F');
+    pdf.rect(MID + 2, y, COL_W, 8, 'F');
+    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+    pdf.text('AUTOEVALUACION (Colaborador)', COL_L + 2, y + 5.5);
+    pdf.text('EVALUACION DEL LIDER', COL_R + 2, y + 5.5);
+    y += 10;
 
- function cab() {
- try { pdf.addImage('/logo.jpg', 'JPEG', MX, 6, 20, 20); } catch(e) {}
- }
- function pie() {
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(148, 163, 184);
- pdf.text('Fabric Group | ' + new Date().toLocaleDateString('es-AR'), MX, 291);
- }
- function nuevaPag() { pie(); pdf.addPage(); cab(); y = 30; }
- function chk(h) { if (y + h > 278) nuevaPag(); }
+    var LINE_H = 4.5;
+    var FONT_COM = 7;
+    var COM_W = COL_W - 6;
 
- // Normalizar texto para jsPDF helvetica (no soporta tildes)
- function t(str) {
- return (str || '')
- .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
- .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u')
- .replace(/[ÁÀÄÂ]/g,'A').replace(/[ÉÈËÊ]/g,'E').replace(/[ÍÌÏÎ]/g,'I')
- .replace(/[ÓÒÖÔ]/g,'O').replace(/[ÚÙÜÛ]/g,'U')
- .replace(/[ñ]/g,'n').replace(/[Ñ]/g,'N')
- .replace(/[^\x00-\x7E]/g,'?');
- }
- function puntCirculo(x, yPos, valor, bgR, bgG, bgB, textR, textG, textB) {
- pdf.setFillColor(bgR, bgG, bgB);
- pdf.circle(x, yPos, 4.5, 'F');
- pdf.setTextColor(textR, textG, textB);
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
- var txt = String(valor);
- pdf.text(txt, x - (txt.length > 1 ? 2.5 : 1.5), yPos + 1.2);
- }
+    compsOrden.forEach(function(comp, idx) {
+      var autoP = autoPunts[comp.id];
+      var liderP = liderPunts[comp.id];
+      var autoC = autoComs[comp.id] || '';
+      var liderC = liderComs[comp.id] || '';
 
- cab();
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(FONT_COM);
+      var textoAuto = autoC ? t(autoC) : 'Sin comentario';
+      var textoLider = liderC ? t(liderC) : 'Sin comentario';
+      var linAuto = pdf.splitTextToSize(textoAuto, COM_W);
+      var linLider = pdf.splitTextToSize(textoLider, COM_W);
+      var maxLineas = Math.max(linAuto.length, linLider.length);
 
- // ---- ENCABEZADO ----
+      var cabH = 8;
+      var cuerpoH = Math.max(20, 13 + maxLineas * LINE_H + 4);
+      var totalH = cabH + cuerpoH;
 
- pdf.setFont('times', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32); pdf.text('EVALUACIÓN DE DESEMPEÑO', MX, y); pdf.setFont('helvetica', 'normal'); y += 7;
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
- pdf.text(t('Colaborador: ' + (d.colaborador.full_name || d.colaborador.email)), MX, y); y += 5;
- pdf.text(t('Puesto: ' + (d.colaborador.puesto || d.colaborador.area || '-') + ' | Area: ' + (d.colaborador.area || '-') + ' | Fecha: ' + new Date().toLocaleDateString('es-AR')), MX, y); y += 8;
+      chk(totalH + 4);
 
- // ---- CABECERA DE COLUMNAS ----
- chk(12);
- pdf.setFillColor(35, 31, 32);
- pdf.rect(MX, y, COL_W, 8, 'F');
- pdf.rect(MID + 2, y, COL_W, 8, 'F');
- pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
- pdf.text('AUTOEVALUACION (Colaborador)', COL_L + 2, y + 5.5);
- pdf.text('EVALUACION DEL LIDER', COL_R + 2, y + 5.5);
- y += 10;
+      var yStart = y;
+      var yCuerpo = yStart + cabH;
 
- // ---- COMPETENCIAS — una por una ----
- var LINE_H = 4.5;
- var FONT_COM = 7;
- var COM_W = COL_W - 6;
+      pdf.setFillColor(212, 210, 198);
+      pdf.rect(MX, yStart, PW - MX * 2, cabH, 'F');
+      if (idx % 2 === 0) { pdf.setFillColor(248, 248, 245); } else { pdf.setFillColor(255, 255, 255); }
+      pdf.rect(MX, yCuerpo, PW - MX * 2, cuerpoH, 'F');
 
- compsOrden.forEach(function(comp, idx) {
- var autoP = autoPunts[comp.id];
- var liderP = liderPunts[comp.id];
- var autoC = autoComs[comp.id] || '';
- var liderC = liderComs[comp.id] || '';
+      pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+      pdf.text(t(comp.nombre.toUpperCase()), MX + 2, yStart + 5.5);
 
- // Calcular lineas antes de dibujar nada
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(FONT_COM);
- var textoAuto = autoC ? t(autoC) : 'Sin comentario';
- var textoLider = liderC ? t(liderC) : 'Sin comentario';
- var linAuto = pdf.splitTextToSize(textoAuto, COM_W);
- var linLider = pdf.splitTextToSize(textoLider, COM_W);
- var maxLineas = Math.max(linAuto.length, linLider.length);
+      pdf.setDrawColor(200, 198, 190); pdf.setLineWidth(0.3);
+      pdf.line(MID, yCuerpo, MID, yCuerpo + cuerpoH);
 
- var cabH = 8;
- var cuerpoH = Math.max(20, 13 + maxLineas * LINE_H + 4);
- var totalH = cabH + cuerpoH;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(5.5); pdf.setTextColor(100, 116, 139);
+      pdf.text('AUTOEVALUACION', COL_L + 2, yCuerpo + 4);
+      pdf.text('EVALUACION LIDER', COL_R + 2, yCuerpo + 4);
 
- chk(totalH + 4);
+      var yPunt = yCuerpo + 9;
+      if (autoP) { pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32); pdf.text('' + autoP + ' / 5', COL_L + 2, yPunt + 1.5); }
+      else { pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184); pdf.text('Sin puntaje', COL_L + 2, yPunt + 1.5); }
+      if (liderP) { pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32); pdf.text('' + liderP + ' / 5', COL_R + 2, yPunt + 1.5); }
+      else { pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184); pdf.text('Sin puntaje', COL_R + 2, yPunt + 1.5); }
 
- var yStart = y;
- var yCuerpo = yStart + cabH;
+      var yComent = yPunt + 8;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(FONT_COM); pdf.setTextColor(50, 50, 50);
+      linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yComent + i * LINE_H); });
+      linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yComent + i * LINE_H); });
 
- // 1. Fondos primero
- pdf.setFillColor(212, 210, 198);
- pdf.rect(MX, yStart, PW - MX * 2, cabH, 'F');
+      y = yStart + totalH + 2;
+      pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.2);
+      pdf.line(MX, y, PW - MX, y);
+      y += 2;
+    });
 
- if (idx % 2 === 0) { pdf.setFillColor(248, 248, 245); } else { pdf.setFillColor(255, 255, 255); }
- pdf.rect(MX, yCuerpo, PW - MX * 2, cuerpoH, 'F');
+    y += 4;
 
- // 2. Nombre competencia
- pdf.setTextColor(35, 31, 32); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
- pdf.text(t(comp.nombre.toUpperCase()), MX + 2, yStart + 5.5);
+    if (autoComentFin || liderComentFin) {
+      chk(20);
+      pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+      pdf.text('COMENTARIOS FINALES', MX + 2, y + 5); y += 9;
+      if (autoComentFin) {
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+        pdf.text('Colaborador:', MX, y); y += 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+        var lA = pdf.splitTextToSize(t(autoComentFin), PW - MX * 2);
+        chk(lA.length * 4 + 3); lA.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; }); y += 3;
+      }
+      if (liderComentFin) {
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+        pdf.text('Lider:', MX, y); y += 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+        var lL = pdf.splitTextToSize(t(liderComentFin), PW - MX * 2);
+        chk(lL.length * 4 + 3); lL.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; }); y += 3;
+      }
+    }
 
- // 3. Linea divisoria vertical
- pdf.setDrawColor(200, 198, 190); pdf.setLineWidth(0.3);
- pdf.line(MID, yCuerpo, MID, yCuerpo + cuerpoH);
+    chk(52); y += 4;
+    pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
+    pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
+    pdf.text('RESULTADO FINAL', MX + 2, y + 5); y += 10;
 
- // 4. Etiquetas columna
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(5.5); pdf.setTextColor(100, 116, 139);
- pdf.text('AUTOEVALUACION', COL_L + 2, yCuerpo + 4);
- pdf.text('EVALUACION LIDER', COL_R + 2, yCuerpo + 4);
+    var clA = clasificarRating(parseFloat(promAuto));
+    var clL = clasificarRating(parseFloat(promLider));
+    var boxW = (PW - MX * 2 - 4) / 2;
+    if (promAuto) {
+      pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, boxW, 14, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+      pdf.text('Autoevaluacion', MX + 2, y + 5);
+      pdf.setFontSize(14); pdf.text(String(promAuto), MX + 2, y + 12);
+      if (clA) { pdf.setFontSize(6); pdf.setTextColor(clA.color.startsWith('#') ? parseInt(clA.color.slice(1,3),16) : 35, clA.color.startsWith('#') ? parseInt(clA.color.slice(3,5),16) : 31, clA.color.startsWith('#') ? parseInt(clA.color.slice(5,7),16) : 32); pdf.text(clA.label, MX + 14, y + 12); }
+    }
+    if (promLider) {
+      pdf.setFillColor(240, 240, 240); pdf.rect(MX + boxW + 4, y, boxW, 14, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
+      pdf.text('Evaluacion del Lider', MX + boxW + 6, y + 5);
+      pdf.setFontSize(14); pdf.text(String(promLider), MX + boxW + 6, y + 12);
+      if (clL) { pdf.setFontSize(6); pdf.setTextColor(clL.color.startsWith('#') ? parseInt(clL.color.slice(1,3),16) : 35, clL.color.startsWith('#') ? parseInt(clL.color.slice(3,5),16) : 31, clL.color.startsWith('#') ? parseInt(clL.color.slice(5,7),16) : 32); pdf.text(clL.label, MX + boxW + 20, y + 12); }
+    }
+    y += 18;
 
- // 5. Puntajes
- // 5. Puntajes — sin círculo, solo texto
- var yPunt = yCuerpo + 9;
- if (autoP) {
-   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
-   pdf.text('' + autoP + ' / 5', COL_L + 2, yPunt + 1.5);
- } else {
-   pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
-   pdf.text('Sin puntaje', COL_L + 2, yPunt + 1.5);
- }
- if (liderP) {
-   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(35, 31, 32);
-   pdf.text('' + liderP + ' / 5', COL_R + 2, yPunt + 1.5);
- } else {
-   pdf.setFont('helvetica', 'italic'); pdf.setFontSize(6.5); pdf.setTextColor(148, 163, 184);
-   pdf.text('Sin puntaje', COL_R + 2, yPunt + 1.5);
- }
+    var rf = d.ratingFinal;
+    if (rf) {
+      var clCal = clasificarRating(parseFloat(rf));
+      pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 28, 'F');
+      pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7); pdf.text('RATING CALIBRADO FINAL', MX + 4, y + 6);
+      pdf.setFontSize(28); pdf.text(String(rf), MX + 4, y + 22);
+      if (clCal) { pdf.setFontSize(10); pdf.setTextColor(255, 255, 255); pdf.text(clCal.label, MX + 22, y + 22); }
+      y += 32;
+    } else {
+      pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, PW - MX * 2, 12, 'F');
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8); pdf.setTextColor(148, 163, 184);
+      pdf.text('Rating calibrado pendiente', MX + 4, y + 8); y += 14;
+    }
 
- var yComent = yPunt + 8;
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(FONT_COM);
- pdf.setTextColor(50, 50, 50);
- linAuto.forEach(function(l, i) { pdf.text(l, COL_L + 2, yComent + i * LINE_H); });
- linLider.forEach(function(l, i) { pdf.text(l, COL_R + 2, yComent + i * LINE_H); });
+    if (d.comentarioCalibracion) {
+      chk(12);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
+      var lJ = pdf.splitTextToSize(t('Justificacion: ' + d.comentarioCalibracion), PW - MX * 2);
+      lJ.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
+    }
 
- y = yStart + totalH + 2;
- pdf.setDrawColor(212, 210, 198); pdf.setLineWidth(0.2);
- pdf.line(MX, y, PW - MX, y);
- y += 2;
- });
+    pie();
+    return pdf;
+  }
 
+  async function verPDF(d) {
+    var pdf = await generarPDFCompleto(d);
+    pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf');
+  }
 
+  var areas = useMemo(function() { return ['Todas'].concat([...new Set(datos.map(function(d) { return d.colaborador.area; }).filter(Boolean))]); }, [datos]);
+  var df = filtro === 'Todas' ? datos : datos.filter(function(d) { return d.colaborador.area === filtro; });
 
- y += 4;
+  if (carg) return <p style={{ padding: 20 }}>Cargando datos de calibracion...</p>;
 
- // ---- COMENTARIOS FINALES ----
- if (autoComentFin || liderComentFin) {
- chk(20);
- pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
- pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
- pdf.text('COMENTARIOS FINALES', MX + 2, y + 5); y += 9;
+  return (
+    <div style={{ ...s.tarjetaStat }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <h3 style={{ margin: 0, color: '#231F20' }}>Calibracion - Auto vs Lider</h3>
+        <select value={filtro} onChange={function(e) { setFiltro(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>
+          {areas.map(function(a) { return <option key={a} value={a}>{a}</option>; })}
+        </select>
+      </div>
+      <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparacion de autoevaluacion y evaluacion del lider. Define el rating final calibrado.</p>
 
- if (autoComentFin) {
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('Colaborador:', MX, y); y += 4;
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
- var lA = pdf.splitTextToSize(t(autoComentFin), PW - MX * 2);
- chk(lA.length * 4 + 3);
- lA.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
- y += 3;
- }
- if (liderComentFin) {
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('Lider:', MX, y); y += 4;
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
- var lL = pdf.splitTextToSize(t(liderComentFin), PW - MX * 2);
- chk(lL.length * 4 + 3);
- lL.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
- y += 3;
- }
- }
-
- // ---- RATINGS RESUMEN + CALIBRADO ----
- chk(52);
- y += 4;
- pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 7, 'F');
- pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5);
- pdf.text('RESULTADO FINAL', MX + 2, y + 5); y += 10;
-
- // ratings auto y lider lado a lado
- var clA = clasificarRating(parseFloat(promAuto));
- var clL = clasificarRating(parseFloat(promLider));
- var boxW = (PW - MX * 2 - 4) / 2;
- if (promAuto) {
- pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, boxW, 14, 'F');
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('Autoevaluacion', MX + 2, y + 5);
- pdf.setFontSize(14); pdf.text(String(promAuto), MX + 2, y + 12);
- if (clA) { pdf.setFontSize(6); pdf.setTextColor(clA.color.startsWith('#') ? parseInt(clA.color.slice(1,3),16) : 35, clA.color.startsWith('#') ? parseInt(clA.color.slice(3,5),16) : 31, clA.color.startsWith('#') ? parseInt(clA.color.slice(5,7),16) : 32); pdf.text(clA.label, MX + 14, y + 12); }
- }
- if (promLider) {
- pdf.setFillColor(240, 240, 240); pdf.rect(MX + boxW + 4, y, boxW, 14, 'F');
- pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(35, 31, 32);
- pdf.text('Evaluacion del Lider', MX + boxW + 6, y + 5);
- pdf.setFontSize(14); pdf.text(String(promLider), MX + boxW + 6, y + 12);
- if (clL) { pdf.setFontSize(6); pdf.setTextColor(clL.color.startsWith('#') ? parseInt(clL.color.slice(1,3),16) : 35, clL.color.startsWith('#') ? parseInt(clL.color.slice(3,5),16) : 31, clL.color.startsWith('#') ? parseInt(clL.color.slice(5,7),16) : 32); pdf.text(clL.label, MX + boxW + 20, y + 12); }
- }
- y += 18;
-
- // calibrado — grande y centrado
- var rf = d.ratingFinal;
- if (rf) {
- var clCal = clasificarRating(parseFloat(rf));
- pdf.setFillColor(35, 31, 32); pdf.rect(MX, y, PW - MX * 2, 28, 'F');
- pdf.setTextColor(212, 210, 198); pdf.setFont('helvetica', 'bold');
- pdf.setFontSize(7); pdf.text('RATING CALIBRADO FINAL', MX + 4, y + 6);
- pdf.setFontSize(28); pdf.text(String(rf), MX + 4, y + 22);
- if (clCal) {
- pdf.setFontSize(10); pdf.setTextColor(255, 255, 255);
- pdf.text(clCal.label, MX + 22, y + 22);
- }
- y += 32;
- } else {
- pdf.setFillColor(245, 245, 245); pdf.rect(MX, y, PW - MX * 2, 12, 'F');
- pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8); pdf.setTextColor(148, 163, 184);
- pdf.text('Rating calibrado pendiente', MX + 4, y + 8); y += 14;
- }
-
- if (d.comentarioCalibracion) {
- chk(12);
- pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
- var lJ = pdf.splitTextToSize(t('Justificacion: ' + d.comentarioCalibracion), PW - MX * 2);
- lJ.forEach(function(l) { pdf.text(t(l), MX, y); y += 4; });
- }
-
- // Historial de calibración
- try {
-   var { data: hist } = await supabase.from('calibracion_historial')
-     .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', d.colaborador.id)
-     .order('created_at', { ascending: true });
-   if (hist && hist.length > 0) {
-     chk(20);
-     pdf.setFillColor(240, 237, 232);
-     pdf.rect(MX, y, PW - MX * 2, 8, 'F');
-     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(35, 31, 32);
-     pdf.text(t('HISTORIAL DE CALIBRACION'), MX + 4, y + 5); y += 10;
-     hist.forEach(function(h) {
-       chk(16);
-       var tipoLabel = { calibracion: 'Calibracion', reabrir_auto: 'Reapertura Auto', reabrir_lider: 'Reapertura Lider', comentario: 'Comentario' };
-       var fecha = new Date(h.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(71, 85, 105);
-       pdf.text(t((tipoLabel[h.tipo] || h.tipo) + ' — ' + fecha + ' — ' + (h.usuario_nombre || '')), MX, y); y += 4;
-       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
-       var lines = pdf.splitTextToSize(t(h.comentario || ''), PW - MX * 2);
-       lines.forEach(function(l) { chk(5); pdf.text(t(l), MX + 4, y); y += 4; });
-       y += 2;
-     });
-   }
- } catch(e) {}
-
-
- pie();
- return pdf;
- }
- async function verPDF(d) { var pdf = await generarPDFCompleto(d); pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
-
- var areas = useMemo(function() { return ['Todas'].concat([...new Set(datos.map(function(d) { return d.colaborador.area; }).filter(Boolean))]); }, [datos]);
- var df = filtro === 'Todas' ? datos : datos.filter(function(d) { return d.colaborador.area === filtro; });
-
- if (carg) return <p style={{ padding: 20 }}> Cargando datos de calibracion...</p>;
-
- return (
- <div style={{ ...s.tarjetaStat }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
- <h3 style={{ margin: 0, color: '#231F20' }}> Calibracion - Auto vs Lider</h3>
- <select value={filtro} onChange={function(e) { setFiltro(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>{areas.map(function(a) { return <option key={a} value={a}>{a}</option>; })}</select>
- </div>
- <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparacion de autoevaluacion y evaluacion del lider. Define el rating final calibrado.</p>
-      {/* Panel de historial de calibración */}
+      {/* Panel de historial */}
       {showHistorial && (
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20, marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1431,8 +1345,6 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
             </div>
             <button onClick={function() { setShowHistorial(false); setHistorial([]); }} style={s.btnInfo}>Cerrar</button>
           </div>
-
-          {/* Agregar comentario */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
             <input
               value={nuevoComentario}
@@ -1443,18 +1355,16 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
             />
             <button onClick={function() { agregarComentario(colaboradorHist); }} style={s.btnPrimario}>Agregar</button>
           </div>
-
-          {/* Lista de eventos */}
           {historial.length === 0 ? (
             <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>Sin registros aún.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {historial.map(function(h) {
                 var colores = {
-                  reabrir_auto: { bg: '#fef3c7', border: '#fcd34d', color: '#92400e', label: 'Reapertura Auto' },
+                  reabrir_auto:  { bg: '#fef3c7', border: '#fcd34d', color: '#92400e', label: 'Reapertura Auto' },
                   reabrir_lider: { bg: '#dbeafe', border: '#93c5fd', color: '#1e40af', label: 'Reapertura Líder' },
-                  calibracion: { bg: '#dcfce7', border: '#86efac', color: '#166534', label: 'Calibración' },
-                  comentario: { bg: '#F0EDE8', border: '#D4D2C6', color: '#231F20', label: 'Comentario' },
+                  calibracion:   { bg: '#dcfce7', border: '#86efac', color: '#166534', label: 'Calibración' },
+                  comentario:    { bg: '#F0EDE8', border: '#D4D2C6', color: '#231F20', label: 'Comentario' },
                 };
                 var c = colores[h.tipo] || colores.comentario;
                 return (
@@ -1474,156 +1384,228 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
         </div>
       )}
 
- {df.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
- <div style={{ overflowX: 'auto' }}>
- <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
-<thead><tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}><th style={th}>Colaborador</th><th style={th}>Area</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Lider</th><th style={th}>Evaluación Final</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Reabrir</th></tr></thead>
- <tbody>{df.map(function(d) {
- var gap = d.promAuto && d.promLider ? (parseFloat(d.promLider) - parseFloat(d.promAuto)).toFixed(1) : null;
- var clasifAuto = clasificarRating(parseFloat(d.promAuto));
- var clasifLider = clasificarRating(parseFloat(d.promLider));
- return (
- <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
- <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
- <td style={td}>{d.colaborador.area || '-'}</td>
- <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
- <td style={{ ...td, textAlign: 'center' }}>
- <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promAuto || '-'}</div>
- {clasifAuto && <div style={{ fontSize: 9, color: clasifAuto.color, fontWeight: 600 }}>{clasifAuto.label}</div>}
- </td>
- <td style={{ ...td, textAlign: 'center' }}>
- <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promLider || '-'}</div>
- {clasifLider && <div style={{ fontSize: 9, color: clasifLider.color, fontWeight: 600 }}>{clasifLider.label}</div>}
- </td>
- <td style={{ ...td, textAlign: 'center', minWidth: 140 }}>
- {d.evaluacionLider ? (
- <div>
- {/* Valor */}
- <div style={{ fontSize: 20, fontWeight: 800, color: '#231F20', lineHeight: 1 }}>
- {d.ratingFinal || d.promLider || '-'}
- </div>
- {clasificarRating(parseFloat(d.ratingFinal || d.promLider)) && (
- <div style={{ fontSize: 9, color: clasificarRating(parseFloat(d.ratingFinal || d.promLider)).color, fontWeight: 700, marginBottom: 8, marginTop: 2 }}>
- {clasificarRating(parseFloat(d.ratingFinal || d.promLider)).label}
- </div>
- )}
- {/* Botones acción — solo si no soloLectura */}
- {!soloLectura && (
- <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
- {editandoCal !== d.colaborador.id && !d.ratingFinal && (
- <button
-   onClick={async function() {
-     var _evId = d.evaluacionLider.id;
-     var _pl = parseFloat(d.promLider) || 0;
-     if (!_pl) { alert('El lider aun no tiene rating promedio'); return; }
-     await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
-     // Registrar en historial
-     var { data: { session } } = await supabase.auth.getSession();
-     await supabase.from('calibracion_historial').insert({
-       ciclo_id: cicloId,
-       colaborador_id: d.colaborador.id,
-       evaluacion_id: _evId,
-       tipo: 'calibracion',
-       comentario: 'Rating calibrado confirmado: ' + _pl + ' (igual al rating del lider, sin cambios)',
-       usuario_id: session.user.id,
-       usuario_nombre: session.user.email
-     });
-   }}
-   title="Confirmar como evaluacion final"
-   style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-   ✓
- </button>
- )}
- {editandoCal !== d.colaborador.id && (
- <button
- onClick={function() { var _id = d.colaborador.id; setEditandoCal(_id); setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' }); }}
- title="Editar evaluacion final"
- style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: 'white', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ✏
- </button>
- )}
- {editandoCal === d.colaborador.id && (
- <button
- onClick={function() { setEditandoCal(null); }}
- title="Cancelar"
- style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ✕
- </button>
- )}
- </div>
- )}
- </div>
- ) : (
- <span style={{ color: '#94a3b8', fontSize: 12 }}>Sin evaluación</span>
- )}
- </td>
- <td style={{ ...td, minWidth: 260 }}>
- {editandoCal === d.colaborador.id ? (
- <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
- <select value={calTemp.rating} onChange={function(e) { setCalTemp({ ...calTemp, rating: e.target.value }); }}
- style={{ padding: '7px 10px', borderRadius: 8, border: '2px solid #231F20', fontSize: 14, fontWeight: 700, background: 'white' }}>
- <option value="">Seleccionar</option>
- {['1.0','1.1','1.2','1.3','1.4','1.5','1.6','1.7','1.8','1.9','2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8','2.9','3.0','3.1','3.2','3.3','3.4','3.5','3.6','3.7','3.8','3.9','4.0','4.1','4.2','4.3','4.4','4.5','4.6','4.7','4.8','4.9','5.0'].map(function(v) { return <option key={v} value={v}>{v}</option>; })}
- </select>
- {parseFloat(calTemp.rating) !== parseFloat(d.promLider) && (
- <textarea value={calTemp.comentario} onChange={function(e) { setCalTemp({ ...calTemp, comentario: e.target.value }); }}
- placeholder="Justificación obligatoria si difiere del líder..."
- style={{ padding: 8, borderRadius: 8, border: '2px solid #f59e0b', fontSize: 12, fontFamily: 'inherit', minHeight: 60, resize: 'vertical', boxSizing: 'border-box', width: '100%' }} />
- )}
- {parseFloat(calTemp.rating) === parseFloat(d.promLider) && (
- <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
- )}
- <button
- onClick={function() {
- if (!calTemp.rating) return alert('Seleccioná un rating');
- if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
- var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
- guardarCal(_evId, _r, _c, _pl);
- setEditandoCal(null);
- }}
- style={{ ...s.btnPrimario, background: '#166534', padding: '8px 16px', fontSize: 12 }}>
- Confirmar
- </button>
- </div>
- ) : (
- <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
- {d.liderReabierto ? 'Cambio la evaluacion del lider — ver historial' : d.ratingFinal ? 'Confirmado sin cambios' : '—'}
- </span>
- )}
- </td>
- <td style={td}><button onClick={function() { cargarHistorial(d.colaborador.id); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>Ver</button></td>
- <td style={td}><button onClick={function() { verPDF(d); }} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Ver PDF</button></td>
-                  <td style={{ ...td, minWidth: 160 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {d.autoevaluacion && d.autoevaluacion.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación', d.colaborador.id, d.colaborador.full_name); }}
-                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fef3c7', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
-                          Reabrir Auto
+      {df.length === 0 ? (
+        <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}>
+                <th style={th}>Colaborador</th>
+                <th style={th}>Area</th>
+                <th style={th}>Seniority</th>
+                <th style={th}>Auto</th>
+                <th style={th}>Lider</th>
+                <th style={th}>Evaluación Final</th>
+                <th style={th}>Justificación</th>
+                <th style={th}>Historial</th>
+                <th style={th}>PDF</th>
+                <th style={th}>Reabrir</th>
+              </tr>
+            </thead>
+            <tbody>
+              {df.map(function(d) {
+                var clasifAuto  = clasificarRating(parseFloat(d.promAuto));
+                var clasifLider = clasificarRating(parseFloat(d.promLider));
+                return (
+                  <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
+                    <td style={td}>{d.colaborador.area || '-'}</td>
+                    <td style={td}>
+                      <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>
+                        {d.colaborador.seniority || '-'}
+                      </span>
+                    </td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promAuto || '-'}</div>
+                      {clasifAuto && <div style={{ fontSize: 9, color: clasifAuto.color, fontWeight: 600 }}>{clasifAuto.label}</div>}
+                    </td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{d.promLider || '-'}</div>
+                      {clasifLider && <div style={{ fontSize: 9, color: clasifLider.color, fontWeight: 600 }}>{clasifLider.label}</div>}
+                    </td>
+
+                    {/* COLUMNA: Evaluación Final */}
+                    <td style={{ ...td, textAlign: 'center', minWidth: 140 }}>
+                      {d.evaluacionLider ? (
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: '#231F20', lineHeight: 1 }}>
+                            {d.ratingFinal || d.promLider || '-'}
+                          </div>
+                          {clasificarRating(parseFloat(d.ratingFinal || d.promLider)) && (
+                            <div style={{ fontSize: 9, color: clasificarRating(parseFloat(d.ratingFinal || d.promLider)).color, fontWeight: 700, marginBottom: 8, marginTop: 2 }}>
+                              {clasificarRating(parseFloat(d.ratingFinal || d.promLider)).label}
+                            </div>
+                          )}
+                          {!soloLectura && (
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                              {/* ── CAMBIO 3: botón ✓ confirma, guarda en historial y cierra ── */}
+                              {editandoCal !== d.colaborador.id && !d.ratingFinal && (
+                                <button
+                                  title="Confirmar como evaluacion final"
+                                  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={async function() {
+                                    var _evId     = d.evaluacionLider.id;
+                                    var _pl       = parseFloat(d.promLider) || 0;
+                                    var _colabId  = d.colaborador.id;
+                                    if (!_pl) { alert('El líder aún no tiene rating promedio'); return; }
+                                    var ok = await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del líder', _pl);
+                                    if (!ok) return;
+                                    // Guardar en historial
+                                    var { data: { session } } = await supabase.auth.getSession();
+                                    await supabase.from('calibracion_historial').insert({
+                                      ciclo_id: cicloId, colaborador_id: _colabId, evaluacion_id: _evId,
+                                      tipo: 'calibracion',
+                                      comentario: 'Rating calibrado confirmado: ' + _pl + ' (igual al rating del líder, sin cambios)',
+                                      usuario_id: session.user.id, usuario_nombre: session.user.email
+                                    });
+                                    // CAMBIO 3: cierra el modo edición
+                                    setEditandoCal(null);
+                                  }}
+                                >
+                                  ✓
+                                </button>
+                              )}
+                              {/* Botón lápiz — abre modo edición */}
+                              {editandoCal !== d.colaborador.id && (
+                                <button
+                                  title="Editar evaluacion final"
+                                  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: 'white', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={function() {
+                                    var _id = d.colaborador.id;
+                                    setEditandoCal(_id);
+                                    setCalTemp({ rating: d.ratingFinal || d.promLider || '', comentario: d.comentarioCalibracion || '' });
+                                  }}
+                                >
+                                  ✏
+                                </button>
+                              )}
+                              {/* Botón X — cancela sin guardar */}
+                              {editandoCal === d.colaborador.id && (
+                                <button
+                                  title="Cancelar"
+                                  style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e8e6e0', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={function() { setEditandoCal(null); }}
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: 12 }}>Sin evaluación</span>
+                      )}
+                    </td>
+
+                    {/* COLUMNA: Justificación / modo edición */}
+                    <td style={{ ...td, minWidth: 260 }}>
+                      {editandoCal === d.colaborador.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <select
+                            value={calTemp.rating}
+                            onChange={function(e) { setCalTemp({ ...calTemp, rating: e.target.value }); }}
+                            style={{ padding: '7px 10px', borderRadius: 8, border: '2px solid #231F20', fontSize: 14, fontWeight: 700, background: 'white' }}
+                          >
+                            <option value="">Seleccionar</option>
+                            {['1.0','1.1','1.2','1.3','1.4','1.5','1.6','1.7','1.8','1.9','2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8','2.9','3.0','3.1','3.2','3.3','3.4','3.5','3.6','3.7','3.8','3.9','4.0','4.1','4.2','4.3','4.4','4.5','4.6','4.7','4.8','4.9','5.0'].map(function(v) { return <option key={v} value={v}>{v}</option>; })}
+                          </select>
+                          {parseFloat(calTemp.rating) !== parseFloat(d.promLider) && (
+                            <textarea
+                              value={calTemp.comentario}
+                              onChange={function(e) { setCalTemp({ ...calTemp, comentario: e.target.value }); }}
+                              placeholder="Justificación obligatoria si difiere del líder..."
+                              style={{ padding: 8, borderRadius: 8, border: '2px solid #f59e0b', fontSize: 12, fontFamily: 'inherit', minHeight: 60, resize: 'vertical', boxSizing: 'border-box', width: '100%' }}
+                            />
+                          )}
+                          {parseFloat(calTemp.rating) === parseFloat(d.promLider) && (
+                            <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
+                          )}
+                          {/* ── CAMBIO 3: botón Confirmar guarda en historial y cierra edición ── */}
+                          <button
+                            style={{ ...s.btnPrimario, background: '#166534', padding: '8px 16px', fontSize: 12 }}
+                            onClick={async function() {
+                              if (!calTemp.rating) return alert('Seleccioná un rating');
+                              if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) {
+                                return alert('La justificación es obligatoria cuando el rating difiere del líder');
+                              }
+                              var _evId    = d.evaluacionLider.id;
+                              var _r       = parseFloat(calTemp.rating);
+                              var _c       = calTemp.comentario;
+                              var _pl      = d.promLider;
+                              var _colabId = d.colaborador.id;
+                              var ok = await guardarCal(_evId, _r, _c, _pl);
+                              if (!ok) return;
+                              // Guardar en historial
+                              var { data: { session } } = await supabase.auth.getSession();
+                              await supabase.from('calibracion_historial').insert({
+                                ciclo_id: cicloId, colaborador_id: _colabId, evaluacion_id: _evId,
+                                tipo: 'calibracion',
+                                comentario: 'Rating calibrado: ' + _r + (_c ? '. Justificacion: ' + _c : ''),
+                                usuario_id: session.user.id, usuario_nombre: session.user.email
+                              });
+                              // CAMBIO 3: cierra el modo edición
+                              setEditandoCal(null);
+                            }}
+                          >
+                            Confirmar
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: d.comentarioCalibracion ? '#475569' : '#94a3b8', fontStyle: d.comentarioCalibracion ? 'normal' : 'italic', wordBreak: 'break-word' }}>
+                          {d.liderReabierto
+                            ? 'Cambio la evaluacion del lider — ver historial'
+                            : d.ratingFinal
+                              ? (d.comentarioCalibracion || 'Confirmado sin cambios')
+                              : '—'}
+                        </span>
+                      )}
+                    </td>
+
+                    <td style={td}>
+                      <button onClick={function() { cargarHistorial(d.colaborador.id); }} style={{ background: '#D4D2C6', color: '#231F20', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 14 }}>Ver</button>
+                    </td>
+                    <td style={td}>
+                      <button onClick={function() { verPDF(d); }} style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Ver PDF</button>
+                    </td>
+                    <td style={{ ...td, minWidth: 160 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {d.autoevaluacion && d.autoevaluacion.estado === 'enviado' && (
+                          <button
+                            onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación', d.colaborador.id, d.colaborador.full_name); }}
+                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fef3c7', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
+                          >
+                            Reabrir Auto
+                          </button>
+                        )}
+                        {d.evaluacionLider && d.evaluacionLider.estado === 'enviado' && (
+                          <button
+                            onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder', d.colaborador.id, d.colaborador.full_name); }}
+                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #93c5fd', background: '#dbeafe', color: '#1e40af', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
+                          >
+                            Reabrir Líder
+                          </button>
+                        )}
+                        {(!d.autoevaluacion || d.autoevaluacion.estado !== 'enviado') && (!d.evaluacionLider || d.evaluacionLider.estado !== 'enviado') && (
+                          <span style={{ fontSize: 11, color: '#94a3b8' }}>Sin envíos</span>
+                        )}
+                        <button
+                          onClick={function() { cargarHistorial(d.colaborador.id); }}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #D4D2C6', background: 'white', color: '#231F20', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginTop: 4 }}
+                        >
+                          Ver historial
                         </button>
-                      )}
-                      {d.evaluacionLider && d.evaluacionLider.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder', d.colaborador.id, d.colaborador.full_name); }}
-                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #93c5fd', background: '#dbeafe', color: '#1e40af', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
-                          Reabrir Líder
-                        </button>
-                      )}
-                      {(!d.autoevaluacion || d.autoevaluacion.estado !== 'enviado') && (!d.evaluacionLider || d.evaluacionLider.estado !== 'enviado') && (
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>Sin envíos</span>
-                      )}
-                      <button onClick={function() { cargarHistorial(d.colaborador.id); }}
-                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #D4D2C6", background: "white", color: "#231F20", cursor: "pointer", fontSize: 11, fontWeight: 600, marginTop: 4 }}>
-                        Ver historial
-                      </button>
-                    </div>
-                  </td>
- </tr>
- );
- })}</tbody>
- </table>
- </div>
-  )}
- </div>
- );
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FeedbackAdmin({ cicloId }) { var [fbs, setFbs] = useState([]); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data } = await supabase.from('feedback').select('*,lider:lider_id(email,full_name),colaborador:colaborador_id(email,full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setFbs(data || []); setCarg(false); })(); }, [cicloId]); if (carg) return <p>Cargando...</p>; return <div style={s.tarjetaStat}><h4> Feedback ({fbs.length})</h4>{fbs.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>Sin registros.</p> : <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={th}>Lider</th><th style={th}>Colaborador</th><th style={th}>Comentario</th><th style={th}>Fecha</th><th style={th}>OK</th></tr></thead><tbody>{fbs.map(function(f) { return (<tr key={f.id}><td style={td}>{f.lider?.full_name || '-'}</td><td style={td}>{f.colaborador?.full_name || '-'}</td><td style={td}>{f.comentario_lider || '-'}</td><td style={td}>{f.fecha_feedback_lider ? new Date(f.fecha_feedback_lider).toLocaleDateString('es-AR') : '-'}</td><td style={td}>{f.confirmacion_colaborador ? '' : ''}</td></tr>); })}</tbody></table>}</div>; }
@@ -1636,6 +1618,7 @@ function HistorialAdmin({ colaborador, onVolver }) { var [hist, setHist] = useSt
 function EquipoLider({ cicloId, profile, soloLectura }) {
  var [equipo, setEquipo] = useState([]);
  var [colSel, setColSel] = useState(null);
+ var [soloLecturaColSel, setSoloLecturaColSel] = useState(false); // CAMBIO 2: controla si el colaborador seleccionado es solo lectura
  var [fbVis, setFbVis] = useState(null);
  var [busqueda, setBusqueda] = useState('');
  var [filtroArea, setFiltroArea] = useState('Todas');
@@ -1644,131 +1627,176 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
  useEffect(function() { cargar(); }, [cicloId]);
 
  async function cargar() {
- var { data: { session } } = await supabase.auth.getSession();
- if (!session) return;
- var uid = session.user.id;
+   var { data: { session } } = await supabase.auth.getSession();
+   if (!session) return;
+   var uid = session.user.id;
 
- // Ver configuración de visibilidad ampliada
- var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+   var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+   var todosLosColabs = [];
 
- var todosLosColabs = [];
+   if (visibilidad && visibilidad.length > 0) {
+     var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
+     if (esTodos) {
+       var { data: todos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
+       todosLosColabs = todos || [];
+     } else {
+       var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
+       var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+       var queries = [];
+       if (areas.length > 0) {
+         var { data: porArea } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
+         queries = queries.concat(porArea || []);
+       }
+       if (usuarios.length > 0) {
+         var { data: porUsuario } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
+         queries = queries.concat(porUsuario || []);
+       }
+       var vistos = {};
+       todosLosColabs = queries.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
+     }
+   }
 
- if (visibilidad && visibilidad.length > 0) {
- var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
- if (esTodos) {
- // Ve toda la compañía
- var { data: todos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
- todosLosColabs = todos || [];
- } else {
- // Ve áreas específicas
- var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
- var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+   // Siempre agregar reportes directos
+   var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
+   (directos || []).forEach(function(c) {
+     if (!todosLosColabs.find(function(x) { return x.id === c.id; })) todosLosColabs.push(c);
+   });
 
- var queries = [];
- if (areas.length > 0) {
- var { data: porArea } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
- queries = queries.concat(porArea || []);
- }
- if (usuarios.length > 0) {
- var { data: porUsuario } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
- queries = queries.concat(porUsuario || []);
- }
- // Deduplicar
- var vistos = {};
- todosLosColabs = queries.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
- }
- }
-
- // Siempre agregar reportes directos
- var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
- (directos || []).forEach(function(c) {
- if (!todosLosColabs.find(function(x) { return x.id === c.id; })) todosLosColabs.push(c);
- });
-
- todosLosColabs.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
- setEquipo(todosLosColabs);
- setCargando(false);
+   todosLosColabs.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+   setEquipo(todosLosColabs);
+   setCargando(false);
  }
 
- if (colSel) return <EvaluacionLider colaborador={colSel} cicloId={cicloId} onVolver={function() { setColSel(null); cargar(); }} soloLectura={soloLectura} />;
+ // CAMBIO 2: al seleccionar un colaborador se guarda si es solo lectura o no
+ if (colSel) return (
+   <EvaluacionLider
+     colaborador={colSel}
+     cicloId={cicloId}
+     onVolver={function() { setColSel(null); setSoloLecturaColSel(false); cargar(); }}
+     soloLectura={soloLecturaColSel}
+   />
+ );
+
  if (fbVis) return <FeedbackForm feedback={fbVis} cicloId={cicloId} onVolver={function() { setFbVis(null); cargar(); }} />;
 
- // Filtros
  var areas = ['Todas'].concat([...new Set(equipo.map(function(c) { return c.area; }).filter(Boolean))].sort());
  var equipoFiltrado = equipo.filter(function(c) {
- if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
- if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
- return true;
+   if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
+   if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
+   return true;
  });
 
  if (cargando) return <p style={{ color: '#64748b', padding: 20 }}>Cargando equipo...</p>;
 
  return (
- <div>
- {/* Header */}
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
- <div>
- <h2 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 20, fontWeight: 700 }}>Mi Equipo</h2>
- <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
- </div>
- </div>
+   <div>
+     {/* Header */}
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+       <div>
+         <h2 style={{ margin: '0 0 4px 0', color: '#231F20', fontSize: 20, fontWeight: 700 }}>Mi Equipo</h2>
+         <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
+       </div>
+     </div>
 
- {/* Buscador y filtros */}
- <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
- <input
- value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }}
- placeholder="Buscar por nombre o puesto..."
- style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
- <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }}
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}>
- {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
- </select>
- {(busqueda || filtroArea !== 'Todas') && (
- <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
- )}
- </div>
+     {/* Buscador y filtros */}
+     <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+       <input
+         value={busqueda}
+         onChange={function(e) { setBusqueda(e.target.value); }}
+         placeholder="Buscar por nombre o puesto..."
+         style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }}
+       />
+       <select
+         value={filtroArea}
+         onChange={function(e) { setFiltroArea(e.target.value); }}
+         style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}
+       >
+         {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+       </select>
+       {(busqueda || filtroArea !== 'Todas') && (
+         <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
+       )}
+     </div>
 
- {/* Lista */}
- {equipoFiltrado.length === 0 ? (
- <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
- {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados para los filtros seleccionados.'}
- </div>
- ) : (
- <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
- {equipoFiltrado.map(function(c) {
- var iniciales = (c.full_name || c.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
- var esDirecto = c.leader_id === profile.id;
- return (
- <div key={c.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px' }}>
- <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
- <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
- {iniciales}
- </div>
- <div style={{ flex: 1, minWidth: 0 }}>
- <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
- <strong style={{ fontSize: 14, color: '#231F20' }}>{c.full_name || c.email}</strong>
- {!esDirecto && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>}
- </div>
- <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.puesto || c.area}</p>
- <p style={{ margin: '1px 0 0 0', fontSize: 11, color: '#94a3b8' }}>{c.area}</p>
- </div>
- </div>
- <div style={{ display: 'flex', gap: 8 }}>
- <button onClick={function() { setColSel(c); }} style={{ ...s.btnPrimario, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center' }}>
- {soloLectura ? 'Ver evaluación' : 'Evaluar'}
- </button>
- {esDirecto && (
- <button onClick={function() { setFbVis(c); }} style={{ ...s.btnSecundario, fontSize: 12, padding: '8px 12px' }}>
- Feedback
- </button>
- )}
- </div>
- </div>
- );
- })}
- </div>
- )}
- </div>
+     {/* Lista */}
+     {equipoFiltrado.length === 0 ? (
+       <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
+         {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados para los filtros seleccionados.'}
+       </div>
+     ) : (
+       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+         {equipoFiltrado.map(function(c) {
+           var iniciales = (c.full_name || c.email || 'U').split(' ').slice(0, 2).map(function(p) { return p[0]; }).join('').toUpperCase();
+
+           // ── CAMBIO 2 ────────────────────────────────────────────────────────
+           // esDirecto determina qué botón mostrar y si puede editar o no
+           var esDirecto = c.leader_id === profile.id;
+           // ── FIN CAMBIO 2 ────────────────────────────────────────────────────
+
+           return (
+             <div key={c.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px' }}>
+               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+                 <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+                   {iniciales}
+                 </div>
+                 <div style={{ flex: 1, minWidth: 0 }}>
+                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                     <strong style={{ fontSize: 14, color: '#231F20' }}>{c.full_name || c.email}</strong>
+                     {/* CAMBIO 2: badge "Indirecto" para los que no son reportes directos */}
+                     {!esDirecto && (
+                       <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>
+                         Indirecto
+                       </span>
+                     )}
+                   </div>
+                   <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>{c.puesto || c.area}</p>
+                   <p style={{ margin: '1px 0 0 0', fontSize: 11, color: '#94a3b8' }}>{c.area}</p>
+                 </div>
+               </div>
+
+               <div style={{ display: 'flex', gap: 8 }}>
+                 {/* ── CAMBIO 2 ────────────────────────────────────────────────
+                     Directo   → botón "Evaluar" (editable) o "Ver evaluación" si ciclo cerrado
+                     Indirecto → botón "Visualizar" (siempre solo lectura, no evalúa)
+                 ── FIN CAMBIO 2 ──────────────────────────────────────────── */}
+                 {esDirecto ? (
+                   <button
+                     onClick={function() {
+                       setSoloLecturaColSel(soloLectura); // hereda el soloLectura del ciclo
+                       setColSel(c);
+                     }}
+                     style={{ ...s.btnPrimario, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center' }}
+                   >
+                     {soloLectura ? 'Ver evaluación' : 'Evaluar'}
+                   </button>
+                 ) : (
+                   <button
+                     onClick={function() {
+                       setSoloLecturaColSel(true); // indirecto siempre es solo lectura
+                       setColSel(c);
+                     }}
+                     style={{ ...s.btnInfo, flex: 1, fontSize: 12, padding: '8px 12px', textAlign: 'center', background: '#F0EDE8' }}
+                   >
+                     Visualizar
+                   </button>
+                 )}
+
+                 {/* CAMBIO 2: Feedback solo para reportes directos */}
+                 {esDirecto && (
+                   <button
+                     onClick={function() { setFbVis(c); }}
+                     style={{ ...s.btnSecundario, fontSize: 12, padding: '8px 12px' }}
+                   >
+                     Feedback
+                   </button>
+                 )}
+               </div>
+             </div>
+           );
+         })}
+       </div>
+     )}
+   </div>
  );
 }
 
@@ -2111,164 +2139,304 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [feedback, setFeedback] = useState(null);
  var [evalData, setEvalData] = useState(null);
  var [showInfo, setShowInfo] = useState({});
+ // CAMBIO 4: estados para ver la evaluación del líder
+ var [verEvalLider, setVerEvalLider] = useState(false);
+ var [evalLiderDetalle, setEvalLiderDetalle] = useState(null);
+ var [evalLiderPunts, setEvalLiderPunts] = useState({});
 
  useEffect(function() {
- (async function() {
- var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
- supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
- supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
- supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
- supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
- ]);
- setComp(comps || []);
- setEvalLider(le);
- setFeedback(fb);
- if (ev) {
- setEvalData(ev);
- setComFin(ev.comentarios_finales || '');
- var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', ev.id);
- var rm = {}; var cm = {};
- (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
- setRatings(rm); setComent(cm);
- } else if (!soloLectura) {
- var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
- if (nuevo) setEvalData(nuevo);
- }
- setCarg(false);
- })();
+   (async function() {
+     var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
+       supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
+       supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
+       // CAMBIO 4: traer también comentarios_finales y comentario_calibracion del líder
+       supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
+       supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
+     ]);
+     setComp(comps || []);
+     setEvalLider(le);
+     setFeedback(fb);
+     if (ev) {
+       setEvalData(ev);
+       setComFin(ev.comentarios_finales || '');
+       var { data: punts } = await supabase.from('puntuaciones').select('rating, competencia_id, comentario').eq('evaluacion_id', ev.id);
+       var rm = {}; var cm = {};
+       (punts || []).forEach(function(p) { rm[p.competencia_id] = p.rating; cm[p.competencia_id] = p.comentario || ''; });
+       setRatings(rm); setComent(cm);
+     } else if (!soloLectura) {
+       var { data: nuevo } = await supabase.from('evaluaciones').insert({ colaborador_id: userId, evaluador_id: userId, tipo_evaluacion: 'autoevaluacion', estado: 'borrador', ciclo_id: cicloId }).select('id').single();
+       if (nuevo) setEvalData(nuevo);
+     }
+     setCarg(false);
+   })();
  }, []);
+
+ // CAMBIO 4: carga el detalle de la evaluación del líder (puntuaciones + comentarios)
+ async function cargarEvalLiderDetalle() {
+   if (!evalLider?.id) return;
+   var { data: punts } = await supabase
+     .from('puntuaciones')
+     .select('rating, competencia_id, comentario, competencias(nombre)')
+     .eq('evaluacion_id', evalLider.id);
+   var map = {};
+   (punts || []).forEach(function(p) {
+     map[p.competencia_id] = {
+       rating: p.rating,
+       comentario: p.comentario || '',
+       nombre: p.competencias?.nombre || ''
+     };
+   });
+   setEvalLiderDetalle(evalLider);
+   setEvalLiderPunts(map);
+   setVerEvalLider(true);
+ }
 
  var yaEnviada = evalData?.estado === 'enviado';
  var bloqueado = soloLectura || yaEnviada;
 
  async function guardarPuntuaciones(evId) {
- for (var cid of Object.keys(ratings)) {
- var r = ratings[cid];
- if (!r) continue;
- var { data: ex } = await supabase.from('puntuaciones')
- .select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
- if (ex?.id) {
- await supabase.from('puntuaciones')
- .update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id);
- } else {
- await supabase.from('puntuaciones')
- .insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' });
- }
- }
+   for (var cid of Object.keys(ratings)) {
+     var r = ratings[cid];
+     if (!r) continue;
+     var { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
+     if (ex?.id) { await supabase.from('puntuaciones').update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id); }
+     else { await supabase.from('puntuaciones').insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }); }
+   }
  }
 
  async function guardar() {
- if (bloqueado) return;
- var evId = evalData?.id;
- if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
- if (Object.keys(ratings).length === 0) { setMsg('Selecciona al menos un puntaje'); setTimeout(function() { setMsg(''); }, 2500); return; }
- setMsg('Guardando...');
- var prom = calcularRating(ratings);
- await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
- await guardarPuntuaciones(evId);
- setMsg('Guardado correctamente'); setTimeout(function() { setMsg(''); }, 2500);
+   if (bloqueado) return;
+   var evId = evalData?.id;
+   if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
+   if (Object.keys(ratings).length === 0) { setMsg('Selecciona al menos un puntaje'); setTimeout(function() { setMsg(''); }, 2500); return; }
+   setMsg('Guardando...');
+   var prom = calcularRating(ratings);
+   await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+   await guardarPuntuaciones(evId);
+   setMsg('Guardado correctamente'); setTimeout(function() { setMsg(''); }, 2500);
  }
 
  async function enviar() {
- if (bloqueado) return;
- var evId = evalData?.id;
- if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
- if (Object.keys(ratings).length === 0) { setMsg('Completa al menos una competencia antes de enviar'); return; }
- setMsg('Enviando...');
- var prom = calcularRating(ratings);
- await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
- await guardarPuntuaciones(evId);
- var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
- if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
- setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
- // Notificar al lider
- var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id").eq("id", userId).single();
- var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id, email").eq("id", userId).single();
- if (perfColabN && perfColabN.leader_id) {
-    if (localStorage.getItem("notifsActivas") !== "false") await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
- // Email al lider
- var { data: liderN } = await supabase.from("profiles").select("email, full_name").eq("id", perfColabN.leader_id).single();
-    if (localStorage.getItem("notifsActivas") !== "false" && liderN && liderN.email) {
- await enviarEmailNotificacion(
- liderN.email,
- liderN.full_name || "Líder",
- perfColabN.full_name + " envió su autoevaluación",
- (perfColabN.full_name || "Un colaborador") + " acaba de enviar su autoevaluación de desempeño. Ingresá a la plataforma para revisarla y completar tu evaluación."
- );
+   if (bloqueado) return;
+   var evId = evalData?.id;
+   if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
+   if (Object.keys(ratings).length === 0) { setMsg('Completa al menos una competencia antes de enviar'); return; }
+   setMsg('Enviando...');
+   var prom = calcularRating(ratings);
+   await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+   await guardarPuntuaciones(evId);
+   var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
+   if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
+   setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+   var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id, email").eq("id", userId).single();
+   if (perfColabN && perfColabN.leader_id) {
+     if (localStorage.getItem("notifsActivas") !== "false") await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
+     var { data: liderN } = await supabase.from("profiles").select("email, full_name").eq("id", perfColabN.leader_id).single();
+     if (localStorage.getItem("notifsActivas") !== "false" && liderN && liderN.email) {
+       await enviarEmailNotificacion(liderN.email, liderN.full_name || "Líder", perfColabN.full_name + " envió su autoevaluación", (perfColabN.full_name || "Un colaborador") + " acaba de enviar su autoevaluación de desempeño. Ingresá a la plataforma para revisarla y completar tu evaluación.");
+     }
+   }
+   setMsg('Autoevaluacion enviada correctamente');
  }
- }
- setMsg('Autoevaluacion enviada correctamente');
- }
-
 
  if (carg) return <p>Cargando...</p>;
 
  var clasifCal = clasificarRating(parseFloat(evalLider?.rating_calibrado));
 
+ // ── CAMBIO 4: vista de la evaluación del líder ────────────────────────────────
+ if (verEvalLider && evalLiderDetalle) {
+   var clasifLider = clasificarRating(parseFloat(evalLiderDetalle.rating_calibrado || evalLiderDetalle.rating_promedio));
+   return (
+     <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
+       <button
+         onClick={function() { setVerEvalLider(false); }}
+         style={{ ...s.btnInfo, marginBottom: 16 }}
+       >
+         ← Volver a mi evaluación
+       </button>
+
+       <h3 style={{ color: '#231F20', margin: '0 0 20px 0' }}>Evaluación de mi líder</h3>
+
+       {/* Rating calibrado final */}
+       {evalLiderDetalle.rating_calibrado && (
+         <div style={{ padding: '24px', background: clasifLider?.bg || '#F0EDE8', borderRadius: 12, border: '2px solid ' + (clasifLider?.color || '#231F20'), marginBottom: 24, textAlign: 'center' }}>
+           <p style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 600, color: clasifLider?.color || '#231F20', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+             Rating calibrado final
+           </p>
+           <p style={{ margin: '0 0 6px 0', fontSize: 52, fontWeight: 800, color: clasifLider?.color || '#231F20', lineHeight: 1 }}>
+             {evalLiderDetalle.rating_calibrado}
+           </p>
+           {clasifLider && (
+             <p style={{ margin: '0 0 10px 0', fontSize: 15, fontWeight: 600, color: clasifLider.color }}>
+               {clasifLider.label}
+             </p>
+           )}
+           {evalLiderDetalle.comentario_calibracion && (
+             <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#475569', fontStyle: 'italic', background: 'rgba(255,255,255,0.6)', padding: '8px 14px', borderRadius: 8 }}>
+               {evalLiderDetalle.comentario_calibracion}
+             </p>
+           )}
+         </div>
+       )}
+
+       {/* Detalle por competencia */}
+       <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
+         <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>Detalle por competencia</h4>
+         {Object.keys(evalLiderPunts).length === 0 ? (
+           <p style={{ color: '#94a3b8', fontSize: 13 }}>El líder aún no completó las competencias.</p>
+         ) : (
+           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+             <thead>
+               <tr style={{ background: '#231F20' }}>
+                 <th style={{ ...th, color: '#D4D2C6' }}>Competencia</th>
+                 <th style={{ ...th, color: '#D4D2C6', textAlign: 'center', width: 80 }}>Puntaje</th>
+                 <th style={{ ...th, color: '#D4D2C6' }}>Comentario del líder</th>
+               </tr>
+             </thead>
+             <tbody>
+               {Object.entries(evalLiderPunts).map(function(entry, idx) {
+                 var compId = entry[0];
+                 var data = entry[1];
+                 return (
+                   <tr key={compId} style={{ background: idx % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                     <td style={{ ...td, fontWeight: 500 }}>{data.nombre || compId}</td>
+                     <td style={{ ...td, textAlign: 'center' }}>
+                       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: '#231F20', color: '#D4D2C6', fontSize: 16, fontWeight: 700 }}>
+                         {data.rating}
+                       </span>
+                     </td>
+                     <td style={{ ...td, fontSize: 13, color: '#475569', fontStyle: data.comentario ? 'normal' : 'italic' }}>
+                       {data.comentario || 'Sin comentario'}
+                     </td>
+                   </tr>
+                 );
+               })}
+             </tbody>
+           </table>
+         )}
+       </div>
+
+       {/* Comentarios finales del líder */}
+       {evalLiderDetalle.comentarios_finales && (
+         <div style={{ padding: 16, background: '#F0EDE8', border: '1px solid #D4D2C6', borderRadius: 12 }}>
+           <h4 style={{ margin: '0 0 10px 0', color: '#231F20', fontSize: 14 }}>Comentarios finales del líder</h4>
+           <p style={{ margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+             {evalLiderDetalle.comentarios_finales}
+           </p>
+         </div>
+       )}
+     </div>
+   );
+ }
+ // ── FIN CAMBIO 4 ─────────────────────────────────────────────────────────────
+
  return (
- <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
- <h3>Mi Autoevaluacion</h3>
- <p style={{ color: "#64748b", fontSize: 13, marginBottom: 20 }}>{[puesto, seniority].filter(Boolean).join(" · ") || "Sin cargo definido"}</p>
- {yaEnviada && (
- <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
- <strong style={{ color: '#166534', fontSize: 15 }}>Autoevaluacion enviada. No se puede modificar.</strong>
- </div>
- )}
- {feedback && (
- <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
- <h4>Feedback</h4>
- <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
- </div>
- )}
- {evalLider?.rating_calibrado && (
- <div style={{ padding: 16, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
- <p style={{ margin: 0, color: clasifCal?.color || '#231F20', fontWeight: 600 }}>Resultado Final Calibrado</p>
- <p style={{ fontSize: 40, fontWeight: 700, margin: '8px 0', color: clasifCal?.color || '#231F20' }}>{evalLider.rating_calibrado}</p>
- {clasifCal && <p style={{ margin: 0, fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
- </div>
- )}
- {competencias.map(function(comp) {
- return (
- <div key={comp.id} style={s.competenciaCard}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
- <div><h5>{comp.nombre}</h5><p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p></div>
- <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>{showInfo[comp.id] ? 'v' : '>'}</button>
- </div>
- {showInfo[comp.id] && (
- <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>
- {[1,2,3,4,5].map(function(r) { return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>; })}
- </div>
- )}
- <div style={s.ratingRow}>
- {[1,2,3,4,5].map(function(r) {
- return (
- <button key={r} onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
- style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
- {r}
- </button>
- );
- })}
- </div>
- <textarea
- value={comentarios[comp.id] || ''}
- onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
- placeholder="Comentario"
- style={{ ...s.textareaSmall, width: "100%", boxSizing: "border-box", maxWidth: "100%" }}
- readOnly={bloqueado}
- />
- </div>
- );
- })}
- <RatingFinalBadge ratings={ratings} />
- <SeccionText titulo="Comentarios Finales" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
- {msg && <div style={s.mensajeToast}>{msg}</div>}
- {!bloqueado && (
- <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
- <button onClick={guardar} style={s.btnSecundario}>Guardar</button>
- <button onClick={enviar} style={s.btnPrimario}>Enviar autoevaluacion</button>
- </div>
- )}
- </div>
+   <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
+     <h3>Mi Autoevaluacion</h3>
+     <p style={{ color: "#64748b", fontSize: 13, marginBottom: 20 }}>
+       {[puesto, seniority].filter(Boolean).join(" · ") || "Sin cargo definido"}
+     </p>
+
+     {yaEnviada && (
+       <div style={{ padding: 14, background: '#dcfce7', border: '2px solid #166534', borderRadius: 10, marginBottom: 20, textAlign: 'center' }}>
+         <strong style={{ color: '#166534', fontSize: 15 }}>Autoevaluacion enviada. No se puede modificar.</strong>
+       </div>
+     )}
+
+     {feedback && (
+       <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
+         <h4>Feedback</h4>
+         <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
+       </div>
+     )}
+
+     {/* CAMBIO 4: bloque del resultado calibrado con botón para ver la eval del líder */}
+     {evalLider?.rating_calibrado && (
+       <div style={{ padding: 20, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
+         <p style={{ margin: '0 0 4px 0', color: clasifCal?.color || '#231F20', fontWeight: 600, fontSize: 13 }}>
+           Resultado Final Calibrado
+         </p>
+         <p style={{ fontSize: 44, fontWeight: 700, margin: '6px 0', color: clasifCal?.color || '#231F20', lineHeight: 1 }}>
+           {evalLider.rating_calibrado}
+         </p>
+         {clasifCal && (
+           <p style={{ margin: '0 0 14px 0', fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>
+             {clasifCal.label}
+           </p>
+         )}
+         {/* ── CAMBIO 4: botón para ver la evaluación del líder ── */}
+         <button
+           onClick={cargarEvalLiderDetalle}
+           style={{
+             padding: '9px 22px',
+             borderRadius: 8,
+             border: '2px solid ' + (clasifCal?.color || '#231F20'),
+             background: 'transparent',
+             color: clasifCal?.color || '#231F20',
+             cursor: 'pointer',
+             fontSize: 13,
+             fontWeight: 600
+           }}
+         >
+           Ver evaluación de mi líder
+         </button>
+       </div>
+     )}
+
+     {/* Competencias */}
+     {competencias.map(function(comp) {
+       return (
+         <div key={comp.id} style={s.competenciaCard}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+             <div>
+               <h5>{comp.nombre}</h5>
+               <p style={{ fontSize: 13, color: '#64748b' }}>{comp.descripcion}</p>
+             </div>
+             <button onClick={function() { setShowInfo({ ...showInfo, [comp.id]: !showInfo[comp.id] }); }} style={s.btnInfo}>
+               {showInfo[comp.id] ? 'v' : '>'}
+             </button>
+           </div>
+           {showInfo[comp.id] && (
+             <div style={{ ...s.ratingInfoBox, marginTop: 8 }}>
+               {[1,2,3,4,5].map(function(r) {
+                 return <div key={r} style={s.ratingInfoItem}><strong>Nivel {r}:</strong> <RatingDesc competenciaId={comp.id} rating={r} /></div>;
+               })}
+             </div>
+           )}
+           <div style={s.ratingRow}>
+             {[1,2,3,4,5].map(function(r) {
+               return (
+                 <button key={r}
+                   onClick={function() { if (!bloqueado) setRatings({ ...ratings, [comp.id]: r }); }}
+                   style={{ ...s.ratingBtn, backgroundColor: ratings[comp.id] === r ? '#231F20' : '#f1f5f9', color: ratings[comp.id] === r ? 'white' : '#475569', cursor: bloqueado ? 'default' : 'pointer' }}>
+                   {r}
+                 </button>
+               );
+             })}
+           </div>
+           <textarea
+             value={comentarios[comp.id] || ''}
+             onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+             placeholder="Comentario"
+             style={{ ...s.textareaSmall, width: "100%", boxSizing: "border-box", maxWidth: "100%" }}
+             readOnly={bloqueado}
+           />
+         </div>
+       );
+     })}
+
+     <RatingFinalBadge ratings={ratings} />
+     <SeccionText titulo="Comentarios Finales" valor={comFin} onChange={bloqueado ? function() {} : setComFin} disabled={bloqueado} />
+
+     {msg && <div style={s.mensajeToast}>{msg}</div>}
+
+     {!bloqueado && (
+       <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+         <button onClick={guardar} style={s.btnSecundario}>Guardar</button>
+         <button onClick={enviar} style={s.btnPrimario}>Enviar autoevaluacion</button>
+       </div>
+     )}
+   </div>
  );
 }
 
@@ -2286,32 +2454,63 @@ function ObjetivosGerente({ profile }) {
  useEffect(function() { cargarEquipo(); }, []);
 
  async function cargarEquipo() {
- var { data: { session } } = await supabase.auth.getSession();
- if (!session) return;
- var uid = session.user.id;
+   var { data: { session } } = await supabase.auth.getSession();
+   if (!session) return;
+   var uid = session.user.id;
 
- var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
- var todos = [];
+   var { data: visibilidad } = await supabase.from('equipo_visibilidad').select('tipo, valor').eq('lider_id', uid);
+   var todos = [];
 
- if (visibilidad && visibilidad.length > 0) {
- var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
- if (esTodos) {
- var { data: all } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
- todos = all || [];
- } else {
- var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
- var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
- if (areas.length > 0) { var { data: pa } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name'); todos = todos.concat(pa || []); }
- if (usuarios.length > 0) { var { data: pu } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios); todos = todos.concat(pu || []); }
- var vistos = {}; todos = todos.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
- }
- }
+   if (visibilidad && visibilidad.length > 0) {
+     var esTodos = visibilidad.some(function(v) { return v.tipo === 'todos'; });
+     if (esTodos) {
+       var { data: all } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).neq('id', uid).order('full_name');
+       todos = all || [];
+     } else {
+       var areas = visibilidad.filter(function(v) { return v.tipo === 'area'; }).map(function(v) { return v.valor; });
+       var usuarios = visibilidad.filter(function(v) { return v.tipo === 'usuario'; }).map(function(v) { return v.valor; });
+       if (areas.length > 0) {
+         var { data: pa } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('area', areas).order('full_name');
+         todos = todos.concat(pa || []);
+       }
+       if (usuarios.length > 0) {
+         var { data: pu } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('activo', true).in('id', usuarios);
+         todos = todos.concat(pu || []);
+       }
+       var vistos = {};
+       todos = todos.filter(function(c) { if (vistos[c.id]) return false; vistos[c.id] = true; return true; });
+     }
+   }
 
- var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
- (directos || []).forEach(function(c) { if (!todos.find(function(x) { return x.id === c.id; })) todos.push(c); });
- todos.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
- setEquipo(todos);
- setCargando(false);
+   // Siempre agregar reportes directos
+   var { data: directos } = await supabase.from('profiles').select('id, email, full_name, area, seniority, puesto, leader_id').eq('leader_id', uid).eq('activo', true);
+   (directos || []).forEach(function(c) {
+     if (!todos.find(function(x) { return x.id === c.id; })) todos.push(c);
+   });
+
+   todos.sort(function(a, b) { return (a.full_name || '').localeCompare(b.full_name || ''); });
+
+   // ── CAMBIO 1 ──────────────────────────────────────────────────────────────
+   // Filtrar para mostrar SOLO los colaboradores que tienen al menos
+   // un objetivo cargado (que no esté rechazado)
+   if (todos.length > 0) {
+     var idsEquipo = todos.map(function(c) { return c.id; });
+     var { data: objsExistentes } = await supabase
+       .from('objetivos')
+       .select('colaborador_id')
+       .in('colaborador_id', idsEquipo)
+       .neq('status', 'rechazado');
+
+     var idsConObjetivos = new Set(
+       (objsExistentes || []).map(function(o) { return o.colaborador_id; })
+     );
+
+     todos = todos.filter(function(c) { return idsConObjetivos.has(c.id); });
+   }
+   // ── FIN CAMBIO 1 ──────────────────────────────────────────────────────────
+
+   setEquipo(todos);
+   setCargando(false);
  }
 
  if (cargando) return <p style={{ color: '#64748b', padding: 20 }}>Cargando equipo...</p>;
@@ -2319,59 +2518,92 @@ function ObjetivosGerente({ profile }) {
 
  var areas = ['Todas'].concat([...new Set(equipo.map(function(c) { return c.area; }).filter(Boolean))].sort());
  var equipoFiltrado = equipo.filter(function(c) {
- if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
- if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
- return true;
+   if (filtroArea !== 'Todas' && c.area !== filtroArea) return false;
+   if (busqueda && !(c.full_name || '').toLowerCase().includes(busqueda.toLowerCase()) && !(c.puesto || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
+   return true;
  });
 
  return (
- <div>
- <div style={{ marginBottom: 20 }}>
- <h2 style={{ color: '#231F20', margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Objetivos de Mi Equipo</h2>
- <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>{equipoFiltrado.length} de {equipo.length} colaboradores</p>
- </div>
+   <div>
+     <div style={{ marginBottom: 20 }}>
+       <h2 style={{ color: '#231F20', margin: '0 0 4px 0', fontSize: 20, fontWeight: 700 }}>Objetivos de Mi Equipo</h2>
+       <p style={{ color: '#64748b', margin: 0, fontSize: 13 }}>
+         {equipoFiltrado.length} colaborador{equipoFiltrado.length !== 1 ? 'es' : ''} con objetivos cargados
+       </p>
+     </div>
 
- <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
- <input value={busqueda} onChange={function(e) { setBusqueda(e.target.value); }} placeholder="Buscar por nombre o puesto..."
- style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
- <select value={filtroArea} onChange={function(e) { setFiltroArea(e.target.value); }}
- style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}>
- {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
- </select>
- {(busqueda || filtroArea !== 'Todas') && (
- <button onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}>Limpiar</button>
- )}
- </div>
+     <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+       <input
+         value={busqueda}
+         onChange={function(e) { setBusqueda(e.target.value); }}
+         placeholder="Buscar por nombre o puesto..."
+         style={{ flex: 2, minWidth: 200, padding: '9px 14px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', boxSizing: 'border-box' }}
+       />
+       <select
+         value={filtroArea}
+         onChange={function(e) { setFiltroArea(e.target.value); }}
+         style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', minWidth: 160 }}
+       >
+         {areas.map(function(a) { return <option key={a} value={a}>{a === 'Todas' ? 'Todas las áreas' : a}</option>; })}
+       </select>
+       {(busqueda || filtroArea !== 'Todas') && (
+         <button
+           onClick={function() { setBusqueda(''); setFiltroArea('Todas'); }}
+           style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5' }}
+         >
+           Limpiar
+         </button>
+       )}
+     </div>
 
- {equipoFiltrado.length === 0 ? (
- <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
- {equipo.length === 0 ? 'No tenés colaboradores asignados.' : 'Sin resultados.'}
- </div>
- ) : (
- <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
- {equipoFiltrado.map(function(col) {
- var iniciales = (col.full_name || col.email || 'U').split(' ').slice(0,2).map(function(p) { return p[0]; }).join('').toUpperCase();
- var esDirecto = col.leader_id === profile.id;
- return (
- <div key={col.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px', cursor: 'pointer' }}
- onClick={function() { setColaboradorSeleccionado(col); }}>
- <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
- <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>{iniciales}</div>
- <div>
- <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
- <strong style={{ fontSize: 13, color: '#231F20' }}>{col.full_name || col.email}</strong>
- {!esDirecto && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>}
- </div>
- <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>{col.puesto || col.area}</p>
- </div>
- </div>
- <button style={{ ...s.btnPrimario, width: '100%', fontSize: 12, padding: '8px', textAlign: 'center' }}>Ver Objetivos</button>
- </div>
- );
- })}
- </div>
- )}
- </div>
+     {equipoFiltrado.length === 0 ? (
+       <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', background: 'white', borderRadius: 12, border: '1px solid #e8e6e0' }}>
+         <p style={{ fontSize: 32, marginBottom: 12 }}>📋</p>
+         <h3 style={{ color: '#231F20', marginBottom: 8 }}>
+           {equipo.length === 0
+             ? 'Ningún colaborador tiene objetivos cargados aún'
+             : 'Sin resultados para los filtros seleccionados'}
+         </h3>
+         <p style={{ fontSize: 14 }}>
+           {equipo.length === 0
+             ? 'Cuando tus colaboradores carguen sus objetivos, los vas a ver acá.'
+             : 'Probá con otros filtros.'}
+         </p>
+       </div>
+     ) : (
+       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+         {equipoFiltrado.map(function(col) {
+           var iniciales = (col.full_name || col.email || 'U').split(' ').slice(0, 2).map(function(p) { return p[0]; }).join('').toUpperCase();
+           var esDirecto = col.leader_id === profile.id;
+           return (
+             <div
+               key={col.id}
+               style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '3px solid ' + (esDirecto ? '#231F20' : '#D4D2C6'), padding: '16px 18px', cursor: 'pointer' }}
+               onClick={function() { setColaboradorSeleccionado(col); }}
+             >
+               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
+                 <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#231F20', flexShrink: 0 }}>
+                   {iniciales}
+                 </div>
+                 <div>
+                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                     <strong style={{ fontSize: 13, color: '#231F20' }}>{col.full_name || col.email}</strong>
+                     {!esDirecto && (
+                       <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#F0EDE8', color: '#64748b', fontWeight: 600 }}>Indirecto</span>
+                     )}
+                   </div>
+                   <p style={{ margin: '2px 0 0 0', fontSize: 11, color: '#64748b' }}>{col.puesto || col.area}</p>
+                 </div>
+               </div>
+               <button style={{ ...s.btnPrimario, width: '100%', fontSize: 12, padding: '8px', textAlign: 'center' }}>
+                 Ver Objetivos
+               </button>
+             </div>
+           );
+         })}
+       </div>
+     )}
+   </div>
  );
 }
 
@@ -3617,12 +3849,12 @@ function SeccionText({ titulo, valor, onChange, disabled }) {
 // MÓDULO CAPACITACIONES
 // =============================================
 function ModuloCapacitaciones({ profile, esAdmin }) {
-  var [vista, setVista] = useState('lista'); // lista | detalle | nueva
+  var [vista, setVista] = useState('lista');
   var [capSeleccionada, setCapSeleccionada] = useState(null);
   var [capacitaciones, setCapacitaciones] = useState([]);
   var [misParticipaciones, setMisParticipaciones] = useState([]);
   var [cargando, setCargando] = useState(true);
-  var [form, setForm] = useState({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' });
+  var [form, setForm] = useState({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' }); // CAMBIO 7: nuevo campo url_material
   var [colabs, setColabs] = useState([]);
   var [participantes, setParticipantes] = useState([]);
   var [seleccionados, setSeleccionados] = useState([]);
@@ -3641,7 +3873,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
       setCapacitaciones(caps || []);
       setColabs(perfiles || []);
     } else {
-      var { data: parts } = await supabase.from('capacitacion_participantes').select('*, capacitacion:capacitacion_id(id, nombre, descripcion, fecha, duracion_horas, instructor)').eq('colaborador_id', profile.id);
+      var { data: parts } = await supabase.from('capacitacion_participantes').select('*, capacitacion:capacitacion_id(id, nombre, descripcion, fecha, duracion_horas, instructor, url_material)').eq('colaborador_id', profile.id); // CAMBIO 7: traer url_material
       setMisParticipaciones(parts || []);
     }
     setCargando(false);
@@ -3660,16 +3892,20 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     setGuardando(true);
     var { data: { session } } = await supabase.auth.getSession();
     var { data: nueva } = await supabase.from('capacitaciones').insert({
-      nombre: form.nombre, descripcion: form.descripcion, fecha: form.fecha,
+      nombre: form.nombre,
+      descripcion: form.descripcion,
+      fecha: form.fecha,
       duracion_horas: form.duracion_horas ? parseFloat(form.duracion_horas) : null,
-      instructor: form.instructor, created_by: session.user.id
+      instructor: form.instructor,
+      url_material: form.url_material || null, // CAMBIO 7: guardar url_material
+      created_by: session.user.id
     }).select().single();
     if (nueva && seleccionados.length > 0) {
       await supabase.from('capacitacion_participantes').insert(
         seleccionados.map(function(cid) { return { capacitacion_id: nueva.id, colaborador_id: cid, fecha_completado: form.fecha }; })
       );
     }
-    setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' });
+    setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' });
     setSeleccionados([]);
     setGuardando(false);
     setVista('lista');
@@ -3702,13 +3938,11 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
 
     pdf.setFillColor(220, 217, 210);
     pdf.rect(0, 0, W, H, 'F');
-
     pdf.setDrawColor(160, 150, 135);
     pdf.setLineWidth(3);
     pdf.roundedRect(6, 6, W - 12, H - 12, 8, 8, 'S');
     pdf.setLineWidth(0.6);
     pdf.roundedRect(10, 10, W - 20, H - 20, 6, 6, 'S');
-
     pdf.setDrawColor(140, 130, 115);
     pdf.setLineWidth(0.6);
     pdf.line(W/2 - 65, 30, W/2 - 22, 30);
@@ -3727,6 +3961,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     var nombreColab = '';
     if (part && part.profiles) nombreColab = part.profiles.full_name || '';
     else if (typeof profile !== 'undefined' && profile) nombreColab = profile.full_name || profile.email || '';
+
     pdf.setFont('times', 'bolditalic');
     pdf.setFontSize(28);
     pdf.setTextColor(35, 31, 32);
@@ -3759,19 +3994,17 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     if (capData && capData.instructor) detalles.push('Instructor: ' + capData.instructor);
     if (detalles.length > 0) pdf.text(detalles.join('  ·  '), W/2, yDet, { align: 'center' });
 
-    var yFirmaImg = H - 54;
     var yLinea = H - 34;
     var yNombre = H - 27;
     var yCargo = H - 21;
 
-    try { pdf.addImage('data:image/png;base64,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', 'PNG', W/4 - 22, yFirmaImg, 44, 18); } catch(e) {{}}  pdf.setDrawColor(140, 130, 115); pdf.setLineWidth(0.5);
+    pdf.setDrawColor(140, 130, 115); pdf.setLineWidth(0.5);
     pdf.line(W/4 - 38, yLinea, W/4 + 38, yLinea);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
     pdf.text('Adrian Galvan', W/4, yNombre, { align: 'center' });
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(100, 95, 85);
     pdf.text('Gerente de Recursos Humanos', W/4, yCargo, { align: 'center' });
 
-    try { pdf.addImage('data:image/png;base64,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', 'PNG', W*3/4 - 22, yFirmaImg, 44, 18); } catch(e) {}
     pdf.setDrawColor(140, 130, 115); pdf.setLineWidth(0.5);
     pdf.line(W*3/4 - 38, yLinea, W*3/4 + 38, yLinea);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
@@ -3782,20 +4015,22 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     pdf.save('Certificado_' + (nombreColab || 'colaborador').replace(/\s+/g, '_') + '.pdf');
   }
 
-
   var inputStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' };
   var labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 };
 
   if (cargando) return <p style={{ padding: 40, color: '#64748b' }}>Cargando...</p>;
 
-  // ── VISTA COLABORADOR ──
+  // ── VISTA COLABORADOR ──────────────────────────────────────────────────────
   if (!esAdmin) {
     return (
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
         <div style={{ background: '#231F20', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
           <h2 style={{ margin: 0, color: '#F0EDE8', fontSize: 22, fontWeight: 700 }}>Mis Capacitaciones</h2>
-          <p style={{ margin: '6px 0 0 0', fontSize: 13, color: '#94a3b8' }}>{misParticipaciones.length} capacitación{misParticipaciones.length !== 1 ? 'es' : ''} completada{misParticipaciones.length !== 1 ? 's' : ''}</p>
+          <p style={{ margin: '6px 0 0 0', fontSize: 13, color: '#94a3b8' }}>
+            {misParticipaciones.length} capacitación{misParticipaciones.length !== 1 ? 'es' : ''} completada{misParticipaciones.length !== 1 ? 's' : ''}
+          </p>
         </div>
+
         {misParticipaciones.length === 0 ? (
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 40, textAlign: 'center' }}>
             <p style={{ color: '#94a3b8', fontSize: 14 }}>Todavía no tenés capacitaciones registradas.</p>
@@ -3805,20 +4040,38 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
             {misParticipaciones.map(function(part) {
               var cap = part.capacitacion;
               return (
-                <div key={part.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid #231F20', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#231F20' }}>{cap?.nombre}</p>
-                    <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
+                <div key={part.id} style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', borderLeft: '4px solid #231F20', padding: '16px 20px' }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 15, fontWeight: 700, color: '#231F20' }}>{cap?.nombre}</p>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                       {cap?.fecha && <span style={{ fontSize: 12, color: '#64748b' }}>{new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
                       {cap?.duracion_horas && <span style={{ fontSize: 12, color: '#64748b' }}>{cap.duracion_horas} hs</span>}
                       {cap?.instructor && <span style={{ fontSize: 12, color: '#64748b' }}>Instructor: {cap.instructor}</span>}
                     </div>
                     {cap?.descripcion && <p style={{ margin: '6px 0 0 0', fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{cap.descripcion}</p>}
                   </div>
-                  <button onClick={function() { generarCertificadoPDF(part, null); }}
-                    style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#231F20', color: '#F0EDE8', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    Descargar Certificado
-                  </button>
+
+                  {/* CAMBIO 7: botones en fila — Descargar certificado + Descargar material */}
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={function() { generarCertificadoPDF(part, null); }}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#231F20', color: '#F0EDE8', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    >
+                      Descargar Certificado
+                    </button>
+
+                    {/* CAMBIO 7: botón Descargar material — solo aparece si la capacitación tiene url_material */}
+                    {cap?.url_material && (
+                      <a
+                        href={cap.url_material}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ padding: '8px 16px', borderRadius: 8, border: '2px solid #231F20', background: 'white', color: '#231F20', cursor: 'pointer', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        ↓ Descargar Material
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -3828,7 +4081,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     );
   }
 
-  // ── VISTA ADMIN — NUEVA CAPACITACIÓN ──
+  // ── VISTA ADMIN — NUEVA CAPACITACIÓN ──────────────────────────────────────
   if (vista === 'nueva') {
     var colabsFiltrados = colabs.filter(function(c) {
       if (!busquedaColab) return true;
@@ -3841,16 +4094,45 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
           <h2 style={{ margin: 0, color: '#231F20', fontSize: 20, fontWeight: 700 }}>Nueva Capacitación</h2>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+
           {/* Formulario */}
           <div style={{ flex: 1, minWidth: 280, background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <h3 style={{ margin: 0, color: '#231F20', fontSize: 15 }}>Datos de la capacitación</h3>
-            <div><label style={labelStyle}>Nombre *</label><input value={form.nombre} onChange={function(e) { setForm({...form, nombre: e.target.value}); }} style={inputStyle} placeholder="Ej: Escuela de Sushi" /></div>
-            <div><label style={labelStyle}>Descripción</label><textarea value={form.descripcion} onChange={function(e) { setForm({...form, descripcion: e.target.value}); }} style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} placeholder="Descripción de la capacitación..." /></div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div><label style={labelStyle}>Fecha *</label><input type="date" value={form.fecha} onChange={function(e) { setForm({...form, fecha: e.target.value}); }} style={inputStyle} /></div>
-              <div><label style={labelStyle}>Duración (horas)</label><input type="number" value={form.duracion_horas} onChange={function(e) { setForm({...form, duracion_horas: e.target.value}); }} style={inputStyle} placeholder="Ej: 8" /></div>
+            <div>
+              <label style={labelStyle}>Nombre *</label>
+              <input value={form.nombre} onChange={function(e) { setForm({...form, nombre: e.target.value}); }} style={inputStyle} placeholder="Ej: Escuela de Sushi" />
             </div>
-            <div><label style={labelStyle}>Instructor</label><input value={form.instructor} onChange={function(e) { setForm({...form, instructor: e.target.value}); }} style={inputStyle} placeholder="Nombre del instructor" /></div>
+            <div>
+              <label style={labelStyle}>Descripción</label>
+              <textarea value={form.descripcion} onChange={function(e) { setForm({...form, descripcion: e.target.value}); }} style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} placeholder="Descripción de la capacitación..." />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Fecha *</label>
+                <input type="date" value={form.fecha} onChange={function(e) { setForm({...form, fecha: e.target.value}); }} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Duración (horas)</label>
+                <input type="number" value={form.duracion_horas} onChange={function(e) { setForm({...form, duracion_horas: e.target.value}); }} style={inputStyle} placeholder="Ej: 8" />
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Instructor</label>
+              <input value={form.instructor} onChange={function(e) { setForm({...form, instructor: e.target.value}); }} style={inputStyle} placeholder="Nombre del instructor" />
+            </div>
+            {/* CAMBIO 7: campo URL del material */}
+            <div>
+              <label style={labelStyle}>URL del material (opcional)</label>
+              <input
+                value={form.url_material}
+                onChange={function(e) { setForm({...form, url_material: e.target.value}); }}
+                style={inputStyle}
+                placeholder="https://drive.google.com/... o cualquier enlace"
+              />
+              <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#94a3b8' }}>
+                Si cargás un link, los colaboradores verán el botón "Descargar Material" en sus capacitaciones.
+              </p>
+            </div>
           </div>
 
           {/* Selector de participantes */}
@@ -3861,8 +4143,10 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
               {colabsFiltrados.map(function(c) {
                 var sel = seleccionados.includes(c.id);
                 return (
-                  <div key={c.id} onClick={function() { setSeleccionados(function(p) { return sel ? p.filter(function(id) { return id !== c.id; }) : [...p, c.id]; }); }}
-                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: sel ? '#231F20' : '#F0EDE8', border: '1px solid ' + (sel ? '#231F20' : '#e8e6e0') }}>
+                  <div key={c.id}
+                    onClick={function() { setSeleccionados(function(p) { return sel ? p.filter(function(id) { return id !== c.id; }) : [...p, c.id]; }); }}
+                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: sel ? '#231F20' : '#F0EDE8', border: '1px solid ' + (sel ? '#231F20' : '#e8e6e0') }}
+                  >
                     <div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: sel ? '#F0EDE8' : '#231F20' }}>{c.full_name}</p>
                       <p style={{ margin: 0, fontSize: 11, color: sel ? '#94a3b8' : '#64748b' }}>{c.area}{c.puesto ? ' · ' + c.puesto : ''}</p>
@@ -3874,15 +4158,18 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
             </div>
           </div>
         </div>
+
         <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-          <button onClick={guardarCapacitacion} disabled={guardando} style={{ ...s.btnPrimario, opacity: guardando ? 0.6 : 1 }}>{guardando ? 'Guardando...' : 'Guardar capacitación'}</button>
+          <button onClick={guardarCapacitacion} disabled={guardando} style={{ ...s.btnPrimario, opacity: guardando ? 0.6 : 1 }}>
+            {guardando ? 'Guardando...' : 'Guardar capacitación'}
+          </button>
           <button onClick={function() { setVista('lista'); setSeleccionados([]); }} style={s.btnSecundario}>Cancelar</button>
         </div>
       </div>
     );
   }
 
-  // ── VISTA ADMIN — DETALLE ──
+  // ── VISTA ADMIN — DETALLE ─────────────────────────────────────────────────
   if (vista === 'detalle' && capSeleccionada) {
     var colabsFiltradosD = colabs.filter(function(c) {
       if (!busquedaColab) return true;
@@ -3894,13 +4181,21 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
           <button onClick={function() { setVista('lista'); setBusquedaColab(''); cargar(); }} style={s.btnInfo}>Volver</button>
           <h2 style={{ margin: 0, color: '#231F20', fontSize: 20, fontWeight: 700 }}>{capSeleccionada.nombre}</h2>
         </div>
-        {/* Info */}
-        <div style={{ background: '#231F20', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+
+        <div style={{ background: '#231F20', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
           {capSeleccionada.fecha && <span style={{ fontSize: 13, color: '#D4D2C6' }}>{new Date(capSeleccionada.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
           {capSeleccionada.duracion_horas && <span style={{ fontSize: 13, color: '#D4D2C6' }}>{capSeleccionada.duracion_horas} horas</span>}
           {capSeleccionada.instructor && <span style={{ fontSize: 13, color: '#D4D2C6' }}>Instructor: {capSeleccionada.instructor}</span>}
           <span style={{ fontSize: 13, color: '#86efac', fontWeight: 700 }}>{seleccionados.length} participantes</span>
+          {/* CAMBIO 7: mostrar si tiene material cargado */}
+          {capSeleccionada.url_material && (
+            <a href={capSeleccionada.url_material} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 13, color: '#fcd34d', fontWeight: 600, textDecoration: 'none' }}>
+              ↓ Ver material
+            </a>
+          )}
         </div>
+
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
           {/* Lista participantes actuales */}
           <div style={{ flex: 1, minWidth: 280 }}>
@@ -3915,12 +4210,16 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
                         <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{c.area}</p>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={function() { var _c = c; var _cap = capSeleccionada; generarCertificadoPDF({ profiles: _c }, _cap); }}
-                          style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: '#F0EDE8', color: '#231F20', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                        <button
+                          onClick={function() { var _c = c; var _cap = capSeleccionada; generarCertificadoPDF({ profiles: _c }, _cap); }}
+                          style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: '#F0EDE8', color: '#231F20', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
+                        >
                           PDF
                         </button>
-                        <button onClick={function() { agregarQuitarParticipante(c.id); }}
-                          style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                        <button
+                          onClick={function() { agregarQuitarParticipante(c.id); }}
+                          style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
+                        >
                           Quitar
                         </button>
                       </div>
@@ -3930,6 +4229,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
               </div>
             )}
           </div>
+
           {/* Agregar participantes */}
           <div style={{ flex: 1, minWidth: 280, background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20 }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#231F20' }}>Agregar participante</h4>
@@ -3937,8 +4237,10 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
             <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {colabsFiltradosD.filter(function(c) { return !seleccionados.includes(c.id); }).map(function(c) {
                 return (
-                  <div key={c.id} onClick={function() { agregarQuitarParticipante(c.id); }}
-                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: '#F0EDE8', border: '1px solid #e8e6e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={c.id}
+                    onClick={function() { agregarQuitarParticipante(c.id); }}
+                    style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: '#F0EDE8', border: '1px solid #e8e6e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
                     <div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#231F20' }}>{c.full_name}</p>
                       <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{c.area}</p>
@@ -3954,32 +4256,19 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     );
   }
 
+  // ── VISTA ADMIN — LISTA ───────────────────────────────────────────────────
   function exportarExcelCapacitaciones() {
-    var rows = [['Capacitación', 'Descripción', 'Fecha', 'Duración (hs)', 'Instructor', 'Cantidad Participantes', 'Participantes']];
+    var rows = [['Capacitación', 'Descripción', 'Fecha', 'Duración (hs)', 'Instructor', 'URL Material', 'Cantidad Participantes', 'Participantes']];
     capacitaciones.forEach(function(cap) {
       var parts = (cap.capacitacion_participantes || []);
       var nombres = parts.map(function(p) { return p.profiles ? p.profiles.full_name : ''; }).filter(Boolean).join(', ');
       var fecha = cap.fecha ? new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '';
-      rows.push([
-        cap.nombre || '',
-        cap.descripcion || '',
-        fecha,
-        cap.duracion_horas || '',
-        cap.instructor || '',
-        parts.length,
-        nombres
-      ]);
+      rows.push([cap.nombre || '', cap.descripcion || '', fecha, cap.duracion_horas || '', cap.instructor || '', cap.url_material || '', parts.length, nombres]);
     });
-
-    // Construir CSV con BOM para Excel
     var bom = '\uFEFF';
     var csv = bom + rows.map(function(row) {
-      return row.map(function(cell) {
-        var val = String(cell).replace(/"/g, '""');
-        return '"' + val + '"';
-      }).join(';');
+      return row.map(function(cell) { var val = String(cell).replace(/"/g, '""'); return '"' + val + '"'; }).join(';');
     }).join('\r\n');
-
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -3989,19 +4278,24 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     URL.revokeObjectURL(url);
   }
 
-  // ── VISTA ADMIN — LISTA ──
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, color: '#231F20', fontSize: 22, fontWeight: 700 }}>Capacitaciones</h2>
           <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{capacitaciones.length} capacitación{capacitaciones.length !== 1 ? 'es' : ''} registrada{capacitaciones.length !== 1 ? 's' : ''}</p>
-        <button onClick={exportarExcelCapacitaciones} style={{ ...s.btnInfo, display: "flex", alignItems: "center", gap: 6 }}>Exportar Excel</button>
         </div>
-        <button onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '' }); }} style={s.btnPrimario}>
-          + Nueva capacitación
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={exportarExcelCapacitaciones} style={s.btnInfo}>Exportar Excel</button>
+          <button
+            onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' }); }}
+            style={s.btnPrimario}
+          >
+            + Nueva capacitación
+          </button>
+        </div>
       </div>
+
       {capacitaciones.length === 0 ? (
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 60, textAlign: 'center' }}>
           <p style={{ color: '#94a3b8', fontSize: 14, margin: 0 }}>No hay capacitaciones cargadas aún.</p>
@@ -4017,6 +4311,10 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                     <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#231F20' }}>{cap.nombre}</p>
                     <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: '#F0EDE8', color: '#231F20' }}>{nPart} participante{nPart !== 1 ? 's' : ''}</span>
+                    {/* CAMBIO 7: badge que indica si tiene material cargado */}
+                    {cap.url_material && (
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: '#dcfce7', color: '#166534' }}>Con material</span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     {cap.fecha && <span style={{ fontSize: 12, color: '#64748b' }}>{new Date(cap.fecha + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>}
