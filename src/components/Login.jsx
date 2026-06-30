@@ -44,7 +44,6 @@ export default function Login() {
         <div style={styles.overlay} />
         <div style={styles.leftContent}>
           <img src="/logo.jpg" alt="Fabric Group" style={styles.logo} />
-          <h1 style={styles.brandName}>Fabric Group</h1>
           <div style={styles.divider} />
           <p style={styles.description}>
             Plataforma integral para la gestión del talento,
@@ -169,14 +168,6 @@ var styles = {
   logo: {
     height: 56, borderRadius: 8, marginBottom: 20,
     boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-  },
-  brandName: {
-    fontSize: '38px', fontWeight: '700',
-    color: '#F0EDE8',
-    margin: '0 0 16px 0',
-    letterSpacing: '3px',
-    textTransform: 'uppercase',
-    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
   },
   divider: {
     width: '48px', height: '3px',
