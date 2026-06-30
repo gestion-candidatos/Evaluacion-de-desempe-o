@@ -1011,12 +1011,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  mapa[ev.colaborador_id].promLider = ev.rating_promedio;
  mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
  mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
- var cal = ev.rating_calibrado;
- if (!cal && ev.rating_promedio) {
- cal = ev.rating_promedio;
- supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
- }
- mapa[ev.colaborador_id].ratingFinal = cal;
+  mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado || null;
  }
  });
  setDatos(Object.values(mapa)); setCarg(false);
@@ -1549,7 +1544,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
  )}
  <button
- onClick={function() {
+ onClick={async function() {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
