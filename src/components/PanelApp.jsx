@@ -1011,7 +1011,12 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  mapa[ev.colaborador_id].promLider = ev.rating_promedio;
  mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
  mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
-  mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado || null;
+ var cal = ev.rating_calibrado;
+ if (!cal && ev.rating_promedio) {
+ cal = ev.rating_promedio;
+ supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
+ }
+ mapa[ev.colaborador_id].ratingFinal = cal;
  }
  });
  setDatos(Object.values(mapa)); setCarg(false);
@@ -1486,8 +1491,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
      var _evId = d.evaluacionLider.id;
      var _pl = parseFloat(d.promLider) || 0;
      if (!_pl) { alert('El lider aun no tiene rating promedio'); return; }
-     var ok = await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
-      if (!ok) return;
+     await guardarCal(_evId, _pl, 'Confirmado sin cambios — rating igual al del lider', _pl);
      // Registrar en historial
      var { data: { session } } = await supabase.auth.getSession();
      await supabase.from('calibracion_historial').insert({
@@ -1499,8 +1503,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
        usuario_id: session.user.id,
        usuario_nombre: session.user.email
      });
-      setEditandoCal(null);
-    }}
+   }}
    title="Confirmar como evaluacion final"
    style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #86efac', background: '#dcfce7', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
    ✓
@@ -1546,7 +1549,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
  )}
  <button
- onClick={async function() {
+ onClick={function() {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
@@ -1802,7 +1805,123 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
 }
 
 
-function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert(' Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button><h3> Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}> Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>Guardar</button></div>; }
+function FeedbackForm({ feedback: col, cicloId, onVolver }) {
+ var [com, setCom] = useState('');
+ var [fb, setFb] = useState(null);
+ var [carg, setCarg] = useState(true);
+ // NUEVO: evaluación que el líder le hizo a este colaborador + estado de aprobación
+ var [miEvaluacion, setMiEvaluacion] = useState(null);
+ var [misPuntuaciones, setMisPuntuaciones] = useState([]);
+ var [dandoOk, setDandoOk] = useState(false);
+
+ useEffect(function() {
+ (async function() {
+ var { data: { session } } = await supabase.auth.getSession();
+ var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
+ if (data) { setFb(data); setCom(data.comentario_lider || ''); }
+ else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); }
+
+ // NUEVO: cargar la evaluación que este líder le hizo al colaborador
+ var { data: ev } = await supabase.from('evaluaciones')
+   .select('id, rating_promedio, rating_calibrado, comentarios_finales, estado, aprobado_lider')
+   .eq('colaborador_id', col.id)
+   .eq('tipo_evaluacion', 'evaluacion_lider')
+   .eq('ciclo_id', cicloId)
+   .maybeSingle();
+ if (ev) {
+   setMiEvaluacion(ev);
+   var { data: punts } = await supabase.from('puntuaciones')
+     .select('rating, comentario, competencia_id, competencias(nombre)')
+     .eq('evaluacion_id', ev.id);
+   setMisPuntuaciones(punts || []);
+ }
+ setCarg(false);
+ })();
+ }, []);
+
+ async function guardar() {
+ var { data: { session } } = await supabase.auth.getSession();
+ await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' });
+ alert('Guardado');
+ onVolver();
+ }
+
+ // NUEVO: el líder da el OK para que el colaborador vea la evaluación
+ async function darOk() {
+ if (!miEvaluacion) return;
+ if (!window.confirm('¿Confirmás que el colaborador puede ver tu evaluación?')) return;
+ setDandoOk(true);
+ await supabase.from('evaluaciones').update({ aprobado_lider: true }).eq('id', miEvaluacion.id);
+ setMiEvaluacion({ ...miEvaluacion, aprobado_lider: true });
+ setDandoOk(false);
+ }
+
+ if (carg) return <p>Cargando...</p>;
+
+ var clasifMia = clasificarRating(parseFloat(miEvaluacion?.rating_calibrado || miEvaluacion?.rating_promedio));
+
+ return (
+ <div style={{ maxWidth: 700 }}>
+ <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
+ <h3>Feedback: {col.full_name || col.email}</h3>
+
+ {/* NUEVO: mi evaluación a este colaborador + botón OK */}
+ {miEvaluacion && (
+ <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+   <h4 style={{ margin: 0, color: '#231F20' }}>Mi evaluación a este colaborador</h4>
+   {miEvaluacion.aprobado_lider ? (
+     <span style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: '#dcfce7', color: '#166534' }}>✓ OK dado — el colaborador puede verla</span>
+   ) : (
+     <button onClick={darOk} disabled={dandoOk || miEvaluacion.estado !== 'enviado'}
+       style={{ ...s.btnPrimario, opacity: (dandoOk || miEvaluacion.estado !== 'enviado') ? 0.5 : 1 }}>
+       {dandoOk ? 'Guardando...' : 'Dar OK al colaborador'}
+     </button>
+   )}
+ </div>
+
+ {miEvaluacion.estado !== 'enviado' && (
+   <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 14px 0', fontStyle: 'italic' }}>
+     Tenés que enviar tu evaluación antes de poder dar el OK.
+   </p>
+ )}
+
+ {(miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio) && (
+   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+     <span style={{ fontSize: 36, fontWeight: 800, color: clasifMia?.color || '#231F20' }}>
+       {miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio}
+     </span>
+     {clasifMia && <span style={{ fontSize: 13, fontWeight: 600, color: clasifMia.color }}>{clasifMia.label}</span>}
+   </div>
+ )}
+
+ {misPuntuaciones.length > 0 && (
+   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+     <tbody>
+       {misPuntuaciones.map(function(p) {
+         return (
+           <tr key={p.competencia_id} style={{ borderBottom: '1px solid #f1f0ec' }}>
+             <td style={{ padding: '6px 4px', fontSize: 13, color: '#231F20' }}>{p.competencias?.nombre}</td>
+             <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 700, color: '#231F20', width: 40 }}>{p.rating}</td>
+           </tr>
+         );
+       })}
+     </tbody>
+   </table>
+ )}
+
+ {miEvaluacion.comentarios_finales && (
+   <p style={{ fontSize: 13, color: '#475569', fontStyle: 'italic', margin: 0 }}>{miEvaluacion.comentarios_finales}</p>
+ )}
+ </div>
+ )}
+
+ <textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />
+ {fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>Confirmado</div>}
+ <button onClick={guardar} style={s.btnPrimario}>Guardar</button>
+ </div>
+ );
+}
 
 // =============================================
 // EVALUACIÓN LÍDER — con bloqueo post-envío
@@ -2140,7 +2259,6 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [feedback, setFeedback] = useState(null);
  var [evalData, setEvalData] = useState(null);
  var [showInfo, setShowInfo] = useState({});
- // CAMBIO 4: estados para ver evaluación del líder
  var [verEvalLider, setVerEvalLider] = useState(false);
  var [evalLiderDetalle, setEvalLiderDetalle] = useState(null);
  var [evalLiderPunts, setEvalLiderPunts] = useState({});
@@ -2150,7 +2268,8 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
  supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
  supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
- supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
+ // NUEVO: trae aprobado_lider — controla si el colaborador puede ver la evaluación
+ supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales, aprobado_lider').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
  supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
  ]);
  setComp(comps || []);
@@ -2171,7 +2290,6 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  })();
  }, []);
 
- // CAMBIO 4: carga puntuaciones del líder
  async function cargarEvalLiderDetalle() {
  if (!evalLider?.id) return;
  var { data: punts } = await supabase
@@ -2238,7 +2356,6 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
 
  var clasifCal = clasificarRating(parseFloat(evalLider?.rating_calibrado));
 
- // CAMBIO 4: vista evaluación del líder
  if (verEvalLider && evalLiderDetalle) {
  return (
    <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
@@ -2309,12 +2426,12 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
  </div>
  )}
- {evalLider?.rating_calibrado && (
+ {/* CAMBIO: el bloque y el ojito solo aparecen si el líder dio el OK (aprobado_lider) */}
+ {evalLider?.rating_calibrado && evalLider?.aprobado_lider && (
  <div style={{ padding: 16, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
  <p style={{ margin: '0 0 4px 0', color: clasifCal?.color || '#231F20', fontWeight: 600, fontSize: 13 }}>Resultado Final Calibrado</p>
  <p style={{ fontSize: 44, fontWeight: 700, margin: '6px 0', color: clasifCal?.color || '#231F20', lineHeight: 1 }}>{evalLider.rating_calibrado}</p>
  {clasifCal && <p style={{ margin: '0 0 14px 0', fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
- {/* CAMBIO 4: botón ojito para ver evaluación del líder */}
  <button
    onClick={cargarEvalLiderDetalle}
    style={{ padding: '9px 22px', borderRadius: 8, border: '2px solid ' + (clasifCal?.color || '#231F20'), background: 'transparent', color: clasifCal?.color || '#231F20', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -2361,11 +2478,6 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  </div>
  );
 }
-
-
-// =============================================
-// OBJETIVOS
-// =============================================
 function ObjetivosGerente({ profile }) {
  var [equipo, setEquipo] = useState([]);
  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
