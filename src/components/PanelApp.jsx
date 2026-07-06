@@ -1011,7 +1011,12 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  mapa[ev.colaborador_id].promLider = ev.rating_promedio;
  mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
  mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
-  mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado || null;
+ var cal = ev.rating_calibrado;
+ if (!cal && ev.rating_promedio) {
+ cal = ev.rating_promedio;
+ supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
+ }
+ mapa[ev.colaborador_id].ratingFinal = cal;
  }
  });
  setDatos(Object.values(mapa)); setCarg(false);
@@ -1544,7 +1549,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
  )}
  <button
- onClick={async function() {
+ onClick={function() {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
@@ -1800,123 +1805,7 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
 }
 
 
-function FeedbackForm({ feedback: col, cicloId, onVolver }) {
- var [com, setCom] = useState('');
- var [fb, setFb] = useState(null);
- var [carg, setCarg] = useState(true);
- // NUEVO: evaluación que el líder le hizo a este colaborador + estado de aprobación
- var [miEvaluacion, setMiEvaluacion] = useState(null);
- var [misPuntuaciones, setMisPuntuaciones] = useState([]);
- var [dandoOk, setDandoOk] = useState(false);
-
- useEffect(function() {
- (async function() {
- var { data: { session } } = await supabase.auth.getSession();
- var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
- if (data) { setFb(data); setCom(data.comentario_lider || ''); }
- else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); }
-
- // NUEVO: cargar la evaluación que este líder le hizo al colaborador
- var { data: ev } = await supabase.from('evaluaciones')
-   .select('id, rating_promedio, rating_calibrado, comentarios_finales, estado, aprobado_lider')
-   .eq('colaborador_id', col.id)
-   .eq('tipo_evaluacion', 'evaluacion_lider')
-   .eq('ciclo_id', cicloId)
-   .maybeSingle();
- if (ev) {
-   setMiEvaluacion(ev);
-   var { data: punts } = await supabase.from('puntuaciones')
-     .select('rating, comentario, competencia_id, competencias(nombre)')
-     .eq('evaluacion_id', ev.id);
-   setMisPuntuaciones(punts || []);
- }
- setCarg(false);
- })();
- }, []);
-
- async function guardar() {
- var { data: { session } } = await supabase.auth.getSession();
- await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' });
- alert('Guardado');
- onVolver();
- }
-
- // NUEVO: el líder da el OK para que el colaborador vea la evaluación
- async function darOk() {
- if (!miEvaluacion) return;
- if (!window.confirm('¿Confirmás que el colaborador puede ver tu evaluación?')) return;
- setDandoOk(true);
- await supabase.from('evaluaciones').update({ aprobado_lider: true }).eq('id', miEvaluacion.id);
- setMiEvaluacion({ ...miEvaluacion, aprobado_lider: true });
- setDandoOk(false);
- }
-
- if (carg) return <p>Cargando...</p>;
-
- var clasifMia = clasificarRating(parseFloat(miEvaluacion?.rating_calibrado || miEvaluacion?.rating_promedio));
-
- return (
- <div style={{ maxWidth: 700 }}>
- <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
- <h3>Feedback: {col.full_name || col.email}</h3>
-
- {/* NUEVO: mi evaluación a este colaborador + botón OK */}
- {miEvaluacion && (
- <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-   <h4 style={{ margin: 0, color: '#231F20' }}>Mi evaluación a este colaborador</h4>
-   {miEvaluacion.aprobado_lider ? (
-     <span style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: '#dcfce7', color: '#166534' }}>✓ OK dado — el colaborador puede verla</span>
-   ) : (
-     <button onClick={darOk} disabled={dandoOk || miEvaluacion.estado !== 'enviado'}
-       style={{ ...s.btnPrimario, opacity: (dandoOk || miEvaluacion.estado !== 'enviado') ? 0.5 : 1 }}>
-       {dandoOk ? 'Guardando...' : 'Dar OK al colaborador'}
-     </button>
-   )}
- </div>
-
- {miEvaluacion.estado !== 'enviado' && (
-   <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 14px 0', fontStyle: 'italic' }}>
-     Tenés que enviar tu evaluación antes de poder dar el OK.
-   </p>
- )}
-
- {(miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio) && (
-   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-     <span style={{ fontSize: 36, fontWeight: 800, color: clasifMia?.color || '#231F20' }}>
-       {miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio}
-     </span>
-     {clasifMia && <span style={{ fontSize: 13, fontWeight: 600, color: clasifMia.color }}>{clasifMia.label}</span>}
-   </div>
- )}
-
- {misPuntuaciones.length > 0 && (
-   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
-     <tbody>
-       {misPuntuaciones.map(function(p) {
-         return (
-           <tr key={p.competencia_id} style={{ borderBottom: '1px solid #f1f0ec' }}>
-             <td style={{ padding: '6px 4px', fontSize: 13, color: '#231F20' }}>{p.competencias?.nombre}</td>
-             <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 700, color: '#231F20', width: 40 }}>{p.rating}</td>
-           </tr>
-         );
-       })}
-     </tbody>
-   </table>
- )}
-
- {miEvaluacion.comentarios_finales && (
-   <p style={{ fontSize: 13, color: '#475569', fontStyle: 'italic', margin: 0 }}>{miEvaluacion.comentarios_finales}</p>
- )}
- </div>
- )}
-
- <textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />
- {fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>Confirmado</div>}
- <button onClick={guardar} style={s.btnPrimario}>Guardar</button>
- </div>
- );
-}
+function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert(' Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button><h3> Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}> Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>Guardar</button></div>; }
 
 // =============================================
 // EVALUACIÓN LÍDER — con bloqueo post-envío
@@ -2254,17 +2143,13 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [feedback, setFeedback] = useState(null);
  var [evalData, setEvalData] = useState(null);
  var [showInfo, setShowInfo] = useState({});
- var [verEvalLider, setVerEvalLider] = useState(false);
- var [evalLiderDetalle, setEvalLiderDetalle] = useState(null);
- var [evalLiderPunts, setEvalLiderPunts] = useState({});
 
  useEffect(function() {
  (async function() {
  var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
  supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
  supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
- // NUEVO: trae aprobado_lider — controla si el colaborador puede ver la evaluación
- supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales, aprobado_lider').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
+ supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
  supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
  ]);
  setComp(comps || []);
@@ -2285,30 +2170,22 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  })();
  }, []);
 
- async function cargarEvalLiderDetalle() {
- if (!evalLider?.id) return;
- var { data: punts } = await supabase
-   .from('puntuaciones')
-   .select('rating, competencia_id, comentario, competencias(nombre)')
-   .eq('evaluacion_id', evalLider.id);
- var map = {};
- (punts || []).forEach(function(p) {
-   map[p.competencia_id] = { rating: p.rating, comentario: p.comentario || '', nombre: p.competencias?.nombre || '' };
- });
- setEvalLiderDetalle(evalLider);
- setEvalLiderPunts(map);
- setVerEvalLider(true);
- }
-
  var yaEnviada = evalData?.estado === 'enviado';
  var bloqueado = soloLectura || yaEnviada;
 
  async function guardarPuntuaciones(evId) {
  for (var cid of Object.keys(ratings)) {
- var r = ratings[cid]; if (!r) continue;
- var { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
- if (ex?.id) { await supabase.from('puntuaciones').update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id); }
- else { await supabase.from('puntuaciones').insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }); }
+ var r = ratings[cid];
+ if (!r) continue;
+ var { data: ex } = await supabase.from('puntuaciones')
+ .select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
+ if (ex?.id) {
+ await supabase.from('puntuaciones')
+ .update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id);
+ } else {
+ await supabase.from('puntuaciones')
+ .insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' });
+ }
  }
  }
 
@@ -2336,75 +2213,29 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var { error: envErr } = await supabase.from('evaluaciones').update({ estado: 'enviado' }).eq('id', evId);
  if (envErr) { setMsg('Error al enviar: ' + envErr.message); return; }
  setEvalData(function(prev) { return { ...prev, estado: 'enviado' }; });
+ // Notificar al lider
+ var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id").eq("id", userId).single();
  var { data: perfColabN } = await supabase.from("profiles").select("full_name, leader_id, email").eq("id", userId).single();
  if (perfColabN && perfColabN.leader_id) {
-   if (localStorage.getItem("notifsActivas") !== "false") await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
-   var { data: liderN } = await supabase.from("profiles").select("email, full_name").eq("id", perfColabN.leader_id).single();
-   if (localStorage.getItem("notifsActivas") !== "false" && liderN && liderN.email) {
-     await enviarEmailNotificacion(liderN.email, liderN.full_name || "Líder", perfColabN.full_name + " envió su autoevaluación", (perfColabN.full_name || "Un colaborador") + " acaba de enviar su autoevaluación de desempeño. Ingresá a la plataforma para revisarla y completar tu evaluación.");
-   }
+    if (localStorage.getItem("notifsActivas") !== "false") await crearNotificacion(perfColabN.leader_id, "autoevaluacion_enviada", (perfColabN.full_name || "Un colaborador") + " envió su autoevaluación", userId, perfColabN.full_name);
+ // Email al lider
+ var { data: liderN } = await supabase.from("profiles").select("email, full_name").eq("id", perfColabN.leader_id).single();
+    if (localStorage.getItem("notifsActivas") !== "false" && liderN && liderN.email) {
+ await enviarEmailNotificacion(
+ liderN.email,
+ liderN.full_name || "Líder",
+ perfColabN.full_name + " envió su autoevaluación",
+ (perfColabN.full_name || "Un colaborador") + " acaba de enviar su autoevaluación de desempeño. Ingresá a la plataforma para revisarla y completar tu evaluación."
+ );
+ }
  }
  setMsg('Autoevaluacion enviada correctamente');
  }
 
+
  if (carg) return <p>Cargando...</p>;
 
  var clasifCal = clasificarRating(parseFloat(evalLider?.rating_calibrado));
-
- if (verEvalLider && evalLiderDetalle) {
- return (
-   <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
-     <button onClick={function() { setVerEvalLider(false); }} style={{ ...s.btnInfo, marginBottom: 16 }}>← Volver a mi evaluación</button>
-     <h3 style={{ color: '#231F20', margin: '0 0 20px 0' }}>Evaluación de mi líder</h3>
-     {evalLiderDetalle.rating_calibrado && (
-       <div style={{ padding: 24, background: clasifCal?.bg || '#F0EDE8', borderRadius: 12, border: '2px solid ' + (clasifCal?.color || '#231F20'), marginBottom: 24, textAlign: 'center' }}>
-         <p style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 600, color: clasifCal?.color || '#231F20', textTransform: 'uppercase' }}>Rating calibrado final</p>
-         <p style={{ margin: '0 0 6px 0', fontSize: 52, fontWeight: 800, color: clasifCal?.color || '#231F20', lineHeight: 1 }}>{evalLiderDetalle.rating_calibrado}</p>
-         {clasifCal && <p style={{ margin: '0 0 10px 0', fontSize: 15, fontWeight: 600, color: clasifCal.color }}>{clasifCal.label}</p>}
-         {evalLiderDetalle.comentario_calibracion && (
-           <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#475569', fontStyle: 'italic', background: 'rgba(255,255,255,0.6)', padding: '8px 14px', borderRadius: 8 }}>{evalLiderDetalle.comentario_calibracion}</p>
-         )}
-       </div>
-     )}
-     <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
-       <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>Detalle por competencia</h4>
-       {Object.keys(evalLiderPunts).length === 0 ? (
-         <p style={{ color: '#94a3b8', fontSize: 13 }}>El líder aún no completó las competencias.</p>
-       ) : (
-         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-           <thead>
-             <tr style={{ background: '#231F20' }}>
-               <th style={{ ...th, color: '#D4D2C6' }}>Competencia</th>
-               <th style={{ ...th, color: '#D4D2C6', textAlign: 'center', width: 80 }}>Puntaje</th>
-               <th style={{ ...th, color: '#D4D2C6' }}>Comentario del líder</th>
-             </tr>
-           </thead>
-           <tbody>
-             {Object.entries(evalLiderPunts).map(function(entry, idx) {
-               var compId = entry[0]; var data = entry[1];
-               return (
-                 <tr key={compId} style={{ background: idx % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                   <td style={{ ...td, fontWeight: 500 }}>{data.nombre || compId}</td>
-                   <td style={{ ...td, textAlign: 'center' }}>
-                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: '#231F20', color: '#D4D2C6', fontSize: 16, fontWeight: 700 }}>{data.rating}</span>
-                   </td>
-                   <td style={{ ...td, fontSize: 13, color: '#475569', fontStyle: data.comentario ? 'normal' : 'italic' }}>{data.comentario || 'Sin comentario'}</td>
-                 </tr>
-               );
-             })}
-           </tbody>
-         </table>
-       )}
-     </div>
-     {evalLiderDetalle.comentarios_finales && (
-       <div style={{ padding: 16, background: '#F0EDE8', border: '1px solid #D4D2C6', borderRadius: 12 }}>
-         <h4 style={{ margin: '0 0 10px 0', color: '#231F20', fontSize: 14 }}>Comentarios finales del líder</h4>
-         <p style={{ margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{evalLiderDetalle.comentarios_finales}</p>
-       </div>
-     )}
-   </div>
- );
- }
 
  return (
  <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
@@ -2421,17 +2252,11 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
  </div>
  )}
- {/* CAMBIO: el bloque y el ojito solo aparecen si el líder dio el OK (aprobado_lider) */}
- {evalLider?.rating_calibrado && evalLider?.aprobado_lider && (
+ {evalLider?.rating_calibrado && (
  <div style={{ padding: 16, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
- <p style={{ margin: '0 0 4px 0', color: clasifCal?.color || '#231F20', fontWeight: 600, fontSize: 13 }}>Resultado Final Calibrado</p>
- <p style={{ fontSize: 44, fontWeight: 700, margin: '6px 0', color: clasifCal?.color || '#231F20', lineHeight: 1 }}>{evalLider.rating_calibrado}</p>
- {clasifCal && <p style={{ margin: '0 0 14px 0', fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
- <button
-   onClick={cargarEvalLiderDetalle}
-   style={{ padding: '9px 22px', borderRadius: 8, border: '2px solid ' + (clasifCal?.color || '#231F20'), background: 'transparent', color: clasifCal?.color || '#231F20', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-   👁 Ver evaluación de mi líder
- </button>
+ <p style={{ margin: 0, color: clasifCal?.color || '#231F20', fontWeight: 600 }}>Resultado Final Calibrado</p>
+ <p style={{ fontSize: 40, fontWeight: 700, margin: '8px 0', color: clasifCal?.color || '#231F20' }}>{evalLider.rating_calibrado}</p>
+ {clasifCal && <p style={{ margin: 0, fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
  </div>
  )}
  {competencias.map(function(comp) {
@@ -2456,8 +2281,13 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  );
  })}
  </div>
- <textarea value={comentarios[comp.id] || ''} onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
- placeholder="Comentario" style={{ ...s.textareaSmall, width: "100%", boxSizing: "border-box", maxWidth: "100%" }} readOnly={bloqueado} />
+ <textarea
+ value={comentarios[comp.id] || ''}
+ onChange={function(e) { if (!bloqueado) setComent({ ...comentarios, [comp.id]: e.target.value }); }}
+ placeholder="Comentario"
+ style={{ ...s.textareaSmall, width: "100%", boxSizing: "border-box", maxWidth: "100%" }}
+ readOnly={bloqueado}
+ />
  </div>
  );
  })}
@@ -2473,6 +2303,11 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  </div>
  );
 }
+
+
+// =============================================
+// OBJETIVOS
+// =============================================
 function ObjetivosGerente({ profile }) {
  var [equipo, setEquipo] = useState([]);
  var [colaboradorSeleccionado, setColaboradorSeleccionado] = useState(null);
@@ -3847,7 +3682,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
   var [capacitaciones, setCapacitaciones] = useState([]);
   var [misParticipaciones, setMisParticipaciones] = useState([]);
   var [cargando, setCargando] = useState(true);
-  var [form, setForm] = useState({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' });
+  var [form, setForm] = useState({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '', tipo: 'interna' });
   var [colabs, setColabs] = useState([]);
   var [participantes, setParticipantes] = useState([]);
   var [seleccionados, setSeleccionados] = useState([]);
@@ -3869,7 +3704,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
       setColabs(perfiles || []);
     } else {
       // CAMBIO: traer url_material para mostrar botón descargar
-      var { data: parts } = await supabase.from('capacitacion_participantes').select('*, capacitacion:capacitacion_id(id, nombre, descripcion, fecha, duracion_horas, instructor, url_material)').eq('colaborador_id', profile.id);
+      var { data: parts } = await supabase.from('capacitacion_participantes').select('*, capacitacion:capacitacion_id(id, nombre, descripcion, fecha, duracion_horas, instructor, url_material, tipo)').eq('colaborador_id', profile.id);
       setMisParticipaciones(parts || []);
     }
     setCargando(false);
@@ -3894,6 +3729,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
       duracion_horas: form.duracion_horas ? parseFloat(form.duracion_horas) : null,
       instructor: form.instructor,
       url_material: form.url_material || null,
+      tipo: form.tipo || 'interna',
       created_by: session.user.id
     }).select().single();
     if (nueva && seleccionados.length > 0) {
@@ -3901,7 +3737,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
         seleccionados.map(function(cid) { return { capacitacion_id: nueva.id, colaborador_id: cid, fecha_completado: form.fecha }; })
       );
     }
-    setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' });
+    setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '', tipo: 'interna' });
     setSeleccionados([]);
     setGuardando(false);
     setVista('lista');
@@ -3940,10 +3776,16 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     var W = 297; var H = 210;
 
-    pdf.setFillColor(220, 217, 210);
+    // Fondo: interna = beige Fabric, externa = blanco
+    var esExterna = capData && capData.tipo === 'externa';
+    if (esExterna) {
+      pdf.setFillColor(255, 255, 255);
+    } else {
+      pdf.setFillColor(220, 217, 210);
+    }
     pdf.rect(0, 0, W, H, 'F');
 
-    pdf.setDrawColor(160, 150, 135);
+    pdf.setDrawColor(35, 31, 32);
     pdf.setLineWidth(3);
     pdf.roundedRect(6, 6, W - 12, H - 12, 8, 8, 'S');
     pdf.setLineWidth(0.6);
@@ -3999,24 +3841,23 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
     if (capData && capData.instructor) detalles.push('Instructor: ' + capData.instructor);
     if (detalles.length > 0) pdf.text(detalles.join('  ·  '), W/2, yDet, { align: 'center' });
 
-    var yFirmaImg = H - 54;
+    // Firmas — líneas negras simples, sin imágenes
     var yLinea = H - 34;
     var yNombre = H - 27;
     var yCargo = H - 21;
 
-    try { pdf.addImage('data:image/png;base64,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', 'PNG', W/4 - 22, yFirmaImg, 44, 18); } catch(e) {}  pdf.setDrawColor(140, 130, 115); pdf.setLineWidth(0.5);
+    pdf.setDrawColor(35, 31, 32); pdf.setLineWidth(0.8);
     pdf.line(W/4 - 38, yLinea, W/4 + 38, yLinea);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
     pdf.text('Adrian Galvan', W/4, yNombre, { align: 'center' });
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(100, 95, 85);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(70, 65, 55);
     pdf.text('Gerente de Recursos Humanos', W/4, yCargo, { align: 'center' });
 
-    try { pdf.addImage('data:image/png;base64,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', 'PNG', W*3/4 - 22, yFirmaImg, 44, 18); } catch(e) {}
-    pdf.setDrawColor(140, 130, 115); pdf.setLineWidth(0.5);
+    pdf.setDrawColor(35, 31, 32); pdf.setLineWidth(0.8);
     pdf.line(W*3/4 - 38, yLinea, W*3/4 + 38, yLinea);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(35, 31, 32);
     pdf.text('Florencia Salvaneschi', W*3/4, yNombre, { align: 'center' });
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(100, 95, 85);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(70, 65, 55);
     pdf.text('HRBP Operaciones', W*3/4, yCargo, { align: 'center' });
 
     pdf.save('Certificado_' + (nombreColab || 'colaborador').replace(/\s+/g, '_') + '.pdf');
@@ -4101,6 +3942,22 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
               <div><label style={labelStyle}>Duración (horas)</label><input type="number" value={form.duracion_horas} onChange={function(e) { setForm({...form, duracion_horas: e.target.value}); }} style={inputStyle} placeholder="Ej: 8" /></div>
             </div>
             <div><label style={labelStyle}>Instructor</label><input value={form.instructor} onChange={function(e) { setForm({...form, instructor: e.target.value}); }} style={inputStyle} placeholder="Nombre del instructor" /></div>
+            {/* Campo tipo: interna o externa */}
+            <div>
+              <label style={labelStyle}>Tipo de capacitación</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {['interna', 'externa'].map(function(t) {
+                  return <button key={t} type="button" onClick={function() { setForm({...form, tipo: t}); }}
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, border: '2px solid', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      borderColor: form.tipo === t ? '#231F20' : '#e8e6e0',
+                      background: form.tipo === t ? '#231F20' : 'white',
+                      color: form.tipo === t ? '#F0EDE8' : '#64748b' }}>
+                    {t === 'interna' ? 'Interna' : 'Externa'}
+                  </button>;
+                })}
+              </div>
+              <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#94a3b8' }}>Interna: certificado con fondo beige. Externa: fondo blanco.</p>
+            </div>
             {/* CAMBIO: campo url_material en el formulario de nueva capacitación */}
             <div>
               <label style={labelStyle}>URL del material (opcional)</label>
@@ -4293,7 +4150,7 @@ function ModuloCapacitaciones({ profile, esAdmin }) {
           <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>{capacitaciones.length} capacitación{capacitaciones.length !== 1 ? 'es' : ''} registrada{capacitaciones.length !== 1 ? 's' : ''}</p>
         <button onClick={exportarExcelCapacitaciones} style={{ ...s.btnInfo, display: "flex", alignItems: "center", gap: 6 }}>Exportar Excel</button>
         </div>
-        <button onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '' }); }} style={s.btnPrimario}>
+        <button onClick={function() { setVista('nueva'); setSeleccionados([]); setBusquedaColab(''); setForm({ nombre: '', descripcion: '', fecha: '', duracion_horas: '', instructor: '', url_material: '', tipo: 'interna' }); }} style={s.btnPrimario}>
           + Nueva capacitación
         </button>
       </div>
