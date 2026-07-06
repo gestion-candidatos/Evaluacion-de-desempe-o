@@ -1011,12 +1011,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  mapa[ev.colaborador_id].promLider = ev.rating_promedio;
  mapa[ev.colaborador_id].comentarioCalibracion = ev.comentario_calibracion || null;
  mapa[ev.colaborador_id].liderReabierto = reabiertos.has(ev.colaborador_id);
- var cal = ev.rating_calibrado;
- if (!cal && ev.rating_promedio) {
- cal = ev.rating_promedio;
- supabase.from('evaluaciones').update({ rating_calibrado: cal }).eq('id', ev.id);
- }
- mapa[ev.colaborador_id].ratingFinal = cal;
+  mapa[ev.colaborador_id].ratingFinal = ev.rating_calibrado || null;
  }
  });
  setDatos(Object.values(mapa)); setCarg(false);
@@ -1549,7 +1544,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <p style={{ margin: 0, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Sin cambios — igual al líder, no requiere justificación</p>
  )}
  <button
- onClick={function() {
+ onClick={async function() {
  if (!calTemp.rating) return alert('Seleccioná un rating');
  if (parseFloat(calTemp.rating) !== parseFloat(d.promLider) && !calTemp.comentario.trim()) return alert('La justificación es obligatoria cuando el rating difiere del líder');
  var _evId = d.evaluacionLider.id; var _r = parseFloat(calTemp.rating); var _c = calTemp.comentario; var _pl = d.promLider;
@@ -1805,7 +1800,96 @@ function EquipoLider({ cicloId, profile, soloLectura }) {
 }
 
 
-function FeedbackForm({ feedback: col, cicloId, onVolver }) { var [com, setCom] = useState(''); var [fb, setFb] = useState(null); var [carg, setCarg] = useState(true); useEffect(function() { (async function() { var { data: { session } } = await supabase.auth.getSession(); var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle(); if (data) { setFb(data); setCom(data.comentario_lider || ''); } else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); } setCarg(false); })(); }, []); async function guardar() { var { data: { session } } = await supabase.auth.getSession(); await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' }); alert(' Guardado'); onVolver(); } if (carg) return <p>Cargando...</p>; return <div style={{ maxWidth: 600 }}><button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button><h3> Feedback: {col.full_name || col.email}</h3><textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />{fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}> Confirmado</div>}<button onClick={guardar} style={s.btnPrimario}>Guardar</button></div>; }
+function FeedbackForm({ feedback: col, cicloId, onVolver }) {
+ var [com, setCom] = useState('');
+ var [fb, setFb] = useState(null);
+ var [carg, setCarg] = useState(true);
+ var [miEvaluacion, setMiEvaluacion] = useState(null);
+ var [misPuntuaciones, setMisPuntuaciones] = useState([]);
+ var [dandoOk, setDandoOk] = useState(false);
+
+ useEffect(function() {
+ (async function() {
+ var { data: { session } } = await supabase.auth.getSession();
+ var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
+ if (data) { setFb(data); setCom(data.comentario_lider || ''); }
+ else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); }
+ var { data: ev } = await supabase.from('evaluaciones')
+   .select('id, rating_promedio, rating_calibrado, comentarios_finales, estado, aprobado_lider')
+   .eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
+ if (ev) {
+   setMiEvaluacion(ev);
+   var { data: punts } = await supabase.from('puntuaciones').select('rating, comentario, competencia_id, competencias(nombre)').eq('evaluacion_id', ev.id);
+   setMisPuntuaciones(punts || []);
+ }
+ setCarg(false);
+ })();
+ }, []);
+
+ async function guardar() {
+ var { data: { session } } = await supabase.auth.getSession();
+ await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' });
+ alert('Guardado'); onVolver();
+ }
+
+ async function darOk() {
+ if (!miEvaluacion) return;
+ if (!window.confirm('¿Confirmás que el colaborador puede ver tu evaluación?')) return;
+ setDandoOk(true);
+ await supabase.from('evaluaciones').update({ aprobado_lider: true }).eq('id', miEvaluacion.id);
+ setMiEvaluacion({ ...miEvaluacion, aprobado_lider: true });
+ setDandoOk(false);
+ }
+
+ if (carg) return <p>Cargando...</p>;
+ var clasifMia = clasificarRating(parseFloat(miEvaluacion?.rating_calibrado || miEvaluacion?.rating_promedio));
+
+ return (
+ <div style={{ maxWidth: 700 }}>
+ <button onClick={onVolver} style={{ ...s.btnInfo, marginBottom: 16 }}>Volver</button>
+ <h3>Feedback: {col.full_name || col.email}</h3>
+ {miEvaluacion && (
+ <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+   <h4 style={{ margin: 0, color: '#231F20' }}>Mi evaluación a este colaborador</h4>
+   {miEvaluacion.aprobado_lider ? (
+     <span style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: '#dcfce7', color: '#166534' }}>✓ OK dado — el colaborador puede verla</span>
+   ) : (
+     <button onClick={darOk} disabled={dandoOk || miEvaluacion.estado !== 'enviado'} style={{ ...s.btnPrimario, opacity: (dandoOk || miEvaluacion.estado !== 'enviado') ? 0.5 : 1 }}>
+       {dandoOk ? 'Guardando...' : 'Dar OK al colaborador'}
+     </button>
+   )}
+ </div>
+ {miEvaluacion.estado !== 'enviado' && <p style={{ fontSize: 12, color: '#92400e', margin: '0 0 14px 0', fontStyle: 'italic' }}>Tenés que enviar tu evaluación antes de poder dar el OK.</p>}
+ {(miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio) && (
+   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+     <span style={{ fontSize: 36, fontWeight: 800, color: clasifMia?.color || '#231F20' }}>{miEvaluacion.rating_calibrado || miEvaluacion.rating_promedio}</span>
+     {clasifMia && <span style={{ fontSize: 13, fontWeight: 600, color: clasifMia.color }}>{clasifMia.label}</span>}
+   </div>
+ )}
+ {misPuntuaciones.length > 0 && (
+   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+     <tbody>
+       {misPuntuaciones.map(function(p) {
+         return (
+           <tr key={p.competencia_id} style={{ borderBottom: '1px solid #f1f0ec' }}>
+             <td style={{ padding: '6px 4px', fontSize: 13, color: '#231F20' }}>{p.competencias?.nombre}</td>
+             <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 700, color: '#231F20', width: 40 }}>{p.rating}</td>
+           </tr>
+         );
+       })}
+     </tbody>
+   </table>
+ )}
+ {miEvaluacion.comentarios_finales && <p style={{ fontSize: 13, color: '#475569', fontStyle: 'italic', margin: 0 }}>{miEvaluacion.comentarios_finales}</p>}
+ </div>
+ )}
+ <textarea value={com} onChange={function(e) { setCom(e.target.value); }} placeholder="Deja tu feedback..." style={{ ...s.textarea, minHeight: 120, marginBottom: 12 }} />
+ {fb?.confirmacion_colaborador && <div style={{ padding: 12, background: '#dcfce7', borderRadius: 8, marginBottom: 16 }}>Confirmado</div>}
+ <button onClick={guardar} style={s.btnPrimario}>Guardar</button>
+ </div>
+ );
+}
 
 // =============================================
 // EVALUACIÓN LÍDER — con bloqueo post-envío
