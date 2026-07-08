@@ -1988,6 +1988,23 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
  })();
  }, []);
 
+ // BORRADOR AUTOMÁTICO en evaluación del líder
+ useEffect(function() {
+   if (!evalData?.id || soloLectura || enviada || evalData?.estado === 'enviado') return;
+   var timer = setTimeout(async function() {
+     var evId = evalData.id;
+     var prom = calcularRating(ratings);
+     await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
+     for (var cid of Object.keys(ratings)) {
+       var r = ratings[cid]; if (!r) continue;
+       var { data: ex } = await supabase.from('puntuaciones').select('id').eq('evaluacion_id', evId).eq('competencia_id', cid).maybeSingle();
+       if (ex?.id) { await supabase.from('puntuaciones').update({ rating: r, comentario: comentarios[cid] || '' }).eq('id', ex.id); }
+       else { await supabase.from('puntuaciones').insert({ evaluacion_id: evId, competencia_id: cid, rating: r, comentario: comentarios[cid] || '' }); }
+     }
+   }, 1500);
+   return function() { clearTimeout(timer); };
+ }, [ratings, comentarios, comFin, evalData?.id]);
+
  var yaEnviada = enviada || evalData?.estado === "enviado";
  var bloqueado = soloLectura || yaEnviada;
 
