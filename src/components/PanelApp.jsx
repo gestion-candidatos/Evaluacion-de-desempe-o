@@ -4671,6 +4671,7 @@ function GestionUsuarios() {
  async function toggleActivo(user) {
  await supabase.from('profiles').update({ activo: !user.activo }).eq('id', user.id);
  setUsuarios(function(prev) { return prev.map(function(u) { return u.id === user.id ? { ...u, activo: !u.activo } : u; }); });
+ }
 
  async function guardarPuesto(userId) {
  await supabase.from("profiles").update({ puesto: puestoTemp }).eq("id", userId);
@@ -4681,7 +4682,6 @@ function GestionUsuarios() {
  async function guardarFechaIngreso(userId, fecha) {
  await supabase.from("profiles").update({ fecha_ingreso: fecha || null }).eq("id", userId);
  setUsuarios(function(prev) { return prev.map(function(u) { return u.id === userId ? { ...u, fecha_ingreso: fecha } : u; }); });
- }
  }
 
  async function asignarLider(userId, liderId) {
