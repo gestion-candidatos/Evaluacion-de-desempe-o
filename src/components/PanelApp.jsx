@@ -2047,6 +2047,7 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
  async function enviar() {
  if (bloqueado) return;
+ if (!comFin || !comFin.trim()) { setMsg('Los comentarios finales son obligatorios antes de enviar'); setTimeout(function() { setMsg(''); }, 3000); return; }
  var evId = await obtenerOCrearEvalId();
  if (!evId) { setMsg('Error al enviar'); return; }
  setMsg('Enviando...');
@@ -2324,6 +2325,7 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var evId = evalData?.id;
  if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
  if (Object.keys(ratings).length === 0) { setMsg('Completa al menos una competencia antes de enviar'); return; }
+ if (!comFin || !comFin.trim()) { setMsg('Los comentarios finales son obligatorios antes de enviar'); setTimeout(function() { setMsg(''); }, 3000); return; }
  setMsg('Enviando...');
  var prom = calcularRating(ratings);
  await supabase.from('evaluaciones').update({ comentarios_finales: comFin, rating_promedio: prom }).eq('id', evId);
