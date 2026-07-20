@@ -973,14 +973,61 @@ function ParticipantesView({ colabs }) {
 
 function EvaluacionesAdmin({ cicloId }) {
  var [evs, setEvs] = useState([]); var [carg, setCarg] = useState(true);
+ var [filtroTipo, setFiltroTipo] = useState('Todos');
+ var [filtroEstado, setFiltroEstado] = useState('Todos');
  useEffect(function() { (async function() { var { data } = await supabase.from('evaluaciones').select('id,colaborador_id,tipo_evaluacion,estado,rating_promedio,rating_calibrado,created_at,colaborador:colaborador_id(email,full_name)').eq('ciclo_id', cicloId).order('created_at', { ascending: false }); setEvs(data || []); setCarg(false); })(); }, [cicloId]);
  if (carg) return <p>Cargando...</p>;
+ var evsFiltradas = evs.filter(function(ev) {
+   if (filtroTipo === 'Auto' && ev.tipo_evaluacion !== 'autoevaluacion') return false;
+   if (filtroTipo === 'Lider' && ev.tipo_evaluacion !== 'evaluacion_lider') return false;
+   if (filtroEstado !== 'Todos' && ev.estado !== filtroEstado) return false;
+   return true;
+ });
+ var selectStyle = { padding: '7px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13, background: 'white', cursor: 'pointer' };
  return (
  <div style={s.tarjetaStat}>
- <h4>Ver Evaluaciones ({evs.length})</h4>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+   <h4 style={{ margin: 0 }}>Ver Evaluaciones ({evsFiltradas.length} de {evs.length})</h4>
+   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+     <select value={filtroTipo} onChange={function(e) { setFiltroTipo(e.target.value); }} style={selectStyle}>
+       <option value="Todos">Todos los tipos</option>
+       <option value="Auto">Autoevaluación</option>
+       <option value="Lider">Evaluación Líder</option>
+     </select>
+     <select value={filtroEstado} onChange={function(e) { setFiltroEstado(e.target.value); }} style={selectStyle}>
+       <option value="Todos">Todos los estados</option>
+       <option value="enviado">Enviado</option>
+       <option value="borrador">Borrador</option>
+     </select>
+     {(filtroTipo !== 'Todos' || filtroEstado !== 'Todos') && (
+       <button onClick={function() { setFiltroTipo('Todos'); setFiltroEstado('Todos'); }} style={{ ...s.btnInfo, color: '#dc2626', borderColor: '#fca5a5', fontSize: 12 }}>Limpiar</button>
+     )}
+   </div>
+ </div>
  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
  <thead><tr><th style={th}>Colaborador</th><th style={th}>Tipo</th><th style={th}>Estado</th><th style={th}>Rating</th><th style={th}>Calibrado</th><th style={th}>Fecha</th></tr></thead>
- <tbody>{evs.map(function(ev) { return (<tr key={ev.id}><td style={td}>{ev.colaborador?.full_name || '-'}</td><td style={td}>{ev.tipo_evaluacion === 'autoevaluacion' ? 'Auto' : 'Lider'}</td><td style={td}>{ev.estado}</td><td style={{ ...td, fontWeight: 700 }}>{ev.rating_promedio || '-'}</td><td style={td}>{ev.rating_calibrado || '-'}</td><td style={td}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td></tr>); })}</tbody>
+ <tbody>{evsFiltradas.map(function(ev) {
+   var esLider = ev.tipo_evaluacion === 'evaluacion_lider';
+   var esBorrador = ev.estado === 'borrador';
+   return (
+     <tr key={ev.id} style={{ borderBottom: '1px solid #f1f5f9', background: esBorrador ? '#fffbeb' : 'white' }}>
+       <td style={td}>{ev.colaborador?.full_name || '-'}</td>
+       <td style={td}>
+         <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: esLider ? '#dbeafe' : '#F0EDE8', color: esLider ? '#1e40af' : '#231F20' }}>
+           {esLider ? 'Líder' : 'Auto'}
+         </span>
+       </td>
+       <td style={td}>
+         <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: esBorrador ? '#fef3c7' : '#dcfce7', color: esBorrador ? '#92400e' : '#166534' }}>
+           {ev.estado}
+         </span>
+       </td>
+       <td style={{ ...td, fontWeight: 700 }}>{ev.rating_promedio || '-'}</td>
+       <td style={td}>{ev.rating_calibrado || '-'}</td>
+       <td style={td}>{new Date(ev.created_at).toLocaleDateString('es-AR')}</td>
+     </tr>
+   );
+ })}</tbody>
  </table>
  </div>
  );
