@@ -2047,6 +2047,9 @@ function EvaluacionLider({ colaborador, cicloId, onVolver, soloLectura }) {
 
  async function enviar() {
  if (bloqueado) return;
+ // Validar que todas las competencias tienen puntaje y comentario
+ var compsSinComentario = competencias.filter(function(c) { return !comentarios[c.id] || !comentarios[c.id].trim(); });
+ if (compsSinComentario.length > 0) { setMsg('Todos los comentarios de competencias son obligatorios. Falta: ' + compsSinComentario.map(function(c) { return c.nombre; }).join(', ')); setTimeout(function() { setMsg(''); }, 4000); return; }
  if (!comFin || !comFin.trim()) { setMsg('Los comentarios finales son obligatorios antes de enviar'); setTimeout(function() { setMsg(''); }, 3000); return; }
  var evId = await obtenerOCrearEvalId();
  if (!evId) { setMsg('Error al enviar'); return; }
@@ -2325,6 +2328,11 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var evId = evalData?.id;
  if (!evId) { setMsg('Error: no se encontro la evaluacion'); return; }
  if (Object.keys(ratings).length === 0) { setMsg('Completa al menos una competencia antes de enviar'); return; }
+ // Validar que todas las competencias tienen puntaje y comentario
+ var compsSinPuntaje = competencias.filter(function(c) { return !ratings[c.id]; });
+ if (compsSinPuntaje.length > 0) { setMsg('Todos los puntajes son obligatorios. Falta: ' + compsSinPuntaje.map(function(c) { return c.nombre; }).join(', ')); setTimeout(function() { setMsg(''); }, 4000); return; }
+ var compsSinComentario = competencias.filter(function(c) { return !comentarios[c.id] || !comentarios[c.id].trim(); });
+ if (compsSinComentario.length > 0) { setMsg('Todos los comentarios de competencias son obligatorios. Falta: ' + compsSinComentario.map(function(c) { return c.nombre; }).join(', ')); setTimeout(function() { setMsg(''); }, 4000); return; }
  if (!comFin || !comFin.trim()) { setMsg('Los comentarios finales son obligatorios antes de enviar'); setTimeout(function() { setMsg(''); }, 3000); return; }
  setMsg('Enviando...');
  var prom = calcularRating(ratings);
