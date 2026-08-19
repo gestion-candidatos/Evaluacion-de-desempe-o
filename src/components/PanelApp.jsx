@@ -467,7 +467,7 @@ function DashboardGlobal() {
 
   // Gráfico araña — solo evaluaciones filtradas del líder
   var compMap = {};
-  var evsLiderIds = evsFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider'; }).map(function(e) { return e.id; });
+  var evsLiderIds = evsFiltradas.filter(function(e) { return e.tipo_evaluacion === 'evaluacion_lider' && e.rating_calibrado; }).map(function(e) { return e.id; });
   (statsDesempeno.puntuaciones || []).forEach(function(p) {
     if (!evsLiderIds.includes(p.evaluacion_id)) return;
     var nombre = p.competencias?.nombre;
@@ -601,6 +601,7 @@ function DashboardGlobal() {
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Evaluaciones lider</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{evalLider.length}</p></div>
             <div style={s.tarjetaStat}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Calibradas</p><p style={{ fontSize: 32, fontWeight: 800, color: '#231F20', margin: '6px 0' }}>{totalG1}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '3px solid #166534' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Alto desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#166534', margin: '6px 0' }}>{alto}</p></div>
+            <div style={{ ...s.tarjetaStat, borderTop: '3px solid #64748b' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Desempeño esperado</p><p style={{ fontSize: 32, fontWeight: 800, color: '#64748b', margin: '6px 0' }}>{medio}</p></div>
             <div style={{ ...s.tarjetaStat, borderTop: '3px solid #dc2626' }}><p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>Bajo desempeño</p><p style={{ fontSize: 32, fontWeight: 800, color: '#dc2626', margin: '6px 0' }}>{bajo}</p></div>
           </div>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 20 }}>
@@ -769,7 +770,7 @@ function DashboardView({ stats, colabs }) {
  ];
 
  // Gráfico 2: Promedio por competencia (para araña)
-  var evalIdsFiltrados = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider"; }).map(function(e) { return e.id; });
+  var evalIdsFiltrados = evalFiltradas.filter(function(e) { return e.tipo_evaluacion === "evaluacion_lider" && e.rating_calibrado; }).map(function(e) { return e.id; });
  var compMap = {};
  puntuaciones.forEach(function(p) {
  if (!evalIdsFiltrados.includes(p.evaluacion_id)) return;
@@ -1039,6 +1040,9 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   var [showHistorial, setShowHistorial] = useState(false);
   var [nuevoComentario, setNuevoComentario] = useState("");
   var [colaboradorHist, setColaboradorHist] = useState(null);
+  // Selección múltiple para exportación masiva
+  var [seleccionados, setSeleccionados] = useState([]);
+  var [exportando, setExportando] = useState(false);
  useEffect(function() { cargar(); }, [cicloId]);
  async function cargar() {
  setCarg(true);
@@ -1112,34 +1116,26 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
    cargarHistorial(colaboradorId);
  }
 
- async function generarPDFCompleto(d) {
- console.log('=== PDF DEBUG ===');
- console.log('d.autoevaluacion:', d.autoevaluacion);
- console.log('d.evaluacionLider:', d.evaluacionLider);
- console.log('punts auto embebidas:', d.autoevaluacion?.puntuaciones);
- console.log('punts lider embebidas:', d.evaluacionLider?.puntuaciones);
-
+ // Carga fresca de datos de auto/lider + competencias — reutilizada por PDF y por Excel
+ async function obtenerDatosEvaluacionCompleta(d) {
  var autoPunts = {}, autoComs = {}, liderPunts = {}, liderComs = {}, compsOrden = [];
  var autoComentFin = '', liderComentFin = '';
  var promAuto = d.promAuto || null;
  var promLider = d.promLider || null;
 
- // Siempre hacer queries frescos — no confiar en datos embebidos
  if (d.autoevaluacion?.id) {
- var { data: aev, error: aevErr } = await supabase
+ var { data: aev } = await supabase
  .from('evaluaciones')
  .select('comentarios_finales, rating_promedio')
  .eq('id', d.autoevaluacion.id)
  .single();
- console.log('aev:', aev, 'error:', aevErr);
  autoComentFin = aev?.comentarios_finales || '';
  if (!promAuto) promAuto = aev?.rating_promedio || null;
 
- var { data: ap, error: apErr } = await supabase
+ var { data: ap } = await supabase
  .from('puntuaciones')
  .select('rating, competencia_id, comentario')
  .eq('evaluacion_id', d.autoevaluacion.id);
- console.log('punts auto fresh:', ap, 'error:', apErr);
  (ap || []).forEach(function(p) {
  autoPunts[p.competencia_id] = p.rating;
  autoComs[p.competencia_id] = p.comentario || '';
@@ -1147,42 +1143,35 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  }
 
  if (d.evaluacionLider?.id) {
- var { data: lev, error: levErr } = await supabase
+ var { data: lev } = await supabase
  .from('evaluaciones')
  .select('comentarios_finales, rating_promedio')
  .eq('id', d.evaluacionLider.id)
  .single();
- console.log('lev:', lev, 'error:', levErr);
  liderComentFin = lev?.comentarios_finales || '';
  if (!promLider) promLider = lev?.rating_promedio || null;
 
- var { data: lp, error: lpErr } = await supabase
+ var { data: lp } = await supabase
  .from('puntuaciones')
  .select('rating, competencia_id, comentario')
  .eq('evaluacion_id', d.evaluacionLider.id);
- console.log('punts lider fresh:', lp, 'error:', lpErr);
  (lp || []).forEach(function(p) {
  liderPunts[p.competencia_id] = p.rating;
  liderComs[p.competencia_id] = p.comentario || '';
  });
  }
 
- // Cargar competencias con sus nombres
  var todasIds = [...new Set([...Object.keys(autoPunts), ...Object.keys(liderPunts)])];
- console.log('competencia IDs encontrados:', todasIds);
-
  if (todasIds.length > 0) {
- var { data: compsData, error: compsErr } = await supabase
+ var { data: compsData } = await supabase
  .from('competencias')
  .select('id, nombre')
  .in('id', todasIds);
- console.log('compsData:', compsData, 'error:', compsErr);
  (compsData || []).forEach(function(c) {
  compsOrden.push({ id: c.id, nombre: c.nombre });
  });
  }
 
- // Fallback si no hay puntuaciones todavía
  if (compsOrden.length === 0) {
  var sen = d.colaborador?.seniority || 'Analista';
  var { data: cFB } = await supabase.from('competencias').select('id, nombre').eq('aplica_a', sen);
@@ -1193,11 +1182,16 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  compsOrden = (cFB || []).map(function(c) { return { id: c.id, nombre: c.nombre }; });
  }
 
- console.log('=== FINAL compsOrden:', compsOrden);
- console.log('autoPunts:', autoPunts);
- console.log('liderPunts:', liderPunts);
- console.log('autoComs:', autoComs);
- console.log('liderComs:', liderComs);
+ return { autoPunts, autoComs, liderPunts, liderComs, compsOrden, autoComentFin, liderComentFin, promAuto, promLider };
+ }
+
+ async function generarPDFCompleto(d) {
+ var datosFrescos = await obtenerDatosEvaluacionCompleta(d);
+ var autoPunts = datosFrescos.autoPunts, autoComs = datosFrescos.autoComs;
+ var liderPunts = datosFrescos.liderPunts, liderComs = datosFrescos.liderComs;
+ var compsOrden = datosFrescos.compsOrden;
+ var autoComentFin = datosFrescos.autoComentFin, liderComentFin = datosFrescos.liderComentFin;
+ var promAuto = datosFrescos.promAuto, promLider = datosFrescos.promLider;
 
  // ---- Setup PDF ----
  var pdf = new jsPDF();
@@ -1424,6 +1418,73 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  }
  async function verPDF(d) { var pdf = await generarPDFCompleto(d); pdf.save('Evaluacion_' + (d.colaborador.full_name || d.colaborador.email).split(' ').join('_') + '.pdf'); }
 
+ // ── Selección múltiple para exportación masiva ──────────────────────────────
+ function toggleSeleccion(colabId) {
+   setSeleccionados(function(prev) {
+     return prev.includes(colabId) ? prev.filter(function(id) { return id !== colabId; }) : [...prev, colabId];
+   });
+ }
+ function toggleSeleccionarTodos(lista) {
+   var idsVisibles = lista.map(function(d) { return d.colaborador.id; });
+   var todosSeleccionados = idsVisibles.length > 0 && idsVisibles.every(function(id) { return seleccionados.includes(id); });
+   if (todosSeleccionados) {
+     setSeleccionados(function(prev) { return prev.filter(function(id) { return !idsVisibles.includes(id); }); });
+   } else {
+     setSeleccionados(function(prev) { return [...new Set([...prev, ...idsVisibles])]; });
+   }
+ }
+
+ // Descarga un PDF por cada colaborador seleccionado (con pequeña pausa entre cada uno para que el navegador no bloquee las descargas)
+ async function descargarPDFsSeleccionados() {
+   var elegidos = datos.filter(function(d) { return seleccionados.includes(d.colaborador.id); });
+   if (elegidos.length === 0) { alert('Seleccioná al menos un participante.'); return; }
+   setExportando(true);
+   for (var i = 0; i < elegidos.length; i++) {
+     await verPDF(elegidos[i]);
+     await new Promise(function(res) { setTimeout(res, 400); });
+   }
+   setExportando(false);
+ }
+
+ // Genera un único Excel con una hoja por colaborador seleccionado
+ async function exportarExcelSeleccionados() {
+   var elegidos = datos.filter(function(d) { return seleccionados.includes(d.colaborador.id); });
+   if (elegidos.length === 0) { alert('Seleccioná al menos un participante.'); return; }
+   setExportando(true);
+   try {
+     var XLSX = await import('xlsx');
+     var wb = XLSX.utils.book_new();
+     for (var i = 0; i < elegidos.length; i++) {
+       var d = elegidos[i];
+       var datosFrescos = await obtenerDatosEvaluacionCompleta(d);
+       var filas = datosFrescos.compsOrden.map(function(c) {
+         return {
+           'Competencia': c.nombre,
+           'Puntaje Auto': datosFrescos.autoPunts[c.id] || '',
+           'Comentario Auto': datosFrescos.autoComs[c.id] || '',
+           'Puntaje Lider': datosFrescos.liderPunts[c.id] || '',
+           'Comentario Lider': datosFrescos.liderComs[c.id] || '',
+         };
+       });
+       filas.push({ 'Competencia': '', 'Puntaje Auto': '', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Comentarios finales - Colaborador', 'Puntaje Auto': datosFrescos.autoComentFin || '-', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Comentarios finales - Lider', 'Puntaje Auto': datosFrescos.liderComentFin || '-', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Rating Promedio Auto', 'Puntaje Auto': datosFrescos.promAuto || '-', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Rating Promedio Lider', 'Puntaje Auto': datosFrescos.promLider || '-', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Rating Calibrado Final', 'Puntaje Auto': d.ratingFinal || 'Pendiente', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       filas.push({ 'Competencia': 'Justificacion Calibracion', 'Puntaje Auto': d.comentarioCalibracion || '-', 'Comentario Auto': '', 'Puntaje Lider': '', 'Comentario Lider': '' });
+       var ws = XLSX.utils.json_to_sheet(filas);
+       ws['!cols'] = [30, 14, 35, 14, 35].map(function(w) { return { wch: w }; });
+       var nombreHoja = (d.colaborador.full_name || d.colaborador.email || 'Colaborador').substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, '');
+       XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+     }
+     var fecha = new Date().toISOString().slice(0, 10);
+     XLSX.writeFile(wb, 'Calibracion_evaluaciones_' + fecha + '.xlsx');
+   } finally {
+     setExportando(false);
+   }
+ }
+
  var areas = useMemo(function() { return ['Todas'].concat([...new Set(datos.map(function(d) { return d.colaborador.area; }).filter(Boolean))]); }, [datos]);
  var df = filtro === 'Todas' ? datos : datos.filter(function(d) { return d.colaborador.area === filtro; });
 
@@ -1436,6 +1497,31 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  <select value={filtro} onChange={function(e) { setFiltro(e.target.value); }} style={{ padding: '8px 12px', borderRadius: 6, border: '2px solid #D4D2C6', fontSize: 14, background: 'white' }}>{areas.map(function(a) { return <option key={a} value={a}>{a}</option>; })}</select>
  </div>
  <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Comparacion de autoevaluacion y evaluacion del lider. Define el rating final calibrado.</p>
+
+      {/* Barra de exportación masiva */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', background: '#F0EDE8', borderRadius: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#231F20' }}>
+          {seleccionados.length > 0 ? seleccionados.length + ' seleccionado(s)' : 'Seleccioná uno o más participantes'}
+        </span>
+        <button
+          onClick={descargarPDFsSeleccionados}
+          disabled={seleccionados.length === 0 || exportando}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: seleccionados.length === 0 || exportando ? '#D4D2C6' : '#f59e0b', color: 'white', fontSize: 12, fontWeight: 700, cursor: seleccionados.length === 0 || exportando ? 'default' : 'pointer' }}>
+          {exportando ? 'Procesando...' : 'Descargar PDFs seleccionados'}
+        </button>
+        <button
+          onClick={exportarExcelSeleccionados}
+          disabled={seleccionados.length === 0 || exportando}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: seleccionados.length === 0 || exportando ? '#D4D2C6' : '#166534', color: 'white', fontSize: 12, fontWeight: 700, cursor: seleccionados.length === 0 || exportando ? 'default' : 'pointer' }}>
+          {exportando ? 'Procesando...' : 'Exportar Excel (todos juntos)'}
+        </button>
+        {seleccionados.length > 0 && (
+          <button onClick={function() { setSeleccionados([]); }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #D4D2C6', background: 'white', color: '#231F20', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Limpiar selección
+          </button>
+        )}
+      </div>
+
       {/* Panel de historial de calibración */}
       {showHistorial && (
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20, marginBottom: 20 }}>
@@ -1494,13 +1580,14 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  {df.length === 0 ? <p style={{ textAlign: 'center', padding: 20, color: '#94a3b8' }}>No hay datos para mostrar.</p> : (
  <div style={{ overflowX: 'auto' }}>
  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
-<thead><tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}><th style={th}>Colaborador</th><th style={th}>Area</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Lider</th><th style={th}>Evaluación Final</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Reabrir</th></tr></thead>
+<thead><tr style={{ borderBottom: '2px solid #e8e6e0', background: '#F0EDE8' }}><th style={{ ...th, width: 36 }}><input type="checkbox" checked={df.length > 0 && df.every(function(d) { return seleccionados.includes(d.colaborador.id); })} onChange={function() { toggleSeleccionarTodos(df); }} /></th><th style={th}>Colaborador</th><th style={th}>Area</th><th style={th}>Seniority</th><th style={th}>Auto</th><th style={th}>Lider</th><th style={th}>Evaluación Final</th><th style={th}>Justificación</th><th style={th}>Historial</th><th style={th}>PDF</th><th style={th}>Reabrir</th></tr></thead>
  <tbody>{df.map(function(d) {
  var gap = d.promAuto && d.promLider ? (parseFloat(d.promLider) - parseFloat(d.promAuto)).toFixed(1) : null;
  var clasifAuto = clasificarRating(parseFloat(d.promAuto));
  var clasifLider = clasificarRating(parseFloat(d.promLider));
  return (
  <tr key={d.colaborador.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+ <td style={td}><input type="checkbox" checked={seleccionados.includes(d.colaborador.id)} onChange={function() { toggleSeleccion(d.colaborador.id); }} /></td>
  <td style={td}><strong>{d.colaborador.full_name || d.colaborador.email}</strong></td>
  <td style={td}>{d.colaborador.area || '-'}</td>
  <td style={td}><span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#D4D2C6', color: '#231F20' }}>{d.colaborador.seniority || '-'}</span></td>
@@ -2295,13 +2382,18 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [feedback, setFeedback] = useState(null);
  var [evalData, setEvalData] = useState(null);
  var [showInfo, setShowInfo] = useState({});
+ // CAMBIO 4: estados para ver la evaluación del líder
+ var [verEvalLider, setVerEvalLider] = useState(false);
+ var [evalLiderDetalle, setEvalLiderDetalle] = useState(null);
+ var [evalLiderPunts, setEvalLiderPunts] = useState({});
 
  useEffect(function() {
  (async function() {
  var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
  supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
  supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
- supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
+ // CAMBIO 4: traer también comentarios_finales, estado y el flag de aprobación del líder
+ supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales, aprobado_lider').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
  supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
  ]);
  setComp(comps || []);
@@ -2338,6 +2430,27 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
    }, 1500);
    return function() { clearTimeout(timer); };
  }, [ratings, comentarios, comFin, evalData?.id]);
+
+ // CAMBIO 4: carga el detalle de la evaluación del líder (puntuaciones + comentarios)
+ // Solo si el líder ya dio el OK explícito (aprobado_lider) — antes de eso el colaborador no debe verla
+ async function cargarEvalLiderDetalle() {
+   if (!evalLider?.id || !evalLider?.aprobado_lider) return;
+   var { data: punts } = await supabase
+     .from('puntuaciones')
+     .select('rating, competencia_id, comentario, competencias(nombre)')
+     .eq('evaluacion_id', evalLider.id);
+   var map = {};
+   (punts || []).forEach(function(p) {
+     map[p.competencia_id] = {
+       rating: p.rating,
+       comentario: p.comentario || '',
+       nombre: p.competencias?.nombre || ''
+     };
+   });
+   setEvalLiderDetalle(evalLider);
+   setEvalLiderPunts(map);
+   setVerEvalLider(true);
+ }
 
  var yaEnviada = evalData?.estado === 'enviado';
  var bloqueado = soloLectura || yaEnviada;
@@ -2412,6 +2525,90 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
 
  var clasifCal = clasificarRating(parseFloat(evalLider?.rating_calibrado));
 
+ // ── CAMBIO 4: vista de la evaluación del líder ────────────────────────────────
+ if (verEvalLider && evalLiderDetalle) {
+   var clasifLider = clasificarRating(parseFloat(evalLiderDetalle.rating_calibrado || evalLiderDetalle.rating_promedio));
+   return (
+     <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
+       <button
+         onClick={function() { setVerEvalLider(false); }}
+         style={{ ...s.btnInfo, marginBottom: 16 }}
+       >
+         ← Volver a mi evaluación
+       </button>
+
+       <h3 style={{ color: '#231F20', margin: '0 0 20px 0' }}>Evaluación de mi líder</h3>
+
+       {evalLiderDetalle.rating_calibrado && (
+         <div style={{ padding: '24px', background: clasifLider?.bg || '#F0EDE8', borderRadius: 12, border: '2px solid ' + (clasifLider?.color || '#231F20'), marginBottom: 24, textAlign: 'center' }}>
+           <p style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 600, color: clasifLider?.color || '#231F20', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+             Rating calibrado final
+           </p>
+           <p style={{ margin: '0 0 6px 0', fontSize: 52, fontWeight: 800, color: clasifLider?.color || '#231F20', lineHeight: 1 }}>
+             {evalLiderDetalle.rating_calibrado}
+           </p>
+           {clasifLider && (
+             <p style={{ margin: '0 0 10px 0', fontSize: 15, fontWeight: 600, color: clasifLider.color }}>
+               {clasifLider.label}
+             </p>
+           )}
+           {evalLiderDetalle.comentario_calibracion && (
+             <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#475569', fontStyle: 'italic', background: 'rgba(255,255,255,0.6)', padding: '8px 14px', borderRadius: 8 }}>
+               {evalLiderDetalle.comentario_calibracion}
+             </p>
+           )}
+         </div>
+       )}
+
+       <div style={{ ...s.tarjetaStat, marginBottom: 20 }}>
+         <h4 style={{ margin: '0 0 16px 0', color: '#231F20' }}>Detalle por competencia</h4>
+         {Object.keys(evalLiderPunts).length === 0 ? (
+           <p style={{ color: '#94a3b8', fontSize: 13 }}>El líder aún no completó las competencias.</p>
+         ) : (
+           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+             <thead>
+               <tr style={{ background: '#231F20' }}>
+                 <th style={{ ...th, color: '#D4D2C6' }}>Competencia</th>
+                 <th style={{ ...th, color: '#D4D2C6', textAlign: 'center', width: 80 }}>Puntaje</th>
+                 <th style={{ ...th, color: '#D4D2C6' }}>Comentario del líder</th>
+               </tr>
+             </thead>
+             <tbody>
+               {Object.entries(evalLiderPunts).map(function(entry, idx) {
+                 var compId = entry[0];
+                 var data = entry[1];
+                 return (
+                   <tr key={compId} style={{ background: idx % 2 === 0 ? 'white' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                     <td style={{ ...td, fontWeight: 500 }}>{data.nombre || compId}</td>
+                     <td style={{ ...td, textAlign: 'center' }}>
+                       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: '#231F20', color: '#D4D2C6', fontSize: 16, fontWeight: 700 }}>
+                         {data.rating}
+                       </span>
+                     </td>
+                     <td style={{ ...td, fontSize: 13, color: '#475569', fontStyle: data.comentario ? 'normal' : 'italic' }}>
+                       {data.comentario || 'Sin comentario'}
+                     </td>
+                   </tr>
+                 );
+               })}
+             </tbody>
+           </table>
+         )}
+       </div>
+
+       {evalLiderDetalle.comentarios_finales && (
+         <div style={{ padding: 16, background: '#F0EDE8', border: '1px solid #D4D2C6', borderRadius: 12 }}>
+           <h4 style={{ margin: '0 0 10px 0', color: '#231F20', fontSize: 14 }}>Comentarios finales del líder</h4>
+           <p style={{ margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+             {evalLiderDetalle.comentarios_finales}
+           </p>
+         </div>
+       )}
+     </div>
+   );
+ }
+ // ── FIN CAMBIO 4 ─────────────────────────────────────────────────────────────
+
  return (
  <div style={{ maxWidth: 900, width: "100%", overflow: "hidden" }}>
  <h3>Mi Autoevaluacion</h3>
@@ -2427,11 +2624,27 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
  </div>
  )}
- {evalLider?.rating_calibrado && (
+ {evalLider?.rating_calibrado && evalLider?.aprobado_lider && (
  <div style={{ padding: 16, background: clasifCal?.bg || '#D4D2C6', borderRadius: 10, marginBottom: 20, textAlign: 'center', border: '2px solid ' + (clasifCal?.color || '#231F20') }}>
  <p style={{ margin: 0, color: clasifCal?.color || '#231F20', fontWeight: 600 }}>Resultado Final Calibrado</p>
  <p style={{ fontSize: 40, fontWeight: 700, margin: '8px 0', color: clasifCal?.color || '#231F20' }}>{evalLider.rating_calibrado}</p>
- {clasifCal && <p style={{ margin: 0, fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
+ {clasifCal && <p style={{ margin: '0 0 14px 0', fontSize: 14, color: clasifCal.color, fontWeight: 600 }}>{clasifCal.label}</p>}
+ {/* CAMBIO 4: botón para ver la evaluación del líder */}
+ <button
+   onClick={cargarEvalLiderDetalle}
+   style={{
+     padding: '9px 22px',
+     borderRadius: 8,
+     border: '2px solid ' + (clasifCal?.color || '#231F20'),
+     background: 'transparent',
+     color: clasifCal?.color || '#231F20',
+     cursor: 'pointer',
+     fontSize: 13,
+     fontWeight: 600
+   }}
+ >
+   Ver evaluación de mi líder
+ </button>
  </div>
  )}
  {competencias.map(function(comp) {
@@ -5138,3 +5351,4 @@ var s = {
  mensajeToast: { padding: '12px 20px', background: '#231F20', borderRadius: 8, marginBottom: 16, color: '#F0EDE8', fontWeight: 500, fontSize: 14, textAlign: 'center' },
  bannerEnviado: { padding: 16, background: '#dcfce7', borderRadius: 10, color: '#166534', fontWeight: 600, textAlign: 'center', marginTop: 16, border: '1px solid #86efac' }
 };
+
