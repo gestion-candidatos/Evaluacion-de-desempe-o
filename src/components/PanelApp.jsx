@@ -1037,12 +1037,16 @@ function EvaluacionesAdmin({ cicloId }) {
 function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
   var [datos, setDatos] = useState([]); var [carg, setCarg] = useState(true); var [filtro, setFiltro] = useState("Todas"); var [editandoCal, setEditandoCal] = useState(null); var [calTemp, setCalTemp] = useState({ rating: "", comentario: "" });
   var [historial, setHistorial] = useState([]);
+  var [historialError, setHistorialError] = useState(null);
   var [showHistorial, setShowHistorial] = useState(false);
   var [nuevoComentario, setNuevoComentario] = useState("");
   var [colaboradorHist, setColaboradorHist] = useState(null);
   // Selección múltiple para exportación masiva
   var [seleccionados, setSeleccionados] = useState([]);
   var [exportando, setExportando] = useState(false);
+  // Modal de reapertura (reemplaza window.prompt/confirm — más confiable y deja motivo obligatorio)
+  var [reabriendo, setReabriendo] = useState(null); // { evalId, tipo, colaboradorId, colaboradorNombre }
+  var [motivoReapertura, setMotivoReapertura] = useState("");
  useEffect(function() { cargar(); }, [cicloId]);
  async function cargar() {
  setCarg(true);
@@ -1076,28 +1080,52 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
    setDatos(function(p) { return p.map(function(d) { return d.evaluacionLider?.id === evaluacionId ? { ...d, ratingFinal: rating, comentarioCalibracion: comentario } : d; }); });
  }
 
- async function reabrirEvaluacion(evalId, tipo, colaboradorId, colaboradorNombre) {
-   if (!window.confirm('¿Reabrir esta ' + tipo + ' para que pueda editarse de nuevo?')) return;
-   var motivo = window.prompt('Motivo de reapertura (opcional):') || '';
-   await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
-   var { data: { session } } = await supabase.auth.getSession();
-   var tipoHist = tipo.includes('auto') ? 'reabrir_auto' : 'reabrir_lider';
-   await supabase.from('calibracion_historial').insert({
-     ciclo_id: cicloId, colaborador_id: colaboradorId, evaluacion_id: evalId,
-     tipo: tipoHist,
-     comentario: 'Reapertura de ' + tipo + (motivo ? ': ' + motivo : ''),
-     usuario_id: session.user.id,
-     usuario_nombre: session.user.email
-   });
-   cargar();
-   if (showHistorial && colaboradorHist === colaboradorId) cargarHistorial(colaboradorId);
+ // Abre el modal para pedir el motivo de reapertura (reemplaza window.confirm + window.prompt)
+ function iniciarReapertura(evalId, tipo, colaboradorId, colaboradorNombre) {
+   setReabriendo({ evalId: evalId, tipo: tipo, colaboradorId: colaboradorId, colaboradorNombre: colaboradorNombre });
+   setMotivoReapertura("");
+ }
+
+ async function confirmarReapertura() {
+   if (!reabriendo) return;
+   if (!motivoReapertura.trim()) { alert('El motivo de reapertura es obligatorio.'); return; }
+   var { evalId, tipo, colaboradorId } = reabriendo;
+   try {
+     var { error: updErr } = await supabase.from('evaluaciones').update({ estado: 'borrador' }).eq('id', evalId);
+     if (updErr) { alert('No se pudo reabrir la evaluación: ' + updErr.message); return; }
+     var { data: { session } } = await supabase.auth.getSession();
+     var tipoHist = tipo.includes('auto') ? 'reabrir_auto' : 'reabrir_lider';
+     var { error: histErr } = await supabase.from('calibracion_historial').insert({
+       ciclo_id: cicloId, colaborador_id: colaboradorId, evaluacion_id: evalId,
+       tipo: tipoHist,
+       comentario: 'Reapertura de ' + tipo + ': ' + motivoReapertura.trim(),
+       usuario_id: session?.user?.id || null,
+       usuario_nombre: session?.user?.email || 'Desconocido'
+     });
+     if (histErr) { console.error('Error guardando historial de reapertura:', histErr); alert('La evaluación se reabrió, pero no se pudo guardar el motivo en el historial: ' + histErr.message); }
+     setReabriendo(null);
+     setMotivoReapertura("");
+     cargar();
+     // Abrir/actualizar el historial de este colaborador para que se vea el registro al instante
+     cargarHistorial(colaboradorId);
+   } catch (e) {
+     console.error('Error inesperado al reabrir evaluación:', e);
+     alert('Ocurrió un error inesperado al reabrir la evaluación. Revisá la consola para más detalle.');
+   }
  }
 
  async function cargarHistorial(colaboradorId) {
-   var { data } = await supabase.from('calibracion_historial')
+   setHistorialError(null);
+   var { data, error } = await supabase.from('calibracion_historial')
      .select('*').eq('ciclo_id', cicloId).eq('colaborador_id', colaboradorId)
      .order('created_at', { ascending: false });
-   setHistorial(data || []);
+   if (error) {
+     console.error('Error cargando historial de calibración:', error);
+     setHistorialError(error.message || 'No se pudo cargar el historial.');
+     setHistorial([]);
+   } else {
+     setHistorial(data || []);
+   }
    setColaboradorHist(colaboradorId);
    setShowHistorial(true);
  }
@@ -1105,13 +1133,14 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
  async function agregarComentario(colaboradorId) {
    if (!nuevoComentario.trim()) return;
    var { data: { session } } = await supabase.auth.getSession();
-   await supabase.from('calibracion_historial').insert({
+   var { error } = await supabase.from('calibracion_historial').insert({
      ciclo_id: cicloId, colaborador_id: colaboradorId,
      tipo: 'comentario',
      comentario: nuevoComentario,
-     usuario_id: session.user.id,
-     usuario_nombre: session.user.email
+     usuario_id: session?.user?.id || null,
+     usuario_nombre: session?.user?.email || 'Desconocido'
    });
+   if (error) { console.error('Error guardando comentario de historial:', error); alert('No se pudo guardar el comentario: ' + error.message); return; }
    setNuevoComentario('');
    cargarHistorial(colaboradorId);
  }
@@ -1548,7 +1577,11 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
           </div>
 
           {/* Lista de eventos */}
-          {historial.length === 0 ? (
+          {historialError ? (
+            <p style={{ color: '#dc2626', fontSize: 13, textAlign: 'center', padding: 20, background: '#fee2e2', borderRadius: 8 }}>
+              No se pudo cargar el historial: {historialError}
+            </p>
+          ) : historial.length === 0 ? (
             <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>Sin registros aún.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1574,6 +1607,36 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal: motivo de reapertura (obligatorio) — reemplaza window.prompt */}
+      {reabriendo && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 460, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+            <h4 style={{ margin: '0 0 6px 0', color: '#231F20' }}>Reabrir {reabriendo.tipo}</h4>
+            <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#64748b' }}>
+              {reabriendo.colaboradorNombre} — esto va a quedar registrado en el historial de calibración.
+            </p>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#231F20', display: 'block', marginBottom: 6 }}>
+              Motivo de reapertura (obligatorio)
+            </label>
+            <textarea
+              value={motivoReapertura}
+              onChange={function(e) { setMotivoReapertura(e.target.value); }}
+              placeholder="Ej: el líder cargó un puntaje incorrecto en Liderazgo..."
+              style={{ width: '100%', minHeight: 90, padding: 10, borderRadius: 8, border: '2px solid #D4D2C6', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button onClick={function() { setReabriendo(null); setMotivoReapertura(""); }} style={s.btnInfo}>
+                Cancelar
+              </button>
+              <button onClick={confirmarReapertura} disabled={!motivoReapertura.trim()} style={{ ...s.btnPrimario, opacity: motivoReapertura.trim() ? 1 : 0.5, cursor: motivoReapertura.trim() ? 'pointer' : 'default' }}>
+                Confirmar reapertura
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1711,13 +1774,13 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                   <td style={{ ...td, minWidth: 160 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {d.autoevaluacion && d.autoevaluacion.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.autoevaluacion.id, 'autoevaluación', d.colaborador.id, d.colaborador.full_name); }}
+                        <button onClick={function() { iniciarReapertura(d.autoevaluacion.id, 'autoevaluación', d.colaborador.id, d.colaborador.full_name); }}
                           style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fcd34d', background: '#fef3c7', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                           Reabrir Auto
                         </button>
                       )}
                       {d.evaluacionLider && d.evaluacionLider.estado === 'enviado' && (
-                        <button onClick={function() { reabrirEvaluacion(d.evaluacionLider.id, 'evaluación del líder', d.colaborador.id, d.colaborador.full_name); }}
+                        <button onClick={function() { iniciarReapertura(d.evaluacionLider.id, 'evaluación del líder', d.colaborador.id, d.colaborador.full_name); }}
                           style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #93c5fd', background: '#dbeafe', color: '#1e40af', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                           Reabrir Líder
                         </button>
@@ -5351,4 +5414,3 @@ var s = {
  mensajeToast: { padding: '12px 20px', background: '#231F20', borderRadius: 8, marginBottom: 16, color: '#F0EDE8', fontWeight: 500, fontSize: 14, textAlign: 'center' },
  bannerEnviado: { padding: 16, background: '#dcfce7', borderRadius: 10, color: '#166534', fontWeight: 600, textAlign: 'center', marginTop: 16, border: '1px solid #86efac' }
 };
-
