@@ -2014,10 +2014,15 @@ function FeedbackForm({ feedback: col, cicloId, onVolver }) {
  useEffect(function() {
  (async function() {
  var { data: { session } } = await supabase.auth.getSession();
- var { data, error } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
+ // No usamos maybeSingle() acá: si por datos viejos hay más de una fila para este colaborador,
+ // maybeSingle() tira error y se pierde el feedback. En cambio, traemos todas y nos quedamos
+ // con la que tenga comentario (o la más reciente si ninguna lo tiene).
+ var { data: filas, error } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).order('created_at', { ascending: false });
  if (error) {
    console.error('Error cargando feedback existente:', error);
- } else if (data) {
+ } else if (filas && filas.length > 0) {
+   var data = filas.find(function(f) { return f.comentario_lider; }) || filas[0];
+   if (filas.length > 1) console.warn('Hay ' + filas.length + ' filas de feedback duplicadas para este colaborador (ciclo ' + cicloId + '). Conviene limpiar los duplicados en Supabase.');
    setFb(data); setCom(data.comentario_lider || '');
  } else {
    var { data: nuevo, error: insErr } = await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }).select().single();
@@ -2479,13 +2484,15 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
 
  useEffect(function() {
  (async function() {
- var [{ data: comps }, { data: ev }, { data: le }, { data: fb }] = await Promise.all([
+ var [{ data: comps }, { data: ev }, { data: le }, { data: fbFilas }] = await Promise.all([
  supabase.from('competencias').select('id, nombre, descripcion').eq('aplica_a', seniority || 'Analista'),
  supabase.from('evaluaciones').select('id, estado, rating_promedio, comentarios_finales').eq('colaborador_id', userId).eq('tipo_evaluacion', 'autoevaluacion').eq('ciclo_id', cicloId).maybeSingle(),
  // CAMBIO 4: traer también comentarios_finales, estado y el flag de aprobación del líder
  supabase.from('evaluaciones').select('id, rating_calibrado, comentario_calibracion, estado, rating_promedio, comentarios_finales, aprobado_lider').eq('colaborador_id', userId).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle(),
- supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).maybeSingle()
+ // No usamos maybeSingle(): si hay filas de feedback duplicadas por datos viejos, maybeSingle() tira error y se pierde el feedback
+ supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', userId).order('created_at', { ascending: false })
  ]);
+ var fb = (fbFilas && fbFilas.length > 0) ? (fbFilas.find(function(f) { return f.comentario_lider; }) || fbFilas[0]) : null;
  setComp(comps || []);
  setEvalLider(le);
  setFeedback(fb);
