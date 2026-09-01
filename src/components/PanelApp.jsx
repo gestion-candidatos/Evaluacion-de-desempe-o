@@ -2469,6 +2469,7 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  var [carg, setCarg] = useState(true);
  var [evalLider, setEvalLider] = useState(null);
  var [feedback, setFeedback] = useState(null);
+ var [confirmandoFb, setConfirmandoFb] = useState(false);
  var [evalData, setEvalData] = useState(null);
  var [showInfo, setShowInfo] = useState({});
  // CAMBIO 4: estados para ver la evaluación del líder
@@ -2539,6 +2540,25 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
    setEvalLiderDetalle(evalLider);
    setEvalLiderPunts(map);
    setVerEvalLider(true);
+ }
+
+ // El colaborador confirma que leyó/recibió el feedback de su líder
+ async function confirmarFeedback() {
+   if (!feedback?.id) return;
+   setConfirmandoFb(true);
+   var { data, error } = await supabase
+     .from('feedback')
+     .update({ confirmacion_colaborador: true })
+     .eq('id', feedback.id)
+     .select()
+     .single();
+   if (error) {
+     console.error('Error confirmando feedback:', error);
+     alert('No se pudo confirmar el feedback: ' + error.message);
+   } else {
+     setFeedback(data);
+   }
+   setConfirmandoFb(false);
  }
 
  var yaEnviada = evalData?.estado === 'enviado';
@@ -2709,8 +2729,15 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  )}
  {feedback?.comentario_lider && (
  <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
- <h4>Feedback</h4>
- <p>{feedback.comentario_lider}</p>
+ <h4 style={{ margin: '0 0 10px 0' }}>Feedback de tu líder</h4>
+ <p style={{ margin: '0 0 14px 0', whiteSpace: 'pre-wrap' }}>{feedback.comentario_lider}</p>
+ {feedback.confirmacion_colaborador ? (
+   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#166534' }}>✓ Confirmaste que recibiste este feedback</p>
+ ) : (
+   <button onClick={confirmarFeedback} disabled={confirmandoFb} style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#231F20', color: '#D4D2C6', fontSize: 13, fontWeight: 700, cursor: confirmandoFb ? 'default' : 'pointer', opacity: confirmandoFb ? 0.6 : 1 }}>
+     {confirmandoFb ? 'Confirmando...' : 'Confirmar recepción del feedback'}
+   </button>
+ )}
  </div>
  )}
  {evalLider?.rating_calibrado && evalLider?.aprobado_lider && (
