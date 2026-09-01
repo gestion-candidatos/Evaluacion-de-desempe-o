@@ -1551,9 +1551,12 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
         )}
       </div>
 
-      {/* Panel de historial de calibración */}
+      {/* Modal de historial de calibración — ventana aparte */}
       {showHistorial && (
-        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 20, marginBottom: 20 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+             onClick={function() { setShowHistorial(false); setHistorial([]); setHistorialError(null); }}>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e6e0', padding: 24, width: '100%', maxWidth: 560, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}
+               onClick={function(e) { e.stopPropagation(); }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
               <h4 style={{ margin: 0, color: '#231F20' }}>Historial de Calibración</h4>
@@ -1561,20 +1564,22 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
                 {datos.find(function(d) { return d.colaborador.id === colaboradorHist; })?.colaborador.full_name || ''}
               </p>
             </div>
-            <button onClick={function() { setShowHistorial(false); setHistorial([]); }} style={s.btnInfo}>Cerrar</button>
+            <button onClick={function() { setShowHistorial(false); setHistorial([]); setHistorialError(null); }} style={s.btnInfo}>Cerrar</button>
           </div>
 
-          {/* Agregar comentario */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <input
-              value={nuevoComentario}
-              onChange={function(e) { setNuevoComentario(e.target.value); }}
-              placeholder="Agregar comentario o nota de calibración..."
-              style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13 }}
-              onKeyDown={function(e) { if (e.key === 'Enter') agregarComentario(colaboradorHist); }}
-            />
-            <button onClick={function() { agregarComentario(colaboradorHist); }} style={s.btnPrimario}>Agregar</button>
-          </div>
+          {/* Agregar comentario — queda grabado en el historial (solo si no es modo lectura) */}
+          {!soloLectura && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <input
+                value={nuevoComentario}
+                onChange={function(e) { setNuevoComentario(e.target.value); }}
+                placeholder="Agregar comentario o nota de calibración..."
+                style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #e8e6e0', fontSize: 13 }}
+                onKeyDown={function(e) { if (e.key === 'Enter') agregarComentario(colaboradorHist); }}
+              />
+              <button onClick={function() { agregarComentario(colaboradorHist); }} style={s.btnPrimario}>Agregar</button>
+            </div>
+          )}
 
           {/* Lista de eventos */}
           {historialError ? (
@@ -1607,6 +1612,7 @@ function PanelCalibracion({ cicloId, colabs, onHist, soloLectura }) {
               })}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -2008,9 +2014,16 @@ function FeedbackForm({ feedback: col, cicloId, onVolver }) {
  useEffect(function() {
  (async function() {
  var { data: { session } } = await supabase.auth.getSession();
- var { data } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
- if (data) { setFb(data); setCom(data.comentario_lider || ''); }
- else { await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }); }
+ var { data, error } = await supabase.from('feedback').select('*').eq('ciclo_id', cicloId).eq('colaborador_id', col.id).maybeSingle();
+ if (error) {
+   console.error('Error cargando feedback existente:', error);
+ } else if (data) {
+   setFb(data); setCom(data.comentario_lider || '');
+ } else {
+   var { data: nuevo, error: insErr } = await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id }).select().single();
+   if (insErr) console.error('Error creando fila de feedback inicial:', insErr);
+   else setFb(nuevo);
+ }
  var { data: ev } = await supabase.from('evaluaciones')
    .select('id, rating_promedio, rating_calibrado, comentarios_finales, estado, aprobado_lider')
    .eq('colaborador_id', col.id).eq('tipo_evaluacion', 'evaluacion_lider').eq('ciclo_id', cicloId).maybeSingle();
@@ -2025,7 +2038,20 @@ function FeedbackForm({ feedback: col, cicloId, onVolver }) {
 
  async function guardar() {
  var { data: { session } } = await supabase.auth.getSession();
- await supabase.from('feedback').upsert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }, { onConflict: 'ciclo_id, colaborador_id' });
+ var resultado;
+ if (fb?.id) {
+   // Ya existe una fila (la creada al abrir el formulario, o una previa) — actualizarla por id, sin depender de ninguna restricción UNIQUE
+   resultado = await supabase.from('feedback').update({ comentario_lider: com, fecha_feedback_lider: new Date(), lider_id: session.user.id }).eq('id', fb.id).select().single();
+ } else {
+   // No había fila previa por algún motivo — crearla directamente
+   resultado = await supabase.from('feedback').insert({ ciclo_id: cicloId, lider_id: session.user.id, colaborador_id: col.id, comentario_lider: com, fecha_feedback_lider: new Date() }).select().single();
+ }
+ if (resultado.error) {
+   console.error('Error guardando feedback:', resultado.error);
+   alert('No se pudo guardar el feedback: ' + resultado.error.message);
+   return;
+ }
+ setFb(resultado.data);
  alert('Guardado'); onVolver();
  }
 
@@ -2681,10 +2707,10 @@ function PanelColaborador({ userId, seniority, puesto, cicloId, soloLectura }) {
  <strong style={{ color: '#166534', fontSize: 15 }}>Autoevaluacion enviada. No se puede modificar.</strong>
  </div>
  )}
- {feedback && (
+ {feedback?.comentario_lider && (
  <div style={{ padding: 16, background: feedback.confirmacion_colaborador ? '#dcfce7' : '#fef3c7', borderRadius: 10, marginBottom: 20 }}>
  <h4>Feedback</h4>
- <p>{feedback.comentario_lider || 'Sin comentarios.'}</p>
+ <p>{feedback.comentario_lider}</p>
  </div>
  )}
  {evalLider?.rating_calibrado && evalLider?.aprobado_lider && (
